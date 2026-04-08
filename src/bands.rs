@@ -17,6 +17,44 @@ impl fmt::Display for BandType {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ITURegion {
+    Region1, // Europe, Africa, Middle East
+    Region2, // Americas
+    Region3, // Asia-Pacific
+}
+
+impl fmt::Display for ITURegion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            ITURegion::Region1 => "1 (Europe, Africa, Middle East)",
+            ITURegion::Region2 => "2 (Americas)",
+            ITURegion::Region3 => "3 (Asia-Pacific)",
+        };
+        write!(f, "Region {}", label)
+    }
+}
+
+impl ITURegion {
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            ITURegion::Region1 => "1",
+            ITURegion::Region2 => "2",
+            ITURegion::Region3 => "3",
+        }
+    }
+
+    pub fn long_name(&self) -> &'static str {
+        match self {
+            ITURegion::Region1 => "Europe, Africa, Middle East",
+            ITURegion::Region2 => "Americas",
+            ITURegion::Region3 => "Asia-Pacific",
+        }
+    }
+}
+
+pub const ALL_REGIONS: &[ITURegion] = &[ITURegion::Region1, ITURegion::Region2, ITURegion::Region3];
+
 #[derive(Debug, Clone)]
 pub struct Band {
     pub name: &'static str,
@@ -25,6 +63,7 @@ pub struct Band {
     pub freq_high_mhz: f64,
     pub freq_center_mhz: f64,
     pub typical_skip_km: (f64, f64), // (min, max) skip distance in km
+    pub regions: &'static [ITURegion], // Available in these ITU regions
 }
 
 impl fmt::Display for Band {
@@ -37,88 +76,130 @@ impl fmt::Display for Band {
     }
 }
 
+fn region_adjusted_range(index: usize, region: ITURegion) -> Option<(f64, f64)> {
+    match index {
+        // 80m amateur allocation differs by ITU region.
+        1 => Some(match region {
+            ITURegion::Region1 => (3.5, 3.8),
+            ITURegion::Region2 => (3.5, 4.0),
+            ITURegion::Region3 => (3.5, 3.9),
+        }),
+        // 60m WRC-15 band segment used as shared baseline.
+        2 => Some((5.3515, 5.3665)),
+        // 40m differs by ITU region.
+        3 => Some(match region {
+            ITURegion::Region1 => (7.0, 7.2),
+            ITURegion::Region2 => (7.0, 7.3),
+            ITURegion::Region3 => (7.0, 7.2),
+        }),
+        _ => None,
+    }
+}
+
+fn band_for_region(base: &Band, index: usize, region: ITURegion) -> Band {
+    if let Some((low, high)) = region_adjusted_range(index, region) {
+        let mut adjusted = base.clone();
+        adjusted.freq_low_mhz = low;
+        adjusted.freq_high_mhz = high;
+        adjusted.freq_center_mhz = (low + high) / 2.0;
+        adjusted
+    } else {
+        base.clone()
+    }
+}
+
 /// All available ham radio and shortwave bands
 pub const BANDS: &[Band] = &[
     // HF Bands (amateur radio)
     Band {
-        name: "160m (1.8-2.0 MHz)",
+        name: "160m",
         band_type: BandType::HF,
         freq_low_mhz: 1.8,
         freq_high_mhz: 2.0,
         freq_center_mhz: 1.9,
         typical_skip_km: (100.0, 2000.0),
+        regions: ALL_REGIONS,
     },
     Band {
-        name: "80m (3.5-4.0 MHz)",
+        name: "80m",
         band_type: BandType::HF,
         freq_low_mhz: 3.5,
         freq_high_mhz: 4.0,
         freq_center_mhz: 3.75,
         typical_skip_km: (50.0, 1500.0),
+        regions: ALL_REGIONS,
     },
     Band {
-        name: "60m (5.25-5.45 MHz)",
+        name: "60m",
         band_type: BandType::HF,
-        freq_low_mhz: 5.25,
-        freq_high_mhz: 5.45,
-        freq_center_mhz: 5.35,
+        freq_low_mhz: 5.3515,
+        freq_high_mhz: 5.3665,
+        freq_center_mhz: 5.359,
         typical_skip_km: (50.0, 1200.0),
+        regions: ALL_REGIONS,
     },
     Band {
-        name: "40m (7.0-7.3 MHz)",
+        name: "40m",
         band_type: BandType::HF,
         freq_low_mhz: 7.0,
         freq_high_mhz: 7.3,
         freq_center_mhz: 7.15,
         typical_skip_km: (50.0, 1000.0),
+        regions: ALL_REGIONS,
     },
     Band {
-        name: "30m (10.1-10.15 MHz)",
+        name: "30m",
         band_type: BandType::HF,
         freq_low_mhz: 10.1,
         freq_high_mhz: 10.15,
         freq_center_mhz: 10.125,
         typical_skip_km: (100.0, 800.0),
+        regions: ALL_REGIONS,
     },
     Band {
-        name: "20m (14.0-14.35 MHz)",
+        name: "20m",
         band_type: BandType::HF,
         freq_low_mhz: 14.0,
         freq_high_mhz: 14.35,
         freq_center_mhz: 14.175,
         typical_skip_km: (150.0, 800.0),
+        regions: ALL_REGIONS,
     },
     Band {
-        name: "17m (18.068-18.168 MHz)",
+        name: "17m",
         band_type: BandType::HF,
         freq_low_mhz: 18.068,
         freq_high_mhz: 18.168,
         freq_center_mhz: 18.118,
         typical_skip_km: (150.0, 800.0),
+        regions: ALL_REGIONS,
     },
     Band {
-        name: "15m (21.0-21.45 MHz)",
+        name: "15m",
         band_type: BandType::HF,
         freq_low_mhz: 21.0,
         freq_high_mhz: 21.45,
         freq_center_mhz: 21.225,
         typical_skip_km: (200.0, 1000.0),
+        regions: ALL_REGIONS,
     },
     Band {
-        name: "12m (24.89-24.99 MHz)",
+        name: "12m",
         band_type: BandType::HF,
         freq_low_mhz: 24.89,
         freq_high_mhz: 24.99,
         freq_center_mhz: 24.94,
         typical_skip_km: (200.0, 1000.0),
+        regions: ALL_REGIONS,
     },
     Band {
-        name: "10m (28.0-29.7 MHz)",
+        name: "10m",
         band_type: BandType::HF,
         freq_low_mhz: 28.0,
         freq_high_mhz: 29.7,
         freq_center_mhz: 28.85,
         typical_skip_km: (250.0, 1200.0),
+        regions: ALL_REGIONS,
     },
     // Shortwave broadcast bands
     Band {
@@ -128,6 +209,7 @@ pub const BANDS: &[Band] = &[
         freq_high_mhz: 2.495,
         freq_center_mhz: 2.398,
         typical_skip_km: (100.0, 1500.0),
+        regions: ALL_REGIONS,
     },
     Band {
         name: "90m SW (3.2-3.4 MHz)",
@@ -136,6 +218,7 @@ pub const BANDS: &[Band] = &[
         freq_high_mhz: 3.4,
         freq_center_mhz: 3.3,
         typical_skip_km: (100.0, 1200.0),
+        regions: ALL_REGIONS,
     },
     Band {
         name: "75m SW (3.9-4.0 MHz)",
@@ -144,6 +227,7 @@ pub const BANDS: &[Band] = &[
         freq_high_mhz: 4.0,
         freq_center_mhz: 3.95,
         typical_skip_km: (50.0, 1500.0),
+        regions: ALL_REGIONS,
     },
     Band {
         name: "49m SW (5.9-6.2 MHz)",
@@ -152,6 +236,7 @@ pub const BANDS: &[Band] = &[
         freq_high_mhz: 6.2,
         freq_center_mhz: 6.05,
         typical_skip_km: (50.0, 1200.0),
+        regions: ALL_REGIONS,
     },
     Band {
         name: "41m SW (7.2-7.45 MHz)",
@@ -160,6 +245,7 @@ pub const BANDS: &[Band] = &[
         freq_high_mhz: 7.45,
         freq_center_mhz: 7.325,
         typical_skip_km: (50.0, 1000.0),
+        regions: ALL_REGIONS,
     },
     Band {
         name: "31m SW (9.4-9.9 MHz)",
@@ -168,6 +254,7 @@ pub const BANDS: &[Band] = &[
         freq_high_mhz: 9.9,
         freq_center_mhz: 9.65,
         typical_skip_km: (100.0, 1000.0),
+        regions: ALL_REGIONS,
     },
     Band {
         name: "25m SW (11.6-12.1 MHz)",
@@ -176,6 +263,7 @@ pub const BANDS: &[Band] = &[
         freq_high_mhz: 12.1,
         freq_center_mhz: 11.85,
         typical_skip_km: (200.0, 1000.0),
+        regions: ALL_REGIONS,
     },
     Band {
         name: "22m SW (13.57-13.87 MHz)",
@@ -184,6 +272,7 @@ pub const BANDS: &[Band] = &[
         freq_high_mhz: 13.87,
         freq_center_mhz: 13.72,
         typical_skip_km: (200.0, 1000.0),
+        regions: ALL_REGIONS,
     },
     Band {
         name: "19m SW (15.1-15.8 MHz)",
@@ -192,6 +281,7 @@ pub const BANDS: &[Band] = &[
         freq_high_mhz: 15.8,
         freq_center_mhz: 15.45,
         typical_skip_km: (250.0, 1200.0),
+        regions: ALL_REGIONS,
     },
     Band {
         name: "16m SW (17.48-17.9 MHz)",
@@ -200,6 +290,7 @@ pub const BANDS: &[Band] = &[
         freq_high_mhz: 17.9,
         freq_center_mhz: 17.69,
         typical_skip_km: (250.0, 1200.0),
+        regions: ALL_REGIONS,
     },
     Band {
         name: "13m SW (21.45-21.85 MHz)",
@@ -208,13 +299,27 @@ pub const BANDS: &[Band] = &[
         freq_high_mhz: 21.85,
         freq_center_mhz: 21.65,
         typical_skip_km: (250.0, 1200.0),
+        regions: ALL_REGIONS,
     },
 ];
 
-pub fn get_band_by_index(index: usize) -> Option<&'static Band> {
-    BANDS.get(index)
+pub fn get_bands_for_region(region: ITURegion) -> Vec<(usize, Band)> {
+    BANDS
+        .iter()
+        .enumerate()
+        .filter(|(_, band)| band.regions.contains(&region))
+        .map(|(idx, band)| (idx, band_for_region(band, idx, region)))
+        .collect()
 }
 
-pub fn band_count() -> usize {
-    BANDS.len()
+pub fn get_band_by_index_for_region(index: usize, region: ITURegion) -> Option<Band> {
+    BANDS
+        .get(index)
+        .and_then(|band| {
+            if band.regions.contains(&region) {
+                Some(band_for_region(band, index, region))
+            } else {
+                None
+            }
+        })
 }

@@ -6,9 +6,9 @@
 /// imports from the core modules that this file needs are for display helpers.
 use crate::app::{
     AppConfig, AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION,
-    FEET_TO_METERS, run_calculation,
+    DEFAULT_ITU_REGION, FEET_TO_METERS, run_calculation,
 };
-use crate::bands::{band_count, BANDS};
+use crate::bands::{get_bands_for_region, ALL_REGIONS, ITURegion};
 use crate::calculations::{
     calculate_average_max_distance, calculate_average_min_distance, WireCalculation,
     DEFAULT_NON_RESONANT_CONFIG,
@@ -30,6 +30,7 @@ struct CliOptions {
     wire_min_ft: Option<f64>,
     wire_max_ft: Option<f64>,
     mode: CalcMode,
+    itu_region: ITURegion,
     list_bands: bool,
     help: bool,
     units: Option<UnitSystem>,
@@ -57,13 +58,16 @@ pub fn run_interactive() {
     println!("Rusty Wire v{} - Resonant Length and Skip Distance Calculator", env!("CARGO_PKG_VERSION"));
     println!("============================================================\n");
 
+    let mut itu_region = prompt_itu_region();
+
     loop {
         println!("Menu:");
-        println!("  1) List all bands");
+        println!("  1) List all bands (for Region {})", itu_region.short_name());
         println!("  2) Calculate selected bands");
         println!("  3) Quick single-band calculation");
-        println!("  4) Exit");
-        print!("\nSelect option (1-4): ");
+        println!("  4) Change ITU Region");
+        println!("  5) Exit");
+        print!("\nSelect option (1-5): ");
         io::stdout().flush().expect("failed to flush stdout");
 
         let mut choice = String::new();
@@ -72,10 +76,14 @@ pub fn run_interactive() {
             .expect("failed to read choice");
 
         match choice.trim() {
-            "1" => show_all_bands(),
-            "2" => calculate_selected_bands(),
-            "3" => quick_calculation(),
+            "1" => show_all_bands_for_region(itu_region),
+            "2" => calculate_selected_bands(itu_region),
+            "3" => quick_calculation(itu_region),
             "4" => {
+                itu_region = prompt_itu_region();
+                println!("Switched to ITU Region {}.\n", itu_region.short_name());
+            }
+            "5" => {
                 println!("Exiting Rusty Wire.");
                 break;
             }
@@ -95,7 +103,7 @@ fn run_non_interactive(opts: CliOptions) {
     }
 
     if opts.list_bands {
-        show_all_bands();
+        show_all_bands_for_region(opts.itu_region);
     }
 
     let indices = match opts.bands {
@@ -121,6 +129,7 @@ fn run_non_interactive(opts: CliOptions) {
         wire_min_m: opts.wire_min_m,
         wire_max_m: opts.wire_max_m,
         units,
+        itu_region: opts.itu_region,
     };
 
     let results = run_calculation(config);
@@ -164,17 +173,19 @@ fn run_non_interactive(opts: CliOptions) {
 // Interactive mode helpers
 // ---------------------------------------------------------------------------
 
-fn show_all_bands() {
-    println!("\nAvailable bands ({} total):", band_count());
+fn show_all_bands_for_region(region: ITURegion) {
+    let bands = get_bands_for_region(region);
+    println!("\nAvailable bands in Region {} ({} total):", region.short_name(), bands.len());
+    println!("  ({})", region.long_name());
     println!("------------------------------------------------------------");
-    for (idx, band) in BANDS.iter().enumerate() {
+    for (idx, band) in bands {
         println!("{:2}. {}", idx + 1, band);
     }
     println!();
 }
 
-fn calculate_selected_bands() {
-    show_all_bands();
+fn calculate_selected_bands(region: ITURegion) {
+    show_all_bands_for_region(region);
     print!("Enter band numbers separated by commas (Enter for default 4,5,6,7,8,9,10): ");
     io::stdout().flush().expect("failed to flush stdout");
 
@@ -218,6 +229,7 @@ fn calculate_selected_bands() {
         wire_min_m,
         wire_max_m,
         units,
+        itu_region: region,
     };
 
     let results = run_calculation(config);
@@ -234,8 +246,8 @@ fn calculate_selected_bands() {
     }
 }
 
-fn quick_calculation() {
-    show_all_bands();
+fn quick_calculation(region: ITURegion) {
+    show_all_bands_for_region(region);
     print!("Enter one band number: ");
     io::stdout().flush().expect("failed to flush stdout");
 
@@ -268,6 +280,7 @@ fn quick_calculation() {
         wire_min_m,
         wire_max_m,
         units,
+        itu_region: region,
     };
 
     let results = run_calculation(config);
@@ -287,6 +300,32 @@ fn quick_calculation() {
 // ---------------------------------------------------------------------------
 // Prompts
 // ---------------------------------------------------------------------------
+
+fn prompt_itu_region() -> ITURegion {
+    println!("\nITU Regions:");
+    for region in ALL_REGIONS {
+        let is_default = *region == DEFAULT_ITU_REGION;
+        let default_str = if is_default { " (default)" } else { "" };
+        println!("  {}) Region {}{}", region.short_name(), region.long_name(), default_str);
+    }
+    print!("Select region (1/2/3, Enter for {}): ", DEFAULT_ITU_REGION.short_name());
+    io::stdout().flush().expect("failed to flush stdout");
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("failed to read region");
+
+    match input.trim() {
+        "" | "1" => ITURegion::Region1,
+        "2" => ITURegion::Region2,
+        "3" => ITURegion::Region3,
+        _ => {
+            println!("Invalid region. Using default Region {}.", DEFAULT_ITU_REGION.short_name());
+            DEFAULT_ITU_REGION
+        }
+    }
+}
 
 fn prompt_calc_mode() -> CalcMode {
     print!("Calculation mode (resonant/non-resonant, Enter for resonant): ");
@@ -656,7 +695,8 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
         UnitSystem::Both => "both",
     };
     let mut cmd = format!(
-        "rusty-wire --mode {} --bands {} --velocity {:.2} --units {}",
+        "rusty-wire --region {} --mode {} --bands {} --velocity {:.2} --units {}",
+        config.itu_region.short_name(),
         match config.mode {
             CalcMode::Resonant => "resonant",
             CalcMode::NonResonant => "non-resonant",
@@ -712,11 +752,13 @@ fn print_usage() {
     println!();
     println!("rusty-wire usage:");
     println!("  rusty-wire                  # interactive mode");
-    println!("  rusty-wire --list-bands");
-    println!("  rusty-wire [--mode resonant|non-resonant] [--bands 1,6,10] [--velocity 0.95] [--wire-min 8] [--wire-max 35] [--units m|ft|both] [--export csv,json,markdown,txt] [--output file]");
-    println!("  rusty-wire [--mode resonant|non-resonant] [--bands 1,6,10] [--velocity 0.95] [--wire-min-ft 26] [--wire-max-ft 115] [--units m|ft|both] [--export csv,json,markdown,txt] [--output file]");
+    println!("  rusty-wire --list-bands     # list bands for Region 1");
+    println!("  rusty-wire --list-bands --region 2");
+    println!("  rusty-wire [--region 1|2|3] [--mode resonant|non-resonant] [--bands 1,6,10] [--velocity 0.95] [--wire-min 8] [--wire-max 35] [--units m|ft|both] [--export csv,json,markdown,txt] [--output file]");
+    println!("  rusty-wire [--region 1|2|3] [--mode resonant|non-resonant] [--bands 1,6,10] [--velocity 0.95] [--wire-min-ft 26] [--wire-max-ft 115] [--units m|ft|both] [--export csv,json,markdown,txt] [--output file]");
     println!("  (--export accepts a comma-separated list; --output applies only when a single format is selected)");
     println!("\nNotes:");
+    println!("  - ITU Region: 1=Europe/Africa/Middle East, 2=Americas, 3=Asia-Pacific (default: 1)");
     println!("  - Band numbers come from --list-bands");
     println!("  - Default selected bands are 40m-10m: 4,5,6,7,8,9,10");
     println!("  - Velocity factor range is 0.50 to 1.00");
@@ -741,6 +783,7 @@ fn parse_cli_args(args: &[String]) -> Result<CliOptions, String> {
         wire_min_ft: None,
         wire_max_ft: None,
         mode: CalcMode::Resonant,
+        itu_region: DEFAULT_ITU_REGION,
         list_bands: false,
         help: false,
         units: None,
@@ -751,6 +794,13 @@ fn parse_cli_args(args: &[String]) -> Result<CliOptions, String> {
         match args[i].as_str() {
             "--help" | "-h" => opts.help = true,
             "--list-bands" => opts.list_bands = true,
+            "--region" => {
+                i += 1;
+                let value = args
+                    .get(i)
+                    .ok_or_else(|| "--region requires a value".to_string())?;
+                opts.itu_region = parse_itu_region(value)?;
+            }
             "--bands" => {
                 i += 1;
                 let value = args
@@ -895,6 +945,18 @@ fn parse_band_list(raw: &str) -> Result<Vec<usize>, String> {
         return Err("--bands cannot be empty".to_string());
     }
     Ok(bands)
+}
+
+fn parse_itu_region(raw: &str) -> Result<ITURegion, String> {
+    match raw.trim() {
+        "1" => Ok(ITURegion::Region1),
+        "2" => Ok(ITURegion::Region2),
+        "3" => Ok(ITURegion::Region3),
+        _ => Err(format!(
+            "invalid --region '{}'; must be 1, 2, or 3",
+            raw
+        )),
+    }
 }
 
 fn parse_export_format(raw: &str) -> Result<ExportFormat, String> {

@@ -4,7 +4,7 @@
 /// future GUI (e.g. iced).  It is deliberately free of I/O; nothing here reads
 /// from stdin or writes to stdout/stderr except for the `eprintln!` that reports
 /// skipped invalid band indices.
-use crate::bands::get_band_by_index;
+use crate::bands::{get_band_by_index_for_region, ITURegion};
 use crate::calculations::{
     calculate_best_non_resonant_length, calculate_for_band_with_velocity,
     calculate_non_resonant_optima, NonResonantRecommendation, NonResonantSearchConfig,
@@ -13,6 +13,7 @@ use crate::calculations::{
 
 pub const FEET_TO_METERS: f64 = 0.3048;
 pub const DEFAULT_BAND_SELECTION: [usize; 7] = [4, 5, 6, 7, 8, 9, 10];
+pub const DEFAULT_ITU_REGION: ITURegion = ITURegion::Region1;
 
 // ---------------------------------------------------------------------------
 // Shared enums
@@ -62,6 +63,7 @@ pub struct AppConfig {
     pub wire_min_m: f64,
     pub wire_max_m: f64,
     pub units: UnitSystem,
+    pub itu_region: ITURegion,
 }
 
 impl Default for AppConfig {
@@ -73,6 +75,7 @@ impl Default for AppConfig {
             wire_min_m: DEFAULT_NON_RESONANT_CONFIG.min_len_m,
             wire_max_m: DEFAULT_NON_RESONANT_CONFIG.max_len_m,
             units: UnitSystem::Both,
+            itu_region: DEFAULT_ITU_REGION,
         }
     }
 }
@@ -100,7 +103,7 @@ pub struct AppResults {
 /// This is a pure, I/O-free function suitable for use from both the CLI and
 /// any future GUI front-end.
 pub fn run_calculation(config: AppConfig) -> AppResults {
-    let calculations = build_calculations(&config.band_indices, config.velocity_factor);
+    let calculations = build_calculations(&config.band_indices, config.velocity_factor, config.itu_region);
 
     // For resonant mode use the default search window; for non-resonant use the
     // user-supplied window.  Optima (tied candidates) are only relevant in
@@ -131,13 +134,13 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
 // Private helpers
 // ---------------------------------------------------------------------------
 
-fn build_calculations(indices: &[usize], velocity: f64) -> Vec<WireCalculation> {
+fn build_calculations(indices: &[usize], velocity: f64, region: ITURegion) -> Vec<WireCalculation> {
     let mut calculations = Vec::new();
     for idx in indices {
-        if let Some(band) = get_band_by_index(idx.saturating_sub(1)) {
-            calculations.push(calculate_for_band_with_velocity(band, velocity));
+        if let Some(band) = get_band_by_index_for_region(idx.saturating_sub(1), region) {
+            calculations.push(calculate_for_band_with_velocity(&band, velocity));
         } else {
-            eprintln!("Band {} not found; skipped.", idx);
+            eprintln!("Band {} not found in Region {}; skipped.", idx, region.short_name());
         }
     }
     calculations
