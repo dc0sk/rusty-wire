@@ -1,6 +1,6 @@
 # Rusty Wire
 
-**Version 1.0.0**
+**Version 1.1.0**
 
 Rusty Wire is a Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.
 
@@ -11,6 +11,7 @@ It supports:
 - Non-resonant common wire optimization across selected bands with multi-optima support
 - Skip-distance summaries for selected bands
 - Interactive and non-interactive (CLI) workflows
+- ITU region-aware amateur band handling (Region 1/2/3)
 - Multiple export formats: CSV, JSON, Markdown, and plain text
 - Unit system filtering: metric-only, imperial-only, or both
 - Empirical test validation
@@ -68,6 +69,7 @@ cargo run -- [OPTIONS]
 
 - `--help` — Display help message
 - `--list-bands` — List all available bands
+- `--region <1|2|3>` — ITU region selection (default: `1`)
 - `--bands <csv>` — Comma-separated band numbers (e.g., `6,10,40`)
 - `--mode <resonant|non-resonant>` — Calculation mode (default: resonant)
 - `--velocity <value>` — Velocity factor (0.0–1.0, default: 0.95)
@@ -87,6 +89,18 @@ Feet (optional alternative):
 Notes:
 - Do not mix meter and feet constraints in the same command.
 - If no `--bands` are provided, Rusty Wire defaults to 40m-10m (`4,5,6,7,8,9,10`).
+- Region-specific amateur band ranges are applied before calculation.
+
+### ITU region behavior
+
+- Region `1`: Europe, Africa, Middle East
+- Region `2`: Americas
+- Region `3`: Asia-Pacific
+
+Example regional differences currently modeled:
+- 80m: R1 `3.5-3.8`, R2 `3.5-4.0`, R3 `3.5-3.9`
+- 40m: R1 `7.0-7.2`, R2 `7.0-7.3`, R3 `7.0-7.2`
+- 60m: harmonized segment `5.3515-5.3665`
 
 ### Unit system and display options
 
@@ -116,6 +130,13 @@ rusty-wire --velocity 0.95
 
 ```bash
 rusty-wire --mode resonant --bands 6,10 --velocity 0.90
+```
+
+### 2a) Region-specific listing and calculation
+
+```bash
+rusty-wire --list-bands --region 1
+rusty-wire --region 2 --mode resonant --bands 4 --velocity 0.95
 ```
 
 ### 3) Non-resonant optimization with metric constraints
@@ -222,3 +243,15 @@ Best non-resonant wire length for selected bands:
 
 PASS: multi-optima behavior is reachable.
 ```
+
+### Running the ITU region regression script
+
+```bash
+./scripts/test-itu-region-bands.sh
+```
+
+This script:
+- Builds the project
+- Runs `--list-bands` for Regions 1, 2, and 3
+- Verifies all listed bands and ranges against expected values
+- Returns exit code 0 on success, non-zero on mismatch

@@ -1,6 +1,6 @@
 # Rusty Wire
 
-**Version 1.0.0**
+**Version 1.1.0**
 
 A Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.
 
@@ -35,6 +35,7 @@ cargo run -- [OPTIONS]
 - **Multiple export formats**: CSV, JSON, Markdown, plain text
 - **Unit system flexibility**: Metric-only, imperial-only, or both
 - **Interactive and CLI modes**: Choose your workflow
+- **ITU region support**: Region-aware amateur band ranges (default: Region 1)
 - **Band database**: Pre-configured ham and shortwave bands
 
 ## Documentation
@@ -43,6 +44,7 @@ For comprehensive CLI documentation and examples, see [docs/cli-guide.md](docs/c
 
 Key topics:
 - CLI usage and all options
+- ITU region selection (`--region 1|2|3`)
 - Resonant vs. non-resonant mode differences
 - Wire search window (non-resonant only)
 - Export format selection
@@ -60,12 +62,22 @@ Verify the multi-optima feature:
 
 This script performs an exhaustive parameter sweep and exits on the first case where multiple optima are found.
 
+Verify ITU region band ranges:
+
+```bash
+./scripts/test-itu-region-bands.sh
+```
+
+This script checks all listed band ranges for Regions 1, 2, and 3.
+
 ## Architecture
 
-- **src/main.rs**: CLI interface, interactive prompts, display and export logic
+- **src/main.rs**: Program entry point and mode dispatch
+- **src/cli.rs**: CLI interface, interactive prompts, display and export logic
 - **src/calculations.rs**: Core physics calculations and optimization algorithms
-- **src/bands.rs**: Band database with frequencies and band names
+- **src/bands.rs**: Region-aware band database and frequency ranges
 - **scripts/test-multi-optima.sh**: Empirical validation test for multi-optima feature
+- **scripts/test-itu-region-bands.sh**: Regression test for ITU region band ranges
 
 ## Examples
 

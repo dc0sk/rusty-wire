@@ -2,6 +2,22 @@
 
 All notable changes to Rusty Wire are documented here.
 
+## [1.1.0] - 2026-04-08
+
+### Added
+- **ITU region selection** in both CLI and interactive mode.
+	- New CLI flag: `--region 1|2|3` (default: Region 1).
+	- Interactive mode now prompts for region and allows changing region from the menu.
+- **Regional band listing**: `--list-bands` now respects the selected ITU region.
+- **Regression test script**: `scripts/test-itu-region-bands.sh` validates all listed bands and ranges for Regions 1, 2, and 3.
+
+### Changed
+- **Band model is now region-aware** for amateur allocations that differ by region:
+	- 80m: Region 1 `3.5-3.8`, Region 2 `3.5-4.0`, Region 3 `3.5-3.9`.
+	- 40m: Region 1 `7.0-7.2`, Region 2 `7.0-7.3`, Region 3 `7.0-7.2`.
+	- 60m uses a harmonized WRC-15 segment: `5.3515-5.3665`.
+- Calculation frequencies are now derived from region-adjusted ranges so resonant results match the selected ITU region.
+
 ## [1.0.0] — 2026-04-03
 
 ### Added
