@@ -8,12 +8,13 @@ use crate::bands::{get_band_by_index_for_region, ITURegion};
 use crate::calculations::{
     calculate_best_non_resonant_length, calculate_for_band_with_velocity,
     calculate_non_resonant_optima, NonResonantRecommendation, NonResonantSearchConfig,
-    WireCalculation, DEFAULT_NON_RESONANT_CONFIG,
+    TransformerRatio, WireCalculation, DEFAULT_NON_RESONANT_CONFIG,
 };
 
 pub const FEET_TO_METERS: f64 = 0.3048;
 pub const DEFAULT_BAND_SELECTION: [usize; 7] = [4, 5, 6, 7, 8, 9, 10];
 pub const DEFAULT_ITU_REGION: ITURegion = ITURegion::Region1;
+pub const DEFAULT_TRANSFORMER_RATIO: TransformerRatio = TransformerRatio::R1To1;
 
 // ---------------------------------------------------------------------------
 // Shared enums
@@ -64,6 +65,7 @@ pub struct AppConfig {
     pub wire_max_m: f64,
     pub units: UnitSystem,
     pub itu_region: ITURegion,
+    pub transformer_ratio: TransformerRatio,
 }
 
 impl Default for AppConfig {
@@ -76,6 +78,7 @@ impl Default for AppConfig {
             wire_max_m: DEFAULT_NON_RESONANT_CONFIG.max_len_m,
             units: UnitSystem::Both,
             itu_region: DEFAULT_ITU_REGION,
+            transformer_ratio: DEFAULT_TRANSFORMER_RATIO,
         }
     }
 }
@@ -103,7 +106,12 @@ pub struct AppResults {
 /// This is a pure, I/O-free function suitable for use from both the CLI and
 /// any future GUI front-end.
 pub fn run_calculation(config: AppConfig) -> AppResults {
-    let calculations = build_calculations(&config.band_indices, config.velocity_factor, config.itu_region);
+    let calculations = build_calculations(
+        &config.band_indices,
+        config.velocity_factor,
+        config.itu_region,
+        config.transformer_ratio,
+    );
 
     // For resonant mode use the default search window; for non-resonant use the
     // user-supplied window.  Optima (tied candidates) are only relevant in
@@ -134,11 +142,20 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
 // Private helpers
 // ---------------------------------------------------------------------------
 
-fn build_calculations(indices: &[usize], velocity: f64, region: ITURegion) -> Vec<WireCalculation> {
+fn build_calculations(
+    indices: &[usize],
+    velocity: f64,
+    region: ITURegion,
+    transformer_ratio: TransformerRatio,
+) -> Vec<WireCalculation> {
     let mut calculations = Vec::new();
     for idx in indices {
         if let Some(band) = get_band_by_index_for_region(idx.saturating_sub(1), region) {
-            calculations.push(calculate_for_band_with_velocity(&band, velocity));
+            calculations.push(calculate_for_band_with_velocity(
+                &band,
+                velocity,
+                transformer_ratio,
+            ));
         } else {
             eprintln!("Band {} not found in Region {}; skipped.", idx, region.short_name());
         }

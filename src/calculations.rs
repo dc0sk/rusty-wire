@@ -2,10 +2,73 @@
 use crate::bands::Band;
 use std::fmt;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransformerRatio {
+    R1To1,
+    R1To2,
+    R1To4,
+    R1To5,
+    R1To6,
+    R1To9,
+    R1To16,
+    R1To49,
+    R1To56,
+    R1To64,
+}
+
+impl TransformerRatio {
+    pub fn as_label(self) -> &'static str {
+        match self {
+            TransformerRatio::R1To1 => "1:1",
+            TransformerRatio::R1To2 => "1:2",
+            TransformerRatio::R1To4 => "1:4",
+            TransformerRatio::R1To5 => "1:5",
+            TransformerRatio::R1To6 => "1:6",
+            TransformerRatio::R1To9 => "1:9",
+            TransformerRatio::R1To16 => "1:16",
+            TransformerRatio::R1To49 => "1:49",
+            TransformerRatio::R1To56 => "1:56",
+            TransformerRatio::R1To64 => "1:64",
+        }
+    }
+
+    pub fn impedance_ratio(self) -> f64 {
+        match self {
+            TransformerRatio::R1To1 => 1.0,
+            TransformerRatio::R1To2 => 2.0,
+            TransformerRatio::R1To4 => 4.0,
+            TransformerRatio::R1To5 => 5.0,
+            TransformerRatio::R1To6 => 6.0,
+            TransformerRatio::R1To9 => 9.0,
+            TransformerRatio::R1To16 => 16.0,
+            TransformerRatio::R1To49 => 49.0,
+            TransformerRatio::R1To56 => 56.0,
+            TransformerRatio::R1To64 => 64.0,
+        }
+    }
+
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw.trim() {
+            "1:1" | "1" => Some(TransformerRatio::R1To1),
+            "1:2" | "2" => Some(TransformerRatio::R1To2),
+            "1:4" | "4" => Some(TransformerRatio::R1To4),
+            "1:5" | "5" => Some(TransformerRatio::R1To5),
+            "1:6" | "6" => Some(TransformerRatio::R1To6),
+            "1:9" | "9" => Some(TransformerRatio::R1To9),
+            "1:16" | "16" => Some(TransformerRatio::R1To16),
+            "1:49" | "49" => Some(TransformerRatio::R1To49),
+            "1:56" | "56" => Some(TransformerRatio::R1To56),
+            "1:64" | "64" => Some(TransformerRatio::R1To64),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct WireCalculation {
     pub band_name: String,
     pub frequency_mhz: f64,
+    pub transformer_ratio_label: &'static str,
     
     // Dipole lengths (in meters)
     pub half_wave_m: f64,
@@ -16,6 +79,14 @@ pub struct WireCalculation {
     pub half_wave_ft: f64,
     pub full_wave_ft: f64,
     pub quarter_wave_ft: f64,
+
+    // Impedance-corrected lengths for selected transformer ratio
+    pub corrected_half_wave_m: f64,
+    pub corrected_full_wave_m: f64,
+    pub corrected_quarter_wave_m: f64,
+    pub corrected_half_wave_ft: f64,
+    pub corrected_full_wave_ft: f64,
+    pub corrected_quarter_wave_ft: f64,
     
     // Skip distances
     pub skip_distance_min_km: f64,
@@ -50,13 +121,20 @@ impl fmt::Display for WireCalculation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}\n  Frequency: {:.3} MHz\n  Half-wave total: {:.2}m ({:.2}ft)\n  Full-wave total: {:.2}m ({:.2}ft)\n  Quarter-wave: {:.2}m ({:.2}ft)\n  Skip distance: {:.0}-{:.0}km (avg: {:.0}km)",
+            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Full-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Quarter-wave: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Skip distance: {:.0}-{:.0}km (avg: {:.0}km)",
             self.band_name,
             self.frequency_mhz,
+            self.transformer_ratio_label,
+            self.corrected_half_wave_m,
+            self.corrected_half_wave_ft,
             self.half_wave_m,
             self.half_wave_ft,
+            self.corrected_full_wave_m,
+            self.corrected_full_wave_ft,
             self.full_wave_m,
             self.full_wave_ft,
+            self.corrected_quarter_wave_m,
+            self.corrected_quarter_wave_ft,
             self.quarter_wave_m,
             self.quarter_wave_ft,
             self.skip_distance_min_km,
@@ -77,6 +155,7 @@ const METERS_TO_FEET: f64 = 3.28084;
 pub fn calculate_for_band_with_velocity(
     band: &Band,
     velocity_factor: f64,
+    transformer: TransformerRatio,
 ) -> WireCalculation {
     let freq = band.freq_center_mhz;
 
@@ -88,6 +167,15 @@ pub fn calculate_for_band_with_velocity(
     let half_wave_m = half_wave_ft / METERS_TO_FEET;
     let full_wave_m = full_wave_ft / METERS_TO_FEET;
     let quarter_wave_m = quarter_wave_ft / METERS_TO_FEET;
+
+    // Use a shared nominal feedpoint reference so transformer selection has a
+    // consistent impact across resonant families and optimization behavior.
+    let corrected_half_wave_ft = impedance_corrected_length_ft(half_wave_ft, 73.0, transformer);
+    let corrected_full_wave_ft = impedance_corrected_length_ft(full_wave_ft, 73.0, transformer);
+    let corrected_quarter_wave_ft = impedance_corrected_length_ft(quarter_wave_ft, 73.0, transformer);
+    let corrected_half_wave_m = corrected_half_wave_ft / METERS_TO_FEET;
+    let corrected_full_wave_m = corrected_full_wave_ft / METERS_TO_FEET;
+    let corrected_quarter_wave_m = corrected_quarter_wave_ft / METERS_TO_FEET;
     
     // Calculate skip distance average
     let skip_distance_avg_km =
@@ -96,16 +184,36 @@ pub fn calculate_for_band_with_velocity(
     WireCalculation {
         band_name: band.name.to_string(),
         frequency_mhz: freq,
+        transformer_ratio_label: transformer.as_label(),
         half_wave_m,
         full_wave_m,
         quarter_wave_m,
         half_wave_ft,
         full_wave_ft,
         quarter_wave_ft,
+        corrected_half_wave_m,
+        corrected_full_wave_m,
+        corrected_quarter_wave_m,
+        corrected_half_wave_ft,
+        corrected_full_wave_ft,
+        corrected_quarter_wave_ft,
         skip_distance_min_km: band.typical_skip_km.0,
         skip_distance_max_km: band.typical_skip_km.1,
         skip_distance_avg_km,
     }
+}
+
+fn impedance_corrected_length_ft(base_len_ft: f64, nominal_feedpoint_ohm: f64, transformer: TransformerRatio) -> f64 {
+    if transformer == TransformerRatio::R1To1 {
+        return base_len_ft;
+    }
+
+    let target_antenna_ohm = 50.0 * transformer.impedance_ratio();
+    let ratio = (target_antenna_ohm / nominal_feedpoint_ohm).max(0.01);
+
+    // Heuristic correction: small logarithmic shift around resonance, bounded to practical limits.
+    let correction = (1.0 + 0.03 * ratio.log10()).clamp(0.85, 1.15);
+    base_len_ft * correction
 }
 
 /// Calculate the most distant reachable distance by averaging skip distances
@@ -155,9 +263,9 @@ pub fn calculate_non_resonant_optima(
 
     let mut resonance_points_m = Vec::new();
     for c in calculations {
-        // Wavelength in meters from frequency in MHz.
-        let wavelength_m = 300.0 / c.frequency_mhz;
-        let quarter_wave_m = (wavelength_m / 4.0) * velocity_factor;
+        // Use transformer-corrected quarter-wave as the base resonance point so
+        // optimum common wire length reflects the selected Unun/Balun ratio.
+        let quarter_wave_m = c.corrected_quarter_wave_m;
 
         let mut harmonic = 1_u32;
         loop {
@@ -171,6 +279,9 @@ pub fn calculate_non_resonant_optima(
             harmonic += 1;
         }
     }
+
+    // Keep API stability while calculations now consume corrected per-band values.
+    let _ = velocity_factor;
 
     if resonance_points_m.is_empty() {
         return Vec::new();
