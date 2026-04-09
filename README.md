@@ -1,6 +1,6 @@
 # Rusty Wire
 
-**Version 1.2.0**
+**Version 1.3.0**
 
 A Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.
 
@@ -32,7 +32,8 @@ cargo run -- [OPTIONS]
 - **Resonant point analysis**: Shows resonant harmonics within the active search window
 - **Resonant shared compromises**: Shows closest combined compromise lengths to in-window resonant points
 - **Non-resonant optimization**: Find the best single wire length for multiple bands
-- **Multi-optima support**: Displays all equally-optimal wire lengths
+- **Non-resonant window optima**: Displays multiple local optimum candidates within the active search window
+- **Equal-tie optima support**: Displays all equally-optimal wire lengths when ties occur
 - **Velocity factor control**: Adjust for different wire types and insulation
 - **Multiple export formats**: CSV, JSON, Markdown, plain text
 - **Unit system flexibility**: Metric-only, imperial-only, or both

@@ -2,6 +2,15 @@
 
 All notable changes to Rusty Wire are documented here.
 
+## [1.3.0] - 2026-04-09
+
+### Added
+- **Non-resonant search-window local optima**: non-resonant mode now lists multiple local optimum wire lengths (clearance maxima) within the active search window.
+
+### Changed
+- **Non-resonant output detail**: output now distinguishes between local window optima and equal global optima, marking the selected recommendation in the local-optima list.
+- **Documentation updates**: README and CLI guide now describe the new non-resonant search-window local-optima output.
+
 ## [1.2.0] - 2026-04-09
 
 ### Added

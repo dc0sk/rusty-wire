@@ -715,6 +715,7 @@ fn print_non_resonant_recommendation(results: &AppResults) {
         None => return,
     };
     let optima = &results.optima;
+    let window_optima = &results.window_optima;
     let (min_m, max_m) = (results.config.wire_min_m, results.config.wire_max_m);
     let min_ft = min_m / FEET_TO_METERS;
     let max_ft = max_m / FEET_TO_METERS;
@@ -763,6 +764,38 @@ fn print_non_resonant_recommendation(results: &AppResults) {
                 UnitSystem::Both => println!(
                     "    {:2}. {:.2} m ({:.2} ft, clearance: {:.2}%)",
                     idx + 1, o.length_m, o.length_ft, o.min_resonance_clearance_pct
+                ),
+            }
+        }
+        println!();
+    }
+
+    if window_optima.len() > 1 {
+        println!("  Local optima in search window (ascending):");
+        for (idx, o) in window_optima.iter().enumerate() {
+            let is_recommended = (o.length_m - rec.length_m).abs() < 1e-6;
+            match units {
+                UnitSystem::Metric => println!(
+                    "    {:2}. {:.2} m (clearance: {:.2}%{})",
+                    idx + 1,
+                    o.length_m,
+                    o.min_resonance_clearance_pct,
+                    if is_recommended { ", recommended" } else { "" }
+                ),
+                UnitSystem::Imperial => println!(
+                    "    {:2}. {:.2} ft (clearance: {:.2}%{})",
+                    idx + 1,
+                    o.length_ft,
+                    o.min_resonance_clearance_pct,
+                    if is_recommended { ", recommended" } else { "" }
+                ),
+                UnitSystem::Both => println!(
+                    "    {:2}. {:.2} m ({:.2} ft, clearance: {:.2}%{})",
+                    idx + 1,
+                    o.length_m,
+                    o.length_ft,
+                    o.min_resonance_clearance_pct,
+                    if is_recommended { ", recommended" } else { "" }
                 ),
             }
         }

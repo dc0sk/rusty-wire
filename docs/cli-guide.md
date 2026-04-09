@@ -1,6 +1,6 @@
 # Rusty Wire
 
-**Version 1.2.0**
+**Version 1.3.0**
 
 Rusty Wire is a Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.
 
@@ -25,7 +25,8 @@ It supports:
   - Non-resonant
 - Velocity factor input (default: 0.95)
 - Non-resonant search constraints in either meters (default) or feet
-- Multiple equally-optimal wire lengths displayed in ascending order
+- Multiple local optima displayed for the active non-resonant search window
+- Multiple equally-optimal wire lengths displayed in ascending order when ties occur
 - Unit system awareness:
   - `--units m`: metric output only
   - `--units ft`: imperial output only
@@ -186,10 +187,14 @@ rusty-wire --mode non-resonant --bands 6,10 --wire-min-ft 30 --wire-max-ft 60 --
 rusty-wire --mode non-resonant --bands 2 --velocity 0.50 --wire-min 6 --wire-max 30
 ```
 
-If multiple wire lengths are equally optimal, all will be displayed in ascending order:
+Non-resonant mode displays local optima for the active search window and, when present, equal-tie optima:
 ```
 Best non-resonant wire length for selected bands:
   15.00 m (49.21 ft), resonance clearance: 33.33%
+  Local optima in search window (ascending):
+     1. 10.35 m (33.96 ft, clearance: 3.95%)
+     2. 15.00 m (49.21 ft, clearance: 33.33%, recommended)
+     3. 19.65 m (64.47 ft, clearance: 18.32%)
   Additional equal optima in range (ascending):
      1. 15.00 m (49.21 ft, clearance: 33.33%)
      2. 25.00 m (82.02 ft, clearance: 20.00%)
@@ -208,6 +213,7 @@ Best non-resonant wire length for selected bands:
 - Band context overview
 - Skip-distance summary
 - **Best non-resonant wire length** with search window and resonance clearance
+- **Local optima in the active search window** in ascending order
 - **Multiple equally-optimal wire lengths** in ascending order (if ties exist)
 - Multiple export format support (CSV, JSON, Markdown, plain text)
 

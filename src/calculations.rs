@@ -269,24 +269,7 @@ pub fn calculate_non_resonant_optima(
     let max_len_m = config.max_len_m;
     let step_m = config.step_m;
 
-    let mut resonance_points_m = Vec::new();
-    for c in calculations {
-        // Use transformer-corrected quarter-wave as the base resonance point so
-        // optimum common wire length reflects the selected Unun/Balun ratio.
-        let quarter_wave_m = c.corrected_quarter_wave_m;
-
-        let mut harmonic = 1_u32;
-        loop {
-            let resonant_len_m = quarter_wave_m * f64::from(harmonic);
-            if resonant_len_m > max_len_m + 1.0 {
-                break;
-            }
-            if resonant_len_m >= min_len_m - 1.0 {
-                resonance_points_m.push(resonant_len_m);
-            }
-            harmonic += 1;
-        }
-    }
+    let resonance_points_m = build_non_resonant_resonance_points(calculations, min_len_m, max_len_m);
 
     // Keep API stability while calculations now consume corrected per-band values.
     let _ = velocity_factor;
@@ -324,6 +307,125 @@ pub fn calculate_non_resonant_optima(
             min_resonance_clearance_pct: (clearance_m / best_len_m) * 100.0,
         })
         .collect()
+}
+
+/// Find local non-resonant optima inside the active search window.
+///
+/// Unlike `calculate_non_resonant_optima` (which keeps only equal global
+/// winners), this returns all local maxima of resonance clearance so users can
+/// inspect multiple practical candidates within the current window.
+pub fn calculate_non_resonant_window_optima(
+    calculations: &[WireCalculation],
+    velocity_factor: f64,
+    config: NonResonantSearchConfig,
+) -> Vec<NonResonantRecommendation> {
+    if calculations.is_empty() {
+        return Vec::new();
+    }
+
+    if config.min_len_m <= 0.0
+        || config.max_len_m <= config.min_len_m
+        || config.step_m <= 0.0
+    {
+        return Vec::new();
+    }
+
+    let min_len_m = config.min_len_m;
+    let max_len_m = config.max_len_m;
+    let step_m = config.step_m;
+
+    let resonance_points_m = build_non_resonant_resonance_points(calculations, min_len_m, max_len_m);
+
+    // Keep API symmetry with non-resonant calculations.
+    let _ = velocity_factor;
+
+    if resonance_points_m.is_empty() {
+        return Vec::new();
+    }
+
+    let mut samples: Vec<(f64, f64)> = Vec::new();
+    let mut len = min_len_m;
+    while len <= max_len_m + 1e-9 {
+        let nearest = resonance_points_m
+            .iter()
+            .map(|r| (len - r).abs())
+            .fold(f64::INFINITY, f64::min);
+        samples.push((len, nearest));
+        len += step_m;
+    }
+
+    if samples.is_empty() {
+        return Vec::new();
+    }
+
+    let mut local_maxima: Vec<(f64, f64)> = Vec::new();
+
+    if samples.len() == 1 {
+        local_maxima.push(samples[0]);
+    } else {
+        if samples[0].1 >= samples[1].1 {
+            local_maxima.push(samples[0]);
+        }
+        for i in 1..(samples.len() - 1) {
+            let prev = samples[i - 1].1;
+            let curr = samples[i].1;
+            let next = samples[i + 1].1;
+            if (curr >= prev && curr >= next) && (curr > prev || curr > next) {
+                local_maxima.push(samples[i]);
+            }
+        }
+        if samples[samples.len() - 1].1 >= samples[samples.len() - 2].1 {
+            local_maxima.push(samples[samples.len() - 1]);
+        }
+    }
+
+    if local_maxima.is_empty() {
+        if let Some(global_best) = samples.iter().cloned().max_by(|a, b| {
+            a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)
+        }) {
+            local_maxima.push(global_best);
+        }
+    }
+
+    local_maxima.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    if local_maxima.len() > 30 {
+        local_maxima.truncate(30);
+    }
+
+    local_maxima
+        .into_iter()
+        .map(|(length_m, clearance_m)| NonResonantRecommendation {
+            length_m,
+            length_ft: length_m * METERS_TO_FEET,
+            min_resonance_clearance_pct: (clearance_m / length_m) * 100.0,
+        })
+        .collect()
+}
+
+fn build_non_resonant_resonance_points(
+    calculations: &[WireCalculation],
+    min_len_m: f64,
+    max_len_m: f64,
+) -> Vec<f64> {
+    let mut resonance_points_m = Vec::new();
+    for c in calculations {
+        // Use transformer-corrected quarter-wave as the base resonance point so
+        // optimum common wire length reflects the selected Unun/Balun ratio.
+        let quarter_wave_m = c.corrected_quarter_wave_m;
+
+        let mut harmonic = 1_u32;
+        loop {
+            let resonant_len_m = quarter_wave_m * f64::from(harmonic);
+            if resonant_len_m > max_len_m + 1.0 {
+                break;
+            }
+            if resonant_len_m >= min_len_m - 1.0 {
+                resonance_points_m.push(resonant_len_m);
+            }
+            harmonic += 1;
+        }
+    }
+    resonance_points_m
 }
 
 pub fn calculate_best_non_resonant_length(
