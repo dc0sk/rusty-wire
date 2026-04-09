@@ -103,6 +103,14 @@ pub struct NonResonantRecommendation {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct ResonantCompromise {
+    pub length_m: f64,
+    pub length_ft: f64,
+    // Worst-case distance to nearest resonant point among selected bands.
+    pub worst_band_distance_m: f64,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct NonResonantSearchConfig {
     pub min_len_m: f64,
     pub max_len_m: f64,
@@ -334,4 +342,138 @@ pub fn calculate_best_non_resonant_length(
         let bd = (b.length_m - preferred_center_m).abs();
         ad.partial_cmp(&bd).unwrap_or(std::cmp::Ordering::Equal)
     })
+}
+
+/// Find compromise wire lengths that are as close as possible to resonant points
+/// across all selected bands within the active search window.
+///
+/// Objective:
+/// - For each candidate length in the window, compute distance to nearest
+///   in-window resonant point per band.
+/// - Minimize the worst per-band distance.
+/// - Return all equal optima (within tolerance) in ascending order.
+pub fn calculate_resonant_compromises(
+    calculations: &[WireCalculation],
+    config: NonResonantSearchConfig,
+) -> Vec<ResonantCompromise> {
+    if calculations.is_empty() {
+        return Vec::new();
+    }
+    if config.min_len_m <= 0.0
+        || config.max_len_m <= config.min_len_m
+        || config.step_m <= 0.0
+    {
+        return Vec::new();
+    }
+
+    let min_len_m = config.min_len_m;
+    let max_len_m = config.max_len_m;
+    let step_m = config.step_m;
+
+    let mut band_points: Vec<Vec<f64>> = Vec::new();
+    for calc in calculations {
+        let quarter_wave_m = calc.corrected_quarter_wave_m;
+        if quarter_wave_m <= 0.0 {
+            continue;
+        }
+
+        let mut points = Vec::new();
+        let mut harmonic = 1_u32;
+        loop {
+            let resonant_len_m = quarter_wave_m * f64::from(harmonic);
+            if resonant_len_m > max_len_m + 1e-9 {
+                break;
+            }
+            if resonant_len_m >= min_len_m - 1e-9 {
+                points.push(resonant_len_m);
+            }
+            harmonic += 1;
+        }
+
+        if !points.is_empty() {
+            band_points.push(points);
+        }
+    }
+
+    if band_points.is_empty() {
+        return Vec::new();
+    }
+
+    let mut samples: Vec<(f64, f64)> = Vec::new();
+    let mut len = min_len_m;
+    while len <= max_len_m + 1e-9 {
+        let mut worst_distance = 0.0_f64;
+        for points in &band_points {
+            let nearest = points
+                .iter()
+                .map(|p| (len - p).abs())
+                .fold(f64::INFINITY, f64::min);
+            if nearest > worst_distance {
+                worst_distance = nearest;
+            }
+        }
+        samples.push((len, worst_distance));
+        len += step_m;
+    }
+
+    if samples.is_empty() {
+        return Vec::new();
+    }
+
+    let mut local_minima: Vec<(f64, f64)> = Vec::new();
+
+    if samples.len() == 1 {
+        local_minima.push(samples[0]);
+    } else {
+        if samples[0].1 <= samples[1].1 {
+            local_minima.push(samples[0]);
+        }
+        for i in 1..(samples.len() - 1) {
+            let prev = samples[i - 1].1;
+            let curr = samples[i].1;
+            let next = samples[i + 1].1;
+            if (curr <= prev && curr <= next) && (curr < prev || curr < next) {
+                local_minima.push(samples[i]);
+            }
+        }
+        if samples[samples.len() - 1].1 <= samples[samples.len() - 2].1 {
+            local_minima.push(samples[samples.len() - 1]);
+        }
+    }
+
+    if local_minima.is_empty() {
+        if let Some(global_best) = samples.iter().cloned().min_by(|a, b| {
+            a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)
+        }) {
+            local_minima.push(global_best);
+        }
+    }
+
+    let best_worst_distance_m = local_minima
+        .iter()
+        .map(|(_, d)| *d)
+        .fold(f64::INFINITY, f64::min);
+
+    // Keep nearby local minima so users can see practical alternates
+    // around repeated resonant alignment points (e.g. ~10/20/30m).
+    let keep_threshold = (best_worst_distance_m * 3.0).max(best_worst_distance_m + 0.05);
+
+    let mut winners: Vec<(f64, f64)> = local_minima
+        .into_iter()
+        .filter(|(_, d)| *d <= keep_threshold + 1e-9)
+        .collect();
+
+    winners.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    if winners.len() > 20 {
+        winners.truncate(20);
+    }
+
+    winners
+        .into_iter()
+        .map(|(length_m, worst_band_distance_m)| ResonantCompromise {
+            length_m,
+            length_ft: length_m * METERS_TO_FEET,
+            worst_band_distance_m,
+        })
+        .collect()
 }

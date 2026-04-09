@@ -1,6 +1,6 @@
 # Rusty Wire
 
-**Version 1.1.0**
+**Version 1.2.0**
 
 A Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.
 
@@ -29,6 +29,8 @@ cargo run -- [OPTIONS]
 ## Features
 
 - **Resonant calculations**: Half-wave, full-wave, and quarter-wave dipole lengths
+- **Resonant point analysis**: Shows resonant harmonics within the active search window
+- **Resonant shared compromises**: Shows closest combined compromise lengths to in-window resonant points
 - **Non-resonant optimization**: Find the best single wire length for multiple bands
 - **Multi-optima support**: Displays all equally-optimal wire lengths
 - **Velocity factor control**: Adjust for different wire types and insulation

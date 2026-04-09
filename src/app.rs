@@ -7,7 +7,8 @@
 use crate::bands::{get_band_by_index_for_region, ITURegion};
 use crate::calculations::{
     calculate_best_non_resonant_length, calculate_for_band_with_velocity,
-    calculate_non_resonant_optima, NonResonantRecommendation, NonResonantSearchConfig,
+    calculate_non_resonant_optima, calculate_resonant_compromises,
+    NonResonantRecommendation, NonResonantSearchConfig, ResonantCompromise,
     TransformerRatio, WireCalculation, DEFAULT_NON_RESONANT_CONFIG,
 };
 
@@ -93,6 +94,9 @@ pub struct AppResults {
     pub recommendation: Option<NonResonantRecommendation>,
     /// All equally-optimal wire lengths in ascending order.
     pub optima: Vec<NonResonantRecommendation>,
+    /// In resonant mode: all compromise lengths that minimize worst-band
+    /// distance to in-window resonant points.
+    pub resonant_compromises: Vec<ResonantCompromise>,
     /// The configuration that produced these results.
     pub config: AppConfig,
 }
@@ -129,11 +133,17 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
     } else {
         Vec::new()
     };
+    let resonant_compromises = if config.mode == CalcMode::Resonant {
+        calculate_resonant_compromises(&calculations, non_res_cfg)
+    } else {
+        Vec::new()
+    };
 
     AppResults {
         calculations,
         recommendation,
         optima,
+        resonant_compromises,
         config,
     }
 }

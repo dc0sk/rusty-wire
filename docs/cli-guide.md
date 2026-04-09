@@ -1,6 +1,6 @@
 # Rusty Wire
 
-**Version 1.1.0**
+**Version 1.2.0**
 
 Rusty Wire is a Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.
 
@@ -118,6 +118,9 @@ Example regional differences currently modeled:
   - `txt` — Plain text table format
 - `--output <file>` — Output file path for exports (default: generates filename per format)
 
+Exports also include resonant points within the active search window for each selected band.
+In resonant mode, non-resonant recommendation payloads are omitted from exports.
+
 ## Examples
 
 ### 1) Default run with defaults (resonant + default bands)
@@ -197,7 +200,8 @@ Best non-resonant wire length for selected bands:
 ### Resonant mode includes:
 - Per-band resonant lengths (with optional unit system filtering)
 - Skip-distance summary
-- **Optimum common wire length** (search window + clearance %)
+- **Resonant points within the active search window** (quarter-wave harmonics for selected bands)
+- **Closest combined compromises to resonant points** (multiple near-best shared lengths across selected bands)
 - Multiple export format support (CSV, JSON, Markdown, plain text)
 
 ### Non-resonant mode includes:

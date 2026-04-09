@@ -144,6 +144,11 @@ fn run_non_interactive(opts: CliOptions) {
 
     let single_output = opts.output;
     let export_count = opts.export.len();
+    let export_recommendation = if results.config.mode == CalcMode::NonResonant {
+        results.recommendation.as_ref()
+    } else {
+        None
+    };
     for (i, &fmt) in opts.export.iter().enumerate() {
         let output = if export_count == 1 {
             single_output
@@ -161,8 +166,10 @@ fn run_non_interactive(opts: CliOptions) {
             fmt,
             &output,
             &results.calculations,
-            results.recommendation.as_ref(),
+            export_recommendation,
             results.config.units,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
         ) {
             eprintln!("Failed to export {}: {}", output, err);
             std::process::exit(1);
@@ -546,6 +553,12 @@ fn interactive_export_prompt(results: &AppResults) -> Vec<(ExportFormat, String)
         }
     };
 
+    let export_recommendation = if results.config.mode == CalcMode::NonResonant {
+        results.recommendation.as_ref()
+    } else {
+        None
+    };
+
     let mut chosen = Vec::new();
     for &fmt in &formats {
         let output = if formats.len() == 1 {
@@ -568,8 +581,10 @@ fn interactive_export_prompt(results: &AppResults) -> Vec<(ExportFormat, String)
             fmt,
             &output,
             &results.calculations,
-            results.recommendation.as_ref(),
+            export_recommendation,
             results.config.units,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
         ) {
             Ok(()) => println!("Exported results to {}", output),
             Err(err) => println!("Failed to export {}: {}", output, err),
@@ -617,38 +632,8 @@ fn print_results(results: &AppResults) {
 
     match mode {
         CalcMode::Resonant => {
-            if let Some(rec) = results.recommendation.as_ref() {
-                let (min_m, max_m) = (results.config.wire_min_m, results.config.wire_max_m);
-                let min_ft = min_m / FEET_TO_METERS;
-                let max_ft = max_m / FEET_TO_METERS;
-                println!("Optimum common wire length (non-resonant compromise):");
-                match units {
-                    UnitSystem::Metric => {
-                        println!("  Search window: {:.2}-{:.2} m", min_m, max_m);
-                        println!(
-                            "  {:.2} m, resonance clearance: {:.2}%\n",
-                            rec.length_m, rec.min_resonance_clearance_pct
-                        );
-                    }
-                    UnitSystem::Imperial => {
-                        println!("  Search window: {:.2}-{:.2} ft", min_ft, max_ft);
-                        println!(
-                            "  {:.2} ft, resonance clearance: {:.2}%\n",
-                            rec.length_ft, rec.min_resonance_clearance_pct
-                        );
-                    }
-                    UnitSystem::Both => {
-                        println!(
-                            "  Search window: {:.2}-{:.2} m ({:.2}-{:.2} ft)",
-                            min_m, max_m, min_ft, max_ft
-                        );
-                        println!(
-                            "  {:.2} m ({:.2} ft), resonance clearance: {:.2}%\n",
-                            rec.length_m, rec.length_ft, rec.min_resonance_clearance_pct
-                        );
-                    }
-                }
-            }
+            print_resonant_points_in_window(results);
+            print_resonant_compromises(results);
         }
         CalcMode::NonResonant => {
             if results.recommendation.is_some() {
@@ -658,6 +643,70 @@ fn print_results(results: &AppResults) {
             }
         }
     }
+}
+
+fn print_resonant_points_in_window(results: &AppResults) {
+    let calculations = &results.calculations;
+    let (min_m, max_m) = (results.config.wire_min_m, results.config.wire_max_m);
+    let min_ft = min_m / FEET_TO_METERS;
+    let max_ft = max_m / FEET_TO_METERS;
+    let units = results.config.units;
+
+    println!("Resonant points within search window:");
+    match units {
+        UnitSystem::Metric => println!("  Search window: {:.2}-{:.2} m", min_m, max_m),
+        UnitSystem::Imperial => println!("  Search window: {:.2}-{:.2} ft", min_ft, max_ft),
+        UnitSystem::Both => println!(
+            "  Search window: {:.2}-{:.2} m ({:.2}-{:.2} ft)",
+            min_m, max_m, min_ft, max_ft
+        ),
+    }
+
+    let mut points: Vec<(f64, String, u32)> = Vec::new();
+    for calc in calculations {
+        let quarter_wave_m = calc.corrected_quarter_wave_m;
+        if quarter_wave_m <= 0.0 {
+            continue;
+        }
+
+        let mut harmonic = 1_u32;
+        loop {
+            let resonant_len_m = quarter_wave_m * f64::from(harmonic);
+            if resonant_len_m > max_m + 1e-9 {
+                break;
+            }
+            if resonant_len_m >= min_m - 1e-9 {
+                points.push((resonant_len_m, calc.band_name.clone(), harmonic));
+            }
+            harmonic += 1;
+        }
+    }
+
+    points.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    if points.is_empty() {
+        println!("  (no resonant points fall within this window)\n");
+        return;
+    }
+
+    for (len_m, band_name, harmonic) in points {
+        let len_ft = len_m / FEET_TO_METERS;
+        match units {
+            UnitSystem::Metric => println!(
+                "  - {}: {}x quarter-wave = {:.2} m",
+                band_name, harmonic, len_m
+            ),
+            UnitSystem::Imperial => println!(
+                "  - {}: {}x quarter-wave = {:.2} ft",
+                band_name, harmonic, len_ft
+            ),
+            UnitSystem::Both => println!(
+                "  - {}: {}x quarter-wave = {:.2} m ({:.2} ft)",
+                band_name, harmonic, len_m, len_ft
+            ),
+        }
+    }
+    println!();
 }
 
 fn print_non_resonant_recommendation(results: &AppResults) {
@@ -719,6 +768,47 @@ fn print_non_resonant_recommendation(results: &AppResults) {
         }
         println!();
     }
+}
+
+fn print_resonant_compromises(results: &AppResults) {
+    let compromises = &results.resonant_compromises;
+    if compromises.is_empty() {
+        println!("Closest combined compromises to resonant points:");
+        println!("  (none available in this window)\n");
+        return;
+    }
+
+    let units = results.config.units;
+    println!("Closest combined compromises to resonant points:");
+    for (idx, c) in compromises.iter().take(10).enumerate() {
+        match units {
+            UnitSystem::Metric => println!(
+                "  {:2}. {:.2} m (worst-band delta: {:.2} m)",
+                idx + 1,
+                c.length_m,
+                c.worst_band_distance_m
+            ),
+            UnitSystem::Imperial => println!(
+                "  {:2}. {:.2} ft (worst-band delta: {:.2} ft)",
+                idx + 1,
+                c.length_ft,
+                c.worst_band_distance_m / FEET_TO_METERS
+            ),
+            UnitSystem::Both => println!(
+                "  {:2}. {:.2} m ({:.2} ft), worst-band delta: {:.2} m ({:.2} ft)",
+                idx + 1,
+                c.length_m,
+                c.length_ft,
+                c.worst_band_distance_m,
+                c.worst_band_distance_m / FEET_TO_METERS
+            ),
+        }
+    }
+
+    if compromises.len() > 10 {
+        println!("  ... and {} more equal compromises", compromises.len() - 10);
+    }
+    println!();
 }
 
 fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat, String)]) {
