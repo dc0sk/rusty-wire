@@ -6,11 +6,11 @@
 /// imports from the core modules that this file needs are for display helpers.
 use crate::app::{
     AppConfig, AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION,
-    DEFAULT_ITU_REGION, FEET_TO_METERS, run_calculation,
+    DEFAULT_ITU_REGION, DEFAULT_TRANSFORMER_RATIO, FEET_TO_METERS, run_calculation,
 };
 use crate::bands::{get_bands_for_region, ALL_REGIONS, ITURegion};
 use crate::calculations::{
-    calculate_average_max_distance, calculate_average_min_distance, WireCalculation,
+    calculate_average_max_distance, calculate_average_min_distance, TransformerRatio, WireCalculation,
     DEFAULT_NON_RESONANT_CONFIG,
 };
 use crate::export::{default_output_name, export_results};
@@ -31,6 +31,7 @@ struct CliOptions {
     wire_max_ft: Option<f64>,
     mode: CalcMode,
     itu_region: ITURegion,
+    transformer_ratio: TransformerRatio,
     list_bands: bool,
     help: bool,
     units: Option<UnitSystem>,
@@ -130,6 +131,7 @@ fn run_non_interactive(opts: CliOptions) {
         wire_max_m: opts.wire_max_m,
         units,
         itu_region: opts.itu_region,
+        transformer_ratio: opts.transformer_ratio,
     };
 
     let results = run_calculation(config);
@@ -142,6 +144,11 @@ fn run_non_interactive(opts: CliOptions) {
 
     let single_output = opts.output;
     let export_count = opts.export.len();
+    let export_recommendation = if results.config.mode == CalcMode::NonResonant {
+        results.recommendation.as_ref()
+    } else {
+        None
+    };
     for (i, &fmt) in opts.export.iter().enumerate() {
         let output = if export_count == 1 {
             single_output
@@ -159,8 +166,10 @@ fn run_non_interactive(opts: CliOptions) {
             fmt,
             &output,
             &results.calculations,
-            results.recommendation.as_ref(),
+            export_recommendation,
             results.config.units,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
         ) {
             eprintln!("Failed to export {}: {}", output, err);
             std::process::exit(1);
@@ -215,6 +224,7 @@ fn calculate_selected_bands(region: ITURegion) {
 
     let mode = prompt_calc_mode();
     let velocity = prompt_velocity_factor();
+    let transformer_ratio = prompt_transformer_ratio();
     let (wire_min_m, wire_max_m, auto_units) = if mode == CalcMode::NonResonant {
         prompt_wire_length_window()
     } else {
@@ -230,6 +240,7 @@ fn calculate_selected_bands(region: ITURegion) {
         wire_max_m,
         units,
         itu_region: region,
+        transformer_ratio,
     };
 
     let results = run_calculation(config);
@@ -266,6 +277,7 @@ fn quick_calculation(region: ITURegion) {
 
     let mode = prompt_calc_mode();
     let velocity = prompt_velocity_factor();
+    let transformer_ratio = prompt_transformer_ratio();
     let (wire_min_m, wire_max_m, auto_units) = if mode == CalcMode::NonResonant {
         prompt_wire_length_window()
     } else {
@@ -281,6 +293,7 @@ fn quick_calculation(region: ITURegion) {
         wire_max_m,
         units,
         itu_region: region,
+        transformer_ratio,
     };
 
     let results = run_calculation(config);
@@ -342,6 +355,35 @@ fn prompt_calc_mode() -> CalcMode {
         _ => {
             println!("Unknown mode. Using resonant.");
             CalcMode::Resonant
+        }
+    }
+}
+
+fn prompt_transformer_ratio() -> TransformerRatio {
+    print!(
+        "Unun/Balun ratio (1:1,1:2,1:4,1:5,1:6,1:9,1:16,1:49,1:56,1:64; Enter for {}): ",
+        DEFAULT_TRANSFORMER_RATIO.as_label()
+    );
+    io::stdout().flush().expect("failed to flush stdout");
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("failed to read transformer ratio");
+
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return DEFAULT_TRANSFORMER_RATIO;
+    }
+
+    match TransformerRatio::parse(trimmed) {
+        Some(r) => r,
+        None => {
+            println!(
+                "Unknown ratio. Using default {}.",
+                DEFAULT_TRANSFORMER_RATIO.as_label()
+            );
+            DEFAULT_TRANSFORMER_RATIO
         }
     }
 }
@@ -511,6 +553,12 @@ fn interactive_export_prompt(results: &AppResults) -> Vec<(ExportFormat, String)
         }
     };
 
+    let export_recommendation = if results.config.mode == CalcMode::NonResonant {
+        results.recommendation.as_ref()
+    } else {
+        None
+    };
+
     let mut chosen = Vec::new();
     for &fmt in &formats {
         let output = if formats.len() == 1 {
@@ -533,8 +581,10 @@ fn interactive_export_prompt(results: &AppResults) -> Vec<(ExportFormat, String)
             fmt,
             &output,
             &results.calculations,
-            results.recommendation.as_ref(),
+            export_recommendation,
             results.config.units,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
         ) {
             Ok(()) => println!("Exported results to {}", output),
             Err(err) => println!("Failed to export {}: {}", output, err),
@@ -562,6 +612,11 @@ fn print_results(results: &AppResults) {
 
     println!("\n{}", heading);
     println!("------------------------------------------------------------");
+    println!(
+        "Using transformer ratio: {}",
+        results.config.transformer_ratio.as_label()
+    );
+    println!("------------------------------------------------------------");
     for calc in calculations {
         println!("{}\n", format_calc(calc, units));
     }
@@ -577,38 +632,8 @@ fn print_results(results: &AppResults) {
 
     match mode {
         CalcMode::Resonant => {
-            if let Some(rec) = results.recommendation.as_ref() {
-                let (min_m, max_m) = (results.config.wire_min_m, results.config.wire_max_m);
-                let min_ft = min_m / FEET_TO_METERS;
-                let max_ft = max_m / FEET_TO_METERS;
-                println!("Optimum common wire length (non-resonant compromise):");
-                match units {
-                    UnitSystem::Metric => {
-                        println!("  Search window: {:.2}-{:.2} m", min_m, max_m);
-                        println!(
-                            "  {:.2} m, resonance clearance: {:.2}%\n",
-                            rec.length_m, rec.min_resonance_clearance_pct
-                        );
-                    }
-                    UnitSystem::Imperial => {
-                        println!("  Search window: {:.2}-{:.2} ft", min_ft, max_ft);
-                        println!(
-                            "  {:.2} ft, resonance clearance: {:.2}%\n",
-                            rec.length_ft, rec.min_resonance_clearance_pct
-                        );
-                    }
-                    UnitSystem::Both => {
-                        println!(
-                            "  Search window: {:.2}-{:.2} m ({:.2}-{:.2} ft)",
-                            min_m, max_m, min_ft, max_ft
-                        );
-                        println!(
-                            "  {:.2} m ({:.2} ft), resonance clearance: {:.2}%\n",
-                            rec.length_m, rec.length_ft, rec.min_resonance_clearance_pct
-                        );
-                    }
-                }
-            }
+            print_resonant_points_in_window(results);
+            print_resonant_compromises(results);
         }
         CalcMode::NonResonant => {
             if results.recommendation.is_some() {
@@ -620,12 +645,77 @@ fn print_results(results: &AppResults) {
     }
 }
 
+fn print_resonant_points_in_window(results: &AppResults) {
+    let calculations = &results.calculations;
+    let (min_m, max_m) = (results.config.wire_min_m, results.config.wire_max_m);
+    let min_ft = min_m / FEET_TO_METERS;
+    let max_ft = max_m / FEET_TO_METERS;
+    let units = results.config.units;
+
+    println!("Resonant points within search window:");
+    match units {
+        UnitSystem::Metric => println!("  Search window: {:.2}-{:.2} m", min_m, max_m),
+        UnitSystem::Imperial => println!("  Search window: {:.2}-{:.2} ft", min_ft, max_ft),
+        UnitSystem::Both => println!(
+            "  Search window: {:.2}-{:.2} m ({:.2}-{:.2} ft)",
+            min_m, max_m, min_ft, max_ft
+        ),
+    }
+
+    let mut points: Vec<(f64, String, u32)> = Vec::new();
+    for calc in calculations {
+        let quarter_wave_m = calc.corrected_quarter_wave_m;
+        if quarter_wave_m <= 0.0 {
+            continue;
+        }
+
+        let mut harmonic = 1_u32;
+        loop {
+            let resonant_len_m = quarter_wave_m * f64::from(harmonic);
+            if resonant_len_m > max_m + 1e-9 {
+                break;
+            }
+            if resonant_len_m >= min_m - 1e-9 {
+                points.push((resonant_len_m, calc.band_name.clone(), harmonic));
+            }
+            harmonic += 1;
+        }
+    }
+
+    points.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    if points.is_empty() {
+        println!("  (no resonant points fall within this window)\n");
+        return;
+    }
+
+    for (len_m, band_name, harmonic) in points {
+        let len_ft = len_m / FEET_TO_METERS;
+        match units {
+            UnitSystem::Metric => println!(
+                "  - {}: {}x quarter-wave = {:.2} m",
+                band_name, harmonic, len_m
+            ),
+            UnitSystem::Imperial => println!(
+                "  - {}: {}x quarter-wave = {:.2} ft",
+                band_name, harmonic, len_ft
+            ),
+            UnitSystem::Both => println!(
+                "  - {}: {}x quarter-wave = {:.2} m ({:.2} ft)",
+                band_name, harmonic, len_m, len_ft
+            ),
+        }
+    }
+    println!();
+}
+
 fn print_non_resonant_recommendation(results: &AppResults) {
     let rec = match results.recommendation.as_ref() {
         Some(r) => r,
         None => return,
     };
     let optima = &results.optima;
+    let window_optima = &results.window_optima;
     let (min_m, max_m) = (results.config.wire_min_m, results.config.wire_max_m);
     let min_ft = min_m / FEET_TO_METERS;
     let max_ft = max_m / FEET_TO_METERS;
@@ -679,6 +769,79 @@ fn print_non_resonant_recommendation(results: &AppResults) {
         }
         println!();
     }
+
+    if window_optima.len() > 1 {
+        println!("  Local optima in search window (ascending):");
+        for (idx, o) in window_optima.iter().enumerate() {
+            let is_recommended = (o.length_m - rec.length_m).abs() < 1e-6;
+            match units {
+                UnitSystem::Metric => println!(
+                    "    {:2}. {:.2} m (clearance: {:.2}%{})",
+                    idx + 1,
+                    o.length_m,
+                    o.min_resonance_clearance_pct,
+                    if is_recommended { ", recommended" } else { "" }
+                ),
+                UnitSystem::Imperial => println!(
+                    "    {:2}. {:.2} ft (clearance: {:.2}%{})",
+                    idx + 1,
+                    o.length_ft,
+                    o.min_resonance_clearance_pct,
+                    if is_recommended { ", recommended" } else { "" }
+                ),
+                UnitSystem::Both => println!(
+                    "    {:2}. {:.2} m ({:.2} ft, clearance: {:.2}%{})",
+                    idx + 1,
+                    o.length_m,
+                    o.length_ft,
+                    o.min_resonance_clearance_pct,
+                    if is_recommended { ", recommended" } else { "" }
+                ),
+            }
+        }
+        println!();
+    }
+}
+
+fn print_resonant_compromises(results: &AppResults) {
+    let compromises = &results.resonant_compromises;
+    if compromises.is_empty() {
+        println!("Closest combined compromises to resonant points:");
+        println!("  (none available in this window)\n");
+        return;
+    }
+
+    let units = results.config.units;
+    println!("Closest combined compromises to resonant points:");
+    for (idx, c) in compromises.iter().take(10).enumerate() {
+        match units {
+            UnitSystem::Metric => println!(
+                "  {:2}. {:.2} m (worst-band delta: {:.2} m)",
+                idx + 1,
+                c.length_m,
+                c.worst_band_distance_m
+            ),
+            UnitSystem::Imperial => println!(
+                "  {:2}. {:.2} ft (worst-band delta: {:.2} ft)",
+                idx + 1,
+                c.length_ft,
+                c.worst_band_distance_m / FEET_TO_METERS
+            ),
+            UnitSystem::Both => println!(
+                "  {:2}. {:.2} m ({:.2} ft), worst-band delta: {:.2} m ({:.2} ft)",
+                idx + 1,
+                c.length_m,
+                c.length_ft,
+                c.worst_band_distance_m,
+                c.worst_band_distance_m / FEET_TO_METERS
+            ),
+        }
+    }
+
+    if compromises.len() > 10 {
+        println!("  ... and {} more equal compromises", compromises.len() - 10);
+    }
+    println!();
 }
 
 fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat, String)]) {
@@ -695,7 +858,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
         UnitSystem::Both => "both",
     };
     let mut cmd = format!(
-        "rusty-wire --region {} --mode {} --bands {} --velocity {:.2} --units {}",
+        "rusty-wire --region {} --mode {} --bands {} --velocity {:.2} --transformer {} --units {}",
         config.itu_region.short_name(),
         match config.mode {
             CalcMode::Resonant => "resonant",
@@ -703,6 +866,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
         },
         bands_csv,
         config.velocity_factor,
+        config.transformer_ratio.as_label(),
         units_str,
     );
 
@@ -732,15 +896,21 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
 fn format_calc(c: &WireCalculation, units: UnitSystem) -> String {
     match units {
         UnitSystem::Metric => format!(
-            "{}\n  Frequency: {:.3} MHz\n  Half-wave: {:.2} m\n  Full-wave: {:.2} m\n  Quarter-wave: {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} m (base: {:.2} m)\n  Full-wave: {:.2} m (base: {:.2} m)\n  Quarter-wave: {:.2} m (base: {:.2} m)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
             c.band_name, c.frequency_mhz,
-            c.half_wave_m, c.full_wave_m, c.quarter_wave_m,
+            c.transformer_ratio_label,
+            c.corrected_half_wave_m, c.half_wave_m,
+            c.corrected_full_wave_m, c.full_wave_m,
+            c.corrected_quarter_wave_m, c.quarter_wave_m,
             c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
         ),
         UnitSystem::Imperial => format!(
-            "{}\n  Frequency: {:.3} MHz\n  Half-wave: {:.2} ft\n  Full-wave: {:.2} ft\n  Quarter-wave: {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} ft (base: {:.2} ft)\n  Full-wave: {:.2} ft (base: {:.2} ft)\n  Quarter-wave: {:.2} ft (base: {:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
             c.band_name, c.frequency_mhz,
-            c.half_wave_ft, c.full_wave_ft, c.quarter_wave_ft,
+            c.transformer_ratio_label,
+            c.corrected_half_wave_ft, c.half_wave_ft,
+            c.corrected_full_wave_ft, c.full_wave_ft,
+            c.corrected_quarter_wave_ft, c.quarter_wave_ft,
             c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
         ),
         UnitSystem::Both => format!("{}", c),
@@ -754,14 +924,15 @@ fn print_usage() {
     println!("  rusty-wire                  # interactive mode");
     println!("  rusty-wire --list-bands     # list bands for Region 1");
     println!("  rusty-wire --list-bands --region 2");
-    println!("  rusty-wire [--region 1|2|3] [--mode resonant|non-resonant] [--bands 1,6,10] [--velocity 0.95] [--wire-min 8] [--wire-max 35] [--units m|ft|both] [--export csv,json,markdown,txt] [--output file]");
-    println!("  rusty-wire [--region 1|2|3] [--mode resonant|non-resonant] [--bands 1,6,10] [--velocity 0.95] [--wire-min-ft 26] [--wire-max-ft 115] [--units m|ft|both] [--export csv,json,markdown,txt] [--output file]");
+    println!("  rusty-wire [--region 1|2|3] [--mode resonant|non-resonant] [--bands 1,6,10] [--velocity 0.95] [--transformer 1:1|1:2|1:4|1:5|1:6|1:9|1:16|1:49|1:56|1:64] [--wire-min 8] [--wire-max 35] [--units m|ft|both] [--export csv,json,markdown,txt] [--output file]");
+    println!("  rusty-wire [--region 1|2|3] [--mode resonant|non-resonant] [--bands 1,6,10] [--velocity 0.95] [--transformer 1:1|1:2|1:4|1:5|1:6|1:9|1:16|1:49|1:56|1:64] [--wire-min-ft 26] [--wire-max-ft 115] [--units m|ft|both] [--export csv,json,markdown,txt] [--output file]");
     println!("  (--export accepts a comma-separated list; --output applies only when a single format is selected)");
     println!("\nNotes:");
     println!("  - ITU Region: 1=Europe/Africa/Middle East, 2=Americas, 3=Asia-Pacific (default: 1)");
     println!("  - Band numbers come from --list-bands");
     println!("  - Default selected bands are 40m-10m: 4,5,6,7,8,9,10");
     println!("  - Velocity factor range is 0.50 to 1.00");
+    println!("  - Transformer ratio defaults to 1:1");
     println!("  - Default mode is resonant");
     println!("  - --wire-min/--wire-max (meters) defaults to metric-only output");
     println!("  - --wire-min-ft/--wire-max-ft (feet) defaults to imperial-only output");
@@ -784,6 +955,7 @@ fn parse_cli_args(args: &[String]) -> Result<CliOptions, String> {
         wire_max_ft: None,
         mode: CalcMode::Resonant,
         itu_region: DEFAULT_ITU_REGION,
+        transformer_ratio: DEFAULT_TRANSFORMER_RATIO,
         list_bands: false,
         help: false,
         units: None,
@@ -882,6 +1054,13 @@ fn parse_cli_args(args: &[String]) -> Result<CliOptions, String> {
                     .ok_or_else(|| "--mode requires a value".to_string())?;
                 opts.mode = parse_calc_mode(value)?;
             }
+            "--transformer" | "--unun" | "--balun" => {
+                i += 1;
+                let value = args
+                    .get(i)
+                    .ok_or_else(|| "--transformer requires a value".to_string())?;
+                opts.transformer_ratio = parse_transformer_ratio(value)?;
+            }
             "--units" => {
                 i += 1;
                 let value = args
@@ -957,6 +1136,13 @@ fn parse_itu_region(raw: &str) -> Result<ITURegion, String> {
             raw
         )),
     }
+}
+
+fn parse_transformer_ratio(raw: &str) -> Result<TransformerRatio, String> {
+    TransformerRatio::parse(raw).ok_or_else(|| {
+        "--transformer must be one of: 1:1,1:2,1:4,1:5,1:6,1:9,1:16,1:49,1:56,1:64"
+            .to_string()
+    })
 }
 
 fn parse_export_format(raw: &str) -> Result<ExportFormat, String> {

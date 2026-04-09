@@ -2,6 +2,30 @@
 
 All notable changes to Rusty Wire are documented here.
 
+## [1.3.0] - 2026-04-09
+
+### Added
+- **Non-resonant search-window local optima**: non-resonant mode now lists multiple local optimum wire lengths (clearance maxima) within the active search window.
+
+### Changed
+- **Non-resonant output detail**: output now distinguishes between local window optima and equal global optima, marking the selected recommendation in the local-optima list.
+- **Documentation updates**: README and CLI guide now describe the new non-resonant search-window local-optima output.
+
+## [1.2.0] - 2026-04-09
+
+### Added
+- **Resonant points in output and exports**: resonant mode now prints all resonant points (quarter-wave harmonics) within the active search window, sorted by wire length.
+- **Resonant shared compromise candidates**: resonant mode now shows closest combined compromise lengths to in-window resonant points across selected bands.
+
+### Changed
+- **Compromise candidate selection**: resonant compromise output now includes multiple near-best local candidates instead of only a single global winner.
+- **Documentation updates**: CLI guide and README were updated to describe resonant-point and resonant-compromise behavior.
+
+### Fixed
+- **Resonant-mode ambiguity**: removed misleading non-resonant compromise block from resonant-mode terminal output.
+- **Export mode gating**: non-resonant recommendation payloads are omitted in resonant-mode exports while remaining available for non-resonant-mode exports.
+- **Markdown export column alignment**: fixed Ratio/Frequency column order mismatch in markdown table rows.
+
 ## [1.1.0] - 2026-04-08
 
 ### Added
