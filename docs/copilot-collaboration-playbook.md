@@ -177,7 +177,85 @@ If you want tighter control, explicitly say:
 
 "Prepare release [version]. Update version files and changelog, run `cargo fmt`, `cargo check`, `cargo test`, commit release bump, create tags (`vX.Y.Z` and `X.Y.Z`), then push."
 
-## 10. Final Principle
+## 10. Terminology Glossary (Plain Language)
+
+Use consistent terms to reduce misunderstandings.
+
+- Acceptance criteria: clear checks that prove the task is done.
+- Breaking change: a change that requires users/scripts to change how they call or use the tool.
+- Regression: behavior that used to work but now fails.
+- Compatibility: preserving existing behavior, flags, interfaces, and outputs unless explicitly changed.
+- Validation: commands that prove the branch is healthy (format, build, tests).
+- Scope: which files/modules/features are included, and what is explicitly out of scope.
+- Constraints: non-negotiable boundaries (for example parity, no removals, minimal diffs).
+- Compromise length: a shared practical length that works acceptably across targets, but is not perfect for each one.
+- Resonant: naturally tuned near a target frequency.
+- Non-resonant: not naturally tuned at the target frequency, often requiring a tuner/matching approach.
+- Velocity factor: propagation adjustment used in wire-length calculations.
+
+## 11. Language Guide for Non-Native Speakers
+
+Use this style when writing requests or docs:
+
+- Keep sentences short.
+- Use one idea per sentence.
+- Prefer direct words over idioms.
+- Reuse the same term for the same concept.
+- Use examples for non-trivial options.
+- Avoid ambiguous words like "better", "clean", or "soon" without context.
+
+Preferred wording examples:
+
+- Instead of: "Improve output."
+- Use: "Change output so it includes X and excludes Y."
+- Instead of: "Refactor this part."
+- Use: "Limit changes to [files] and keep behavior unchanged."
+- Instead of: "Handle edge cases."
+- Use: "Handle these edge cases: [list]."
+
+## 12. Meaning Check Questions (Before and After Work)
+
+Ask these questions to avoid rework:
+
+- Do we mean same behavior, same output text, or same implementation?
+- Is this additive, replacement, or removal?
+- Which users/flows are affected?
+- What is the success signal (tests, command output, file diff)?
+- What is intentionally not included in this task?
+
+## 13. Example Phrase Bank
+
+Copy/paste and adapt these phrases.
+
+Clarifying scope:
+
+- "Scope this to [files/modules] only; do not edit other files."
+- "Treat [feature] as out of scope for this change."
+- "Keep public behavior unchanged except for [explicit delta]."
+
+Setting constraints:
+
+- "Do not remove existing functionality without confirmation."
+- "Preserve CLI and interactive parity for user-facing behavior."
+- "Prefer minimal-diff implementation over broad refactor."
+
+Defining acceptance:
+
+- "Success criteria: [criterion 1], [criterion 2], [criterion 3]."
+- "Include at least one regression test for [bug/behavior]."
+- "Update docs in [files] to reflect behavior changes."
+
+Requesting validation:
+
+- "Run `cargo fmt`, `cargo check`, and `cargo test`; stop if any step fails."
+- "Report exact pass/fail status and any remaining risk."
+
+Requesting commit hygiene:
+
+- "Split commits into: formatting, feature/tests, docs."
+- "Do not push until I confirm."
+
+## 14. Final Principle
 
 Best results come from combining:
 
