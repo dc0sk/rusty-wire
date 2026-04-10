@@ -1,6 +1,6 @@
 # Rusty Wire
 
-**Version 1.5.1**
+**Version 1.5.2**
 
 A Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.
 
@@ -35,8 +35,8 @@ cargo run -- [OPTIONS]
 ## Features
 
 - **Resonant calculations**: Half-wave, full-wave, and quarter-wave dipole lengths
-- **Derived antenna variants**: Also shows end-fed half-wave, full-wave loop, and OCFD segment dimensions
-- **Antenna model filter**: Optional `--antenna dipole|efhw|loop|ocfd` to show one model at a time
+- **Derived antenna variants**: Also shows end-fed half-wave, full-wave loop, inverted-V dipole geometry, and OCFD segment dimensions
+- **Antenna model filter**: Optional `--antenna dipole|inverted-v|efhw|loop|ocfd` to show one model at a time
 - **Resonant point analysis**: Shows resonant harmonics within the active search window
 - **Resonant shared compromises**: Shows closest combined compromise lengths to in-window resonant points
 - **Non-resonant optimization**: Find the best single wire length for multiple bands
@@ -123,6 +123,11 @@ rusty-wire --mode non-resonant --bands 2 --units m --wire-min 6 --wire-max 30
 Filter to EFHW output only:
 ```bash
 rusty-wire --mode resonant --bands 4,6 --antenna efhw
+```
+
+Filter to inverted-V output only:
+```bash
+rusty-wire --mode resonant --bands 4,6 --antenna inverted-v
 ```
 
 Filter to OCFD output only:

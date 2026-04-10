@@ -168,6 +168,7 @@ impl ValueEnum for UnitSystem {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AntennaModel {
     Dipole,
+    InvertedVDipole,
     EndFedHalfWave,
     FullWaveLoop,
     OffCenterFedDipole,
@@ -179,13 +180,14 @@ impl FromStr for AntennaModel {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "dipole" => Ok(AntennaModel::Dipole),
+            "inverted-v" | "inv-v" | "invertedv" | "invv" => Ok(AntennaModel::InvertedVDipole),
             "efhw" | "end-fed" | "end-fed-half-wave" => Ok(AntennaModel::EndFedHalfWave),
             "loop" | "full-wave-loop" => Ok(AntennaModel::FullWaveLoop),
             "ocfd" | "off-center-fed" | "off-center-fed-dipole" | "windom" => {
                 Ok(AntennaModel::OffCenterFedDipole)
             }
             _ => Err(format!(
-                "Invalid antenna model '{}'. Must be 'dipole', 'efhw', 'loop', or 'ocfd'.",
+                "Invalid antenna model '{}'. Must be 'dipole', 'inverted-v', 'efhw', 'loop', or 'ocfd'.",
                 s
             )),
         }
@@ -196,6 +198,7 @@ impl ValueEnum for AntennaModel {
     fn value_variants<'a>() -> &'a [Self] {
         &[
             AntennaModel::Dipole,
+            AntennaModel::InvertedVDipole,
             AntennaModel::EndFedHalfWave,
             AntennaModel::FullWaveLoop,
             AntennaModel::OffCenterFedDipole,
@@ -207,6 +210,9 @@ impl ValueEnum for AntennaModel {
             AntennaModel::Dipole => {
                 Some(clap::builder::PossibleValue::new("dipole").help("Center-fed dipole model"))
             }
+            AntennaModel::InvertedVDipole => Some(
+                clap::builder::PossibleValue::new("inverted-v").help("Inverted-V dipole model"),
+            ),
             AntennaModel::EndFedHalfWave => {
                 Some(clap::builder::PossibleValue::new("efhw").help("End-fed half-wave model"))
             }

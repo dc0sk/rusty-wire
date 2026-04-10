@@ -8,7 +8,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
 It supports:
 - Resonant wire length calculations (half-wave, full-wave, quarter-wave)
-- Derived antenna outputs for end-fed half-wave, full-wave loop, and off-center-fed dipole layouts
+- Derived antenna outputs for end-fed half-wave, full-wave loop, inverted-V dipole geometry, and off-center-fed dipole layouts
 - Non-resonant common wire optimization across selected bands with multi-optima support
 - Skip-distance summaries for selected bands
 - Interactive and non-interactive (CLI) workflows
@@ -76,7 +76,7 @@ cargo run -- [OPTIONS]
 - `--region <1|2|3>` — ITU region selection (default: `1`)
 - `--bands <csv>` — Comma-separated band numbers (e.g., `6,10,40`)
 - `--mode <resonant|non-resonant>` — Calculation mode (default: resonant)
-- `--antenna <dipole|efhw|loop|ocfd>` — Filter output to a single antenna model (default: all models)
+- `--antenna <dipole|inverted-v|efhw|loop|ocfd>` — Filter output to a single antenna model (default: all models)
 - `--velocity <value>` — Velocity factor (0.0–1.0, default: 0.95)
 
 ### Non-resonant search window constraints
@@ -116,12 +116,13 @@ Example regional differences currently modeled:
 
 ### Antenna model selection
 
-- If `--antenna` is omitted, per-band output includes dipole, end-fed half-wave, full-wave loop, and OCFD dimensions.
+- If `--antenna` is omitted, per-band output includes dipole, end-fed half-wave, full-wave loop, inverted-V, and OCFD dimensions.
 - If `--antenna dipole` is selected, output is filtered to dipole lengths.
+- If `--antenna inverted-v` is selected, output is filtered to inverted-V total length, per-leg length, and estimated span at common apex angles.
 - If `--antenna efhw` is selected, output is filtered to end-fed half-wave lengths.
 - If `--antenna loop` is selected, output is filtered to full-wave loop dimensions.
 - If `--antenna ocfd` is selected, output is filtered to off-center-fed dipole leg splits.
-- Resonant point summary remains dipole-oriented and is shown for `dipole` or when all models are shown.
+- Resonant point summary remains dipole-oriented and is shown for `dipole`, `inverted-v`, or when all models are shown.
 - Compromise lengths are shown for all antenna selections; in `efhw`, `loop`, and `ocfd` modes they are labeled as tuner-assisted, dipole-derived guidance.
 - In `ocfd` mode, each compromise line is a total wire length and now includes:
   - explicit 33/67 leg lengths
