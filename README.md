@@ -35,6 +35,8 @@ cargo run -- [OPTIONS]
 ## Features
 
 - **Resonant calculations**: Half-wave, full-wave, and quarter-wave dipole lengths
+- **Derived antenna variants**: Also shows first-batch end-fed half-wave and full-wave loop dimensions
+- **Antenna model filter**: Optional `--antenna dipole|efhw|loop` to show one model at a time
 - **Resonant point analysis**: Shows resonant harmonics within the active search window
 - **Resonant shared compromises**: Shows closest combined compromise lengths to in-window resonant points
 - **Non-resonant optimization**: Find the best single wire length for multiple bands
@@ -51,6 +53,7 @@ cargo run -- [OPTIONS]
 For comprehensive CLI documentation and examples, see [docs/cli-guide.md](docs/cli-guide.md).
 For test execution details, see [docs/testing.md](docs/testing.md).
 For module layout and system design, see [docs/architecture.md](docs/architecture.md).
+For planned future enhancements, see [docs/roadmap.md](docs/roadmap.md).
 
 Key topics:
 - CLI usage and all options
@@ -63,6 +66,7 @@ Key topics:
 - Multi-optima feature
 - Testing with `cargo test` and the included shell scripts
 - Project architecture and module boundaries
+- Planned future enhancements and feature roadmap
 
 ## Testing
 
@@ -114,6 +118,11 @@ rusty-wire --mode non-resonant --bands 6,10 --export csv,json,markdown --output 
 Metric-only output:
 ```bash
 rusty-wire --mode non-resonant --bands 2 --units m --wire-min 6 --wire-max 30
+```
+
+Filter to EFHW output only:
+```bash
+rusty-wire --mode resonant --bands 4,6 --antenna efhw
 ```
 
 For more examples, see [docs/cli-guide.md](docs/cli-guide.md).

@@ -8,6 +8,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
 It supports:
 - Resonant wire length calculations (half-wave, full-wave, quarter-wave)
+- First-batch derived antenna outputs for end-fed half-wave and full-wave loop layouts
 - Non-resonant common wire optimization across selected bands with multi-optima support
 - Skip-distance summaries for selected bands
 - Interactive and non-interactive (CLI) workflows
@@ -23,6 +24,10 @@ It supports:
   - Resonant (default)
   - Non-resonant
 - Velocity factor input (default: 0.95)
+- Additional resonant-model guidance:
+  - End-fed half-wave total wire length
+  - Full-wave loop circumference
+  - Full-wave loop square-side estimate
 - Non-resonant search constraints in either meters (default) or feet
 - Multiple local optima displayed for the active non-resonant search window
 - Multiple equally-optimal wire lengths displayed in ascending order when ties occur
@@ -70,6 +75,7 @@ cargo run -- [OPTIONS]
 - `--region <1|2|3>` — ITU region selection (default: `1`)
 - `--bands <csv>` — Comma-separated band numbers (e.g., `6,10,40`)
 - `--mode <resonant|non-resonant>` — Calculation mode (default: resonant)
+- `--antenna <dipole|efhw|loop>` — Filter output to a single antenna model (default: all models)
 - `--velocity <value>` — Velocity factor (0.0–1.0, default: 0.95)
 
 ### Non-resonant search window constraints
@@ -106,6 +112,15 @@ Example regional differences currently modeled:
   - `m` — Metric only (meters)
   - `ft` — Imperial only (feet)
   - `both` — Both metrics and imperial
+
+### Antenna model selection
+
+- If `--antenna` is omitted, per-band output includes dipole, end-fed half-wave, and full-wave loop dimensions.
+- If `--antenna dipole` is selected, output is filtered to dipole lengths.
+- If `--antenna efhw` is selected, output is filtered to end-fed half-wave lengths.
+- If `--antenna loop` is selected, output is filtered to full-wave loop dimensions.
+- Resonant point summary remains dipole-oriented and is shown for `dipole` or when all models are shown.
+- Compromise lengths are shown for all antenna selections; in `efhw` and `loop` modes they are labeled as tuner-assisted, dipole-derived guidance.
 
 ### Export options
 
