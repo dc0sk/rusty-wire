@@ -35,8 +35,8 @@ cargo run -- [OPTIONS]
 ## Features
 
 - **Resonant calculations**: Half-wave, full-wave, and quarter-wave dipole lengths
-- **Derived antenna variants**: Also shows first-batch end-fed half-wave and full-wave loop dimensions
-- **Antenna model filter**: Optional `--antenna dipole|efhw|loop` to show one model at a time
+- **Derived antenna variants**: Also shows end-fed half-wave, full-wave loop, and OCFD segment dimensions
+- **Antenna model filter**: Optional `--antenna dipole|efhw|loop|ocfd` to show one model at a time
 - **Resonant point analysis**: Shows resonant harmonics within the active search window
 - **Resonant shared compromises**: Shows closest combined compromise lengths to in-window resonant points
 - **Non-resonant optimization**: Find the best single wire length for multiple bands
@@ -123,6 +123,11 @@ rusty-wire --mode non-resonant --bands 2 --units m --wire-min 6 --wire-max 30
 Filter to EFHW output only:
 ```bash
 rusty-wire --mode resonant --bands 4,6 --antenna efhw
+```
+
+Filter to OCFD output only:
+```bash
+rusty-wire --mode resonant --bands 4,6 --antenna ocfd
 ```
 
 For more examples, see [docs/cli-guide.md](docs/cli-guide.md).
