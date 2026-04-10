@@ -109,3 +109,53 @@ fn single_export_uses_requested_output_name() {
 
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn default_antenna_mode_shows_all_models_per_band() {
+    let output = binary()
+        .args(["--bands", "4"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Antenna model: all"));
+    assert!(stdout.contains("Half-wave:"));
+    assert!(stdout.contains("End-fed half-wave:"));
+    assert!(stdout.contains("Full-wave loop circumference:"));
+}
+
+#[test]
+fn selected_antenna_model_filters_output_and_resonant_summary() {
+    let output = binary()
+        .args(["--bands", "4", "--antenna", "efhw"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Antenna model: end-fed half-wave"));
+    assert!(stdout.contains("End-fed half-wave:"));
+    assert!(!stdout.contains("Half-wave:"));
+    assert!(!stdout.contains("Full-wave loop circumference:"));
+    assert!(stdout.contains("Closest combined compromises to resonant points (tuner-assisted EFHW guidance):"));
+    assert!(stdout.contains("dipole-derived compromise lengths shown as tuner-assisted starting points"));
+}
+
+#[test]
+fn loop_antenna_mode_shows_loop_guidance_compromises() {
+    let output = binary()
+        .args(["--bands", "4", "--antenna", "loop"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Antenna model: full-wave loop"));
+    assert!(stdout.contains("Full-wave loop circumference:"));
+    assert!(stdout.contains("Full-wave loop square side:"));
+    assert!(!stdout.contains("Half-wave:"));
+    assert!(!stdout.contains("End-fed half-wave:"));
+    assert!(stdout.contains("Closest combined compromises to resonant points (tuner-assisted loop guidance):"));
+    assert!(stdout.contains("dipole-derived compromise lengths shown as tuner-assisted starting points"));
+}
