@@ -121,6 +121,7 @@ fn default_antenna_mode_shows_all_models_per_band() {
     assert!(stdout.contains("Half-wave:"));
     assert!(stdout.contains("End-fed half-wave:"));
     assert!(stdout.contains("Full-wave loop circumference:"));
+    assert!(stdout.contains("OCFD 33/67 legs:"));
 }
 
 #[test]
@@ -159,6 +160,28 @@ fn loop_antenna_mode_shows_loop_guidance_compromises() {
     assert!(!stdout.contains("End-fed half-wave:"));
     assert!(stdout.contains(
         "Closest combined compromises to resonant points (tuner-assisted loop guidance):"
+    ));
+    assert!(stdout
+        .contains("dipole-derived compromise lengths shown as tuner-assisted starting points"));
+}
+
+#[test]
+fn ocfd_antenna_mode_shows_ocfd_guidance_compromises() {
+    let output = binary()
+        .args(["--bands", "4", "--antenna", "ocfd"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Antenna model: off-center-fed dipole"));
+    assert!(stdout.contains("OCFD 33/67 legs:"));
+    assert!(stdout.contains("OCFD 20/80 legs:"));
+    assert!(!stdout.contains("Half-wave:"));
+    assert!(!stdout.contains("End-fed half-wave:"));
+    assert!(!stdout.contains("Full-wave loop circumference:"));
+    assert!(stdout.contains(
+        "Closest combined compromises to resonant points (tuner-assisted OCFD guidance):"
     ));
     assert!(stdout
         .contains("dipole-derived compromise lengths shown as tuner-assisted starting points"));

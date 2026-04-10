@@ -126,6 +126,14 @@ pub struct WireCalculation {
     pub full_wave_loop_circumference_ft: f64,
     pub full_wave_loop_square_side_m: f64,
     pub full_wave_loop_square_side_ft: f64,
+    pub ocfd_33_short_leg_m: f64,
+    pub ocfd_33_short_leg_ft: f64,
+    pub ocfd_33_long_leg_m: f64,
+    pub ocfd_33_long_leg_ft: f64,
+    pub ocfd_20_short_leg_m: f64,
+    pub ocfd_20_short_leg_ft: f64,
+    pub ocfd_20_long_leg_m: f64,
+    pub ocfd_20_long_leg_ft: f64,
 
     // Skip distances
     pub skip_distance_min_km: f64,
@@ -168,7 +176,7 @@ impl fmt::Display for WireCalculation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Full-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Quarter-wave: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  End-fed half-wave: {:.2}m ({:.2}ft)\n  Full-wave loop circumference: {:.2}m ({:.2}ft)\n  Full-wave loop square side: {:.2}m ({:.2}ft)\n  Skip distance: {:.0}-{:.0}km (avg: {:.0}km)",
+            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Full-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Quarter-wave: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  End-fed half-wave: {:.2}m ({:.2}ft)\n  Full-wave loop circumference: {:.2}m ({:.2}ft)\n  Full-wave loop square side: {:.2}m ({:.2}ft)\n  OCFD 33/67 legs: {:.2}m/{:.2}m ({:.2}ft/{:.2}ft)\n  OCFD 20/80 legs: {:.2}m/{:.2}m ({:.2}ft/{:.2}ft)\n  Skip distance: {:.0}-{:.0}km (avg: {:.0}km)",
             self.band_name,
             self.frequency_mhz,
             self.transformer_ratio_label,
@@ -190,6 +198,14 @@ impl fmt::Display for WireCalculation {
             self.full_wave_loop_circumference_ft,
             self.full_wave_loop_square_side_m,
             self.full_wave_loop_square_side_ft,
+            self.ocfd_33_short_leg_m,
+            self.ocfd_33_long_leg_m,
+            self.ocfd_33_short_leg_ft,
+            self.ocfd_33_long_leg_ft,
+            self.ocfd_20_short_leg_m,
+            self.ocfd_20_long_leg_m,
+            self.ocfd_20_short_leg_ft,
+            self.ocfd_20_long_leg_ft,
             self.skip_distance_min_km,
             self.skip_distance_max_km,
             self.skip_distance_avg_km,
@@ -236,6 +252,16 @@ pub fn calculate_for_band_with_velocity(
     let full_wave_loop_circumference_m = corrected_full_wave_m;
     let full_wave_loop_square_side_ft = full_wave_loop_circumference_ft / 4.0;
     let full_wave_loop_square_side_m = full_wave_loop_circumference_m / 4.0;
+    let ocfd_total_ft = corrected_half_wave_ft;
+    let ocfd_total_m = corrected_half_wave_m;
+    let ocfd_33_short_leg_ft = ocfd_total_ft / 3.0;
+    let ocfd_33_short_leg_m = ocfd_total_m / 3.0;
+    let ocfd_33_long_leg_ft = ocfd_total_ft * 2.0 / 3.0;
+    let ocfd_33_long_leg_m = ocfd_total_m * 2.0 / 3.0;
+    let ocfd_20_short_leg_ft = ocfd_total_ft * 0.2;
+    let ocfd_20_short_leg_m = ocfd_total_m * 0.2;
+    let ocfd_20_long_leg_ft = ocfd_total_ft * 0.8;
+    let ocfd_20_long_leg_m = ocfd_total_m * 0.8;
 
     // Calculate skip distance average
     let skip_distance_avg_km = (band.typical_skip_km.0 + band.typical_skip_km.1) / 2.0;
@@ -262,6 +288,14 @@ pub fn calculate_for_band_with_velocity(
         full_wave_loop_circumference_ft,
         full_wave_loop_square_side_m,
         full_wave_loop_square_side_ft,
+        ocfd_33_short_leg_m,
+        ocfd_33_short_leg_ft,
+        ocfd_33_long_leg_m,
+        ocfd_33_long_leg_ft,
+        ocfd_20_short_leg_m,
+        ocfd_20_short_leg_ft,
+        ocfd_20_long_leg_m,
+        ocfd_20_long_leg_ft,
         skip_distance_min_km: band.typical_skip_km.0,
         skip_distance_max_km: band.typical_skip_km.1,
         skip_distance_avg_km,
@@ -757,6 +791,28 @@ mod tests {
         );
         assert!(
             (result.full_wave_loop_square_side_ft * 4.0 - result.full_wave_loop_circumference_ft)
+                .abs()
+                < 1e-9
+        );
+        assert!(
+            (result.ocfd_33_short_leg_m + result.ocfd_33_long_leg_m - result.end_fed_half_wave_m)
+                .abs()
+                < 1e-9
+        );
+        assert!(
+            (result.ocfd_33_short_leg_ft + result.ocfd_33_long_leg_ft
+                - result.end_fed_half_wave_ft)
+                .abs()
+                < 1e-9
+        );
+        assert!(
+            (result.ocfd_20_short_leg_m + result.ocfd_20_long_leg_m - result.end_fed_half_wave_m)
+                .abs()
+                < 1e-9
+        );
+        assert!(
+            (result.ocfd_20_short_leg_ft + result.ocfd_20_long_leg_ft
+                - result.end_fed_half_wave_ft)
                 .abs()
                 < 1e-9
         );

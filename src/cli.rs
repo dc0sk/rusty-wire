@@ -586,7 +586,9 @@ fn prompt_calc_mode() -> CalcMode {
 }
 
 fn prompt_antenna_model() -> Option<AntennaModel> {
-    print!("Antenna model: (d)ipole, (e)nd-fed half-wave, (l)oop, (a)ll [a]: ");
+    print!(
+        "Antenna model: (d)ipole, (e)nd-fed half-wave, (l)oop, (o)ff-center-fed dipole, (a)ll [a]: "
+    );
     io::stdout().flush().expect("failed to flush stdout");
 
     let mut input = String::new();
@@ -599,6 +601,9 @@ fn prompt_antenna_model() -> Option<AntennaModel> {
         "d" | "dipole" => Some(AntennaModel::Dipole),
         "e" | "efhw" | "end-fed" | "end-fed-half-wave" => Some(AntennaModel::EndFedHalfWave),
         "l" | "loop" | "full-wave-loop" => Some(AntennaModel::FullWaveLoop),
+        "o" | "ocfd" | "off-center-fed" | "off-center-fed-dipole" | "windom" => {
+            Some(AntennaModel::OffCenterFedDipole)
+        }
         _ => {
             println!("Unknown antenna model. Showing all models per band.");
             None
@@ -934,6 +939,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
             AntennaModel::Dipole => "dipole",
             AntennaModel::EndFedHalfWave => "efhw",
             AntennaModel::FullWaveLoop => "loop",
+            AntennaModel::OffCenterFedDipole => "ocfd",
         };
         cmd.push_str(&format!(" --antenna {}", shell_quote(antenna)));
     }
@@ -1018,6 +1024,7 @@ fn print_results(results: &AppResults) {
             Some(AntennaModel::Dipole) => "dipole",
             Some(AntennaModel::EndFedHalfWave) => "end-fed half-wave",
             Some(AntennaModel::FullWaveLoop) => "full-wave loop",
+            Some(AntennaModel::OffCenterFedDipole) => "off-center-fed dipole",
         }
     );
     println!("------------------------------------------------------------");
@@ -1231,6 +1238,9 @@ fn print_resonant_compromises(results: &AppResults) {
         Some(AntennaModel::FullWaveLoop) => {
             "Closest combined compromises to resonant points (tuner-assisted loop guidance):"
         }
+        Some(AntennaModel::OffCenterFedDipole) => {
+            "Closest combined compromises to resonant points (tuner-assisted OCFD guidance):"
+        }
         _ => "Closest combined compromises to resonant points:",
     };
 
@@ -1244,7 +1254,9 @@ fn print_resonant_compromises(results: &AppResults) {
     println!("{}", heading);
     if matches!(
         results.config.antenna_model,
-        Some(AntennaModel::EndFedHalfWave) | Some(AntennaModel::FullWaveLoop)
+        Some(AntennaModel::EndFedHalfWave)
+            | Some(AntennaModel::FullWaveLoop)
+            | Some(AntennaModel::OffCenterFedDipole)
     ) {
         println!(
             "  Note: These are dipole-derived compromise lengths shown as tuner-assisted starting points."
@@ -1338,8 +1350,21 @@ fn format_calc(
                 c.skip_distance_max_km,
                 c.skip_distance_avg_km,
             ),
+            Some(AntennaModel::OffCenterFedDipole) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  OCFD 33/67 legs: {:.2} m / {:.2} m\n  OCFD 20/80 legs: {:.2} m / {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.ocfd_33_short_leg_m,
+                c.ocfd_33_long_leg_m,
+                c.ocfd_20_short_leg_m,
+                c.ocfd_20_long_leg_m,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
             None => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} m (base: {:.2} m)\n  Full-wave: {:.2} m (base: {:.2} m)\n  Quarter-wave: {:.2} m (base: {:.2} m)\n  End-fed half-wave: {:.2} m\n  Full-wave loop circumference: {:.2} m\n  Full-wave loop square side: {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} m (base: {:.2} m)\n  Full-wave: {:.2} m (base: {:.2} m)\n  Quarter-wave: {:.2} m (base: {:.2} m)\n  End-fed half-wave: {:.2} m\n  Full-wave loop circumference: {:.2} m\n  Full-wave loop square side: {:.2} m\n  OCFD 33/67 legs: {:.2} m / {:.2} m\n  OCFD 20/80 legs: {:.2} m / {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
                 c.band_name, c.frequency_mhz,
                 c.transformer_ratio_label,
                 c.corrected_half_wave_m, c.half_wave_m,
@@ -1348,6 +1373,10 @@ fn format_calc(
                 c.end_fed_half_wave_m,
                 c.full_wave_loop_circumference_m,
                 c.full_wave_loop_square_side_m,
+                c.ocfd_33_short_leg_m,
+                c.ocfd_33_long_leg_m,
+                c.ocfd_20_short_leg_m,
+                c.ocfd_20_long_leg_m,
                 c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
             ),
         },
@@ -1382,8 +1411,21 @@ fn format_calc(
                 c.skip_distance_max_km,
                 c.skip_distance_avg_km,
             ),
+            Some(AntennaModel::OffCenterFedDipole) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  OCFD 33/67 legs: {:.2} ft / {:.2} ft\n  OCFD 20/80 legs: {:.2} ft / {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.ocfd_33_short_leg_ft,
+                c.ocfd_33_long_leg_ft,
+                c.ocfd_20_short_leg_ft,
+                c.ocfd_20_long_leg_ft,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
             None => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} ft (base: {:.2} ft)\n  Full-wave: {:.2} ft (base: {:.2} ft)\n  Quarter-wave: {:.2} ft (base: {:.2} ft)\n  End-fed half-wave: {:.2} ft\n  Full-wave loop circumference: {:.2} ft\n  Full-wave loop square side: {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} ft (base: {:.2} ft)\n  Full-wave: {:.2} ft (base: {:.2} ft)\n  Quarter-wave: {:.2} ft (base: {:.2} ft)\n  End-fed half-wave: {:.2} ft\n  Full-wave loop circumference: {:.2} ft\n  Full-wave loop square side: {:.2} ft\n  OCFD 33/67 legs: {:.2} ft / {:.2} ft\n  OCFD 20/80 legs: {:.2} ft / {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
                 c.band_name, c.frequency_mhz,
                 c.transformer_ratio_label,
                 c.corrected_half_wave_ft, c.half_wave_ft,
@@ -1392,6 +1434,10 @@ fn format_calc(
                 c.end_fed_half_wave_ft,
                 c.full_wave_loop_circumference_ft,
                 c.full_wave_loop_square_side_ft,
+                c.ocfd_33_short_leg_ft,
+                c.ocfd_33_long_leg_ft,
+                c.ocfd_20_short_leg_ft,
+                c.ocfd_20_long_leg_ft,
                 c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
             ),
         },
@@ -1437,6 +1483,23 @@ fn format_calc(
                 c.full_wave_loop_circumference_ft,
                 c.full_wave_loop_square_side_m,
                 c.full_wave_loop_square_side_ft,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
+            Some(AntennaModel::OffCenterFedDipole) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  OCFD 33/67 legs: {:.2} m / {:.2} m ({:.2} ft / {:.2} ft)\n  OCFD 20/80 legs: {:.2} m / {:.2} m ({:.2} ft / {:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.ocfd_33_short_leg_m,
+                c.ocfd_33_long_leg_m,
+                c.ocfd_33_short_leg_ft,
+                c.ocfd_33_long_leg_ft,
+                c.ocfd_20_short_leg_m,
+                c.ocfd_20_long_leg_m,
+                c.ocfd_20_short_leg_ft,
+                c.ocfd_20_long_leg_ft,
                 c.skip_distance_min_km,
                 c.skip_distance_max_km,
                 c.skip_distance_avg_km,

@@ -170,6 +170,7 @@ pub enum AntennaModel {
     Dipole,
     EndFedHalfWave,
     FullWaveLoop,
+    OffCenterFedDipole,
 }
 
 impl FromStr for AntennaModel {
@@ -180,8 +181,11 @@ impl FromStr for AntennaModel {
             "dipole" => Ok(AntennaModel::Dipole),
             "efhw" | "end-fed" | "end-fed-half-wave" => Ok(AntennaModel::EndFedHalfWave),
             "loop" | "full-wave-loop" => Ok(AntennaModel::FullWaveLoop),
+            "ocfd" | "off-center-fed" | "off-center-fed-dipole" | "windom" => {
+                Ok(AntennaModel::OffCenterFedDipole)
+            }
             _ => Err(format!(
-                "Invalid antenna model '{}'. Must be 'dipole', 'efhw', or 'loop'.",
+                "Invalid antenna model '{}'. Must be 'dipole', 'efhw', 'loop', or 'ocfd'.",
                 s
             )),
         }
@@ -194,6 +198,7 @@ impl ValueEnum for AntennaModel {
             AntennaModel::Dipole,
             AntennaModel::EndFedHalfWave,
             AntennaModel::FullWaveLoop,
+            AntennaModel::OffCenterFedDipole,
         ]
     }
 
@@ -208,6 +213,10 @@ impl ValueEnum for AntennaModel {
             AntennaModel::FullWaveLoop => {
                 Some(clap::builder::PossibleValue::new("loop").help("Full-wave loop model"))
             }
+            AntennaModel::OffCenterFedDipole => Some(
+                clap::builder::PossibleValue::new("ocfd")
+                    .help("Off-center-fed dipole (Windom) model"),
+            ),
         }
     }
 }
