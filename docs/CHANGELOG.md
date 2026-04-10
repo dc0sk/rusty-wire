@@ -4,6 +4,14 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Inverted-V antenna model mode**: added `--antenna inverted-v` with inverted-V total length, per-leg length, and estimated 90°/120° apex span output.
+- **Inverted-V integration coverage**: added CLI integration tests validating inverted-V filtered output and export-field presence.
+
+### Changed
+- **Antenna model output expansion**: default all-model output now includes inverted-V geometry in addition to dipole, EFHW, loop, and OCFD fields.
+- **Export payload expansion**: CSV/JSON/Markdown/TXT exports now include inverted-V fields in metric, imperial, and both-unit modes.
+
 ## [1.5.1] - 2026-04-11
 
 ### Added
