@@ -126,6 +126,14 @@ pub struct WireCalculation {
     pub full_wave_loop_circumference_ft: f64,
     pub full_wave_loop_square_side_m: f64,
     pub full_wave_loop_square_side_ft: f64,
+    pub ocfd_33_short_leg_m: f64,
+    pub ocfd_33_short_leg_ft: f64,
+    pub ocfd_33_long_leg_m: f64,
+    pub ocfd_33_long_leg_ft: f64,
+    pub ocfd_20_short_leg_m: f64,
+    pub ocfd_20_short_leg_ft: f64,
+    pub ocfd_20_long_leg_m: f64,
+    pub ocfd_20_long_leg_ft: f64,
 
     // Skip distances
     pub skip_distance_min_km: f64,
@@ -150,6 +158,17 @@ pub struct ResonantCompromise {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct OcfdSplitRecommendation {
+    pub short_ratio: f64,
+    pub long_ratio: f64,
+    pub short_leg_m: f64,
+    pub short_leg_ft: f64,
+    pub long_leg_m: f64,
+    pub long_leg_ft: f64,
+    pub worst_leg_clearance_pct: f64,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct NonResonantSearchConfig {
     pub min_len_m: f64,
     pub max_len_m: f64,
@@ -168,7 +187,7 @@ impl fmt::Display for WireCalculation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Full-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Quarter-wave: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  End-fed half-wave: {:.2}m ({:.2}ft)\n  Full-wave loop circumference: {:.2}m ({:.2}ft)\n  Full-wave loop square side: {:.2}m ({:.2}ft)\n  Skip distance: {:.0}-{:.0}km (avg: {:.0}km)",
+            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Full-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Quarter-wave: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  End-fed half-wave: {:.2}m ({:.2}ft)\n  Full-wave loop circumference: {:.2}m ({:.2}ft)\n  Full-wave loop square side: {:.2}m ({:.2}ft)\n  OCFD 33/67 legs: {:.2}m/{:.2}m ({:.2}ft/{:.2}ft)\n  OCFD 20/80 legs: {:.2}m/{:.2}m ({:.2}ft/{:.2}ft)\n  Skip distance: {:.0}-{:.0}km (avg: {:.0}km)",
             self.band_name,
             self.frequency_mhz,
             self.transformer_ratio_label,
@@ -190,6 +209,14 @@ impl fmt::Display for WireCalculation {
             self.full_wave_loop_circumference_ft,
             self.full_wave_loop_square_side_m,
             self.full_wave_loop_square_side_ft,
+            self.ocfd_33_short_leg_m,
+            self.ocfd_33_long_leg_m,
+            self.ocfd_33_short_leg_ft,
+            self.ocfd_33_long_leg_ft,
+            self.ocfd_20_short_leg_m,
+            self.ocfd_20_long_leg_m,
+            self.ocfd_20_short_leg_ft,
+            self.ocfd_20_long_leg_ft,
             self.skip_distance_min_km,
             self.skip_distance_max_km,
             self.skip_distance_avg_km,
@@ -236,6 +263,16 @@ pub fn calculate_for_band_with_velocity(
     let full_wave_loop_circumference_m = corrected_full_wave_m;
     let full_wave_loop_square_side_ft = full_wave_loop_circumference_ft / 4.0;
     let full_wave_loop_square_side_m = full_wave_loop_circumference_m / 4.0;
+    let ocfd_total_ft = corrected_half_wave_ft;
+    let ocfd_total_m = corrected_half_wave_m;
+    let ocfd_33_short_leg_ft = ocfd_total_ft / 3.0;
+    let ocfd_33_short_leg_m = ocfd_total_m / 3.0;
+    let ocfd_33_long_leg_ft = ocfd_total_ft * 2.0 / 3.0;
+    let ocfd_33_long_leg_m = ocfd_total_m * 2.0 / 3.0;
+    let ocfd_20_short_leg_ft = ocfd_total_ft * 0.2;
+    let ocfd_20_short_leg_m = ocfd_total_m * 0.2;
+    let ocfd_20_long_leg_ft = ocfd_total_ft * 0.8;
+    let ocfd_20_long_leg_m = ocfd_total_m * 0.8;
 
     // Calculate skip distance average
     let skip_distance_avg_km = (band.typical_skip_km.0 + band.typical_skip_km.1) / 2.0;
@@ -262,6 +299,14 @@ pub fn calculate_for_band_with_velocity(
         full_wave_loop_circumference_ft,
         full_wave_loop_square_side_m,
         full_wave_loop_square_side_ft,
+        ocfd_33_short_leg_m,
+        ocfd_33_short_leg_ft,
+        ocfd_33_long_leg_m,
+        ocfd_33_long_leg_ft,
+        ocfd_20_short_leg_m,
+        ocfd_20_short_leg_ft,
+        ocfd_20_long_leg_m,
+        ocfd_20_long_leg_ft,
         skip_distance_min_km: band.typical_skip_km.0,
         skip_distance_max_km: band.typical_skip_km.1,
         skip_distance_avg_km,
@@ -638,6 +683,84 @@ pub fn calculate_resonant_compromises(
         .collect()
 }
 
+pub fn optimize_ocfd_split_for_length(
+    calculations: &[WireCalculation],
+    total_len_m: f64,
+) -> Option<OcfdSplitRecommendation> {
+    if calculations.is_empty() || total_len_m <= 0.0 {
+        return None;
+    }
+
+    let mut best: Option<OcfdSplitRecommendation> = None;
+
+    for step in 20..=45 {
+        let short_ratio = f64::from(step) / 100.0;
+        let long_ratio = 1.0 - short_ratio;
+        let short_leg_m = total_len_m * short_ratio;
+        let long_leg_m = total_len_m * long_ratio;
+
+        let mut worst_leg_clearance_pct = f64::INFINITY;
+        for calc in calculations {
+            let quarter_wave = calc.corrected_quarter_wave_m;
+            if quarter_wave <= 0.0 {
+                continue;
+            }
+            let short_clearance = nearest_resonance_clearance_pct(short_leg_m, quarter_wave);
+            let long_clearance = nearest_resonance_clearance_pct(long_leg_m, quarter_wave);
+            worst_leg_clearance_pct = worst_leg_clearance_pct
+                .min(short_clearance)
+                .min(long_clearance);
+        }
+
+        if !worst_leg_clearance_pct.is_finite() {
+            continue;
+        }
+
+        let candidate = OcfdSplitRecommendation {
+            short_ratio,
+            long_ratio,
+            short_leg_m,
+            short_leg_ft: short_leg_m * METERS_TO_FEET,
+            long_leg_m,
+            long_leg_ft: long_leg_m * METERS_TO_FEET,
+            worst_leg_clearance_pct,
+        };
+
+        best = match best {
+            None => Some(candidate),
+            Some(current) => {
+                let better_clearance =
+                    candidate.worst_leg_clearance_pct > current.worst_leg_clearance_pct + 1e-9;
+                let tie_clearance =
+                    (candidate.worst_leg_clearance_pct - current.worst_leg_clearance_pct).abs()
+                        <= 1e-9;
+                let candidate_balance = (candidate.short_ratio - (1.0 / 3.0)).abs();
+                let current_balance = (current.short_ratio - (1.0 / 3.0)).abs();
+
+                if better_clearance || (tie_clearance && candidate_balance < current_balance) {
+                    Some(candidate)
+                } else {
+                    Some(current)
+                }
+            }
+        };
+    }
+
+    best
+}
+
+fn nearest_resonance_clearance_pct(length_m: f64, quarter_wave_m: f64) -> f64 {
+    if length_m <= 0.0 || quarter_wave_m <= 0.0 {
+        return 0.0;
+    }
+
+    let harmonic = (length_m / quarter_wave_m).floor().max(1.0);
+    let d1 = (length_m - (quarter_wave_m * harmonic)).abs();
+    let d2 = (length_m - (quarter_wave_m * (harmonic + 1.0))).abs();
+    let nearest = d1.min(d2);
+    (nearest / length_m) * 100.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -760,6 +883,43 @@ mod tests {
                 .abs()
                 < 1e-9
         );
+        assert!(
+            (result.ocfd_33_short_leg_m + result.ocfd_33_long_leg_m - result.end_fed_half_wave_m)
+                .abs()
+                < 1e-9
+        );
+        assert!(
+            (result.ocfd_33_short_leg_ft + result.ocfd_33_long_leg_ft
+                - result.end_fed_half_wave_ft)
+                .abs()
+                < 1e-9
+        );
+        assert!(
+            (result.ocfd_20_short_leg_m + result.ocfd_20_long_leg_m - result.end_fed_half_wave_m)
+                .abs()
+                < 1e-9
+        );
+        assert!(
+            (result.ocfd_20_short_leg_ft + result.ocfd_20_long_leg_ft
+                - result.end_fed_half_wave_ft)
+                .abs()
+                < 1e-9
+        );
+    }
+
+    #[test]
+    fn optimize_ocfd_split_for_length_returns_valid_recommendation() {
+        let band = sample_band();
+        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1);
+        let total = calc.corrected_half_wave_m;
+
+        let rec = optimize_ocfd_split_for_length(&[calc], total)
+            .expect("expected OCFD split recommendation");
+
+        assert!(rec.short_ratio >= 0.2 && rec.short_ratio <= 0.45);
+        assert!((rec.short_ratio + rec.long_ratio - 1.0).abs() < 1e-9);
+        assert!((rec.short_leg_m + rec.long_leg_m - total).abs() < 1e-9);
+        assert!(rec.worst_leg_clearance_pct >= 0.0);
     }
 
     #[test]
