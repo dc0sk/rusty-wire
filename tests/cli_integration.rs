@@ -185,4 +185,8 @@ fn ocfd_antenna_mode_shows_ocfd_guidance_compromises() {
     ));
     assert!(stdout
         .contains("dipole-derived compromise lengths shown as tuner-assisted starting points"));
+    assert!(stdout.contains("OCFD mode: each compromise line shows a total wire length"));
+    assert!(stdout.contains("33/67 legs:"));
+    assert!(stdout.contains("20/80 legs:"));
+    assert!(stdout.contains("Optimized split:"));
 }

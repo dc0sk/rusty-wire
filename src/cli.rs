@@ -10,8 +10,8 @@ use crate::app::{
 };
 use crate::bands::{get_bands_for_region, ITURegion, ALL_REGIONS};
 use crate::calculations::{
-    calculate_average_max_distance, calculate_average_min_distance, TransformerRatio,
-    WireCalculation, DEFAULT_NON_RESONANT_CONFIG,
+    calculate_average_max_distance, calculate_average_min_distance, optimize_ocfd_split_for_length,
+    TransformerRatio, WireCalculation, DEFAULT_NON_RESONANT_CONFIG,
 };
 use crate::export::{default_output_name, export_results, validate_export_path};
 use clap::Parser;
@@ -1262,7 +1262,19 @@ fn print_resonant_compromises(results: &AppResults) {
             "  Note: These are dipole-derived compromise lengths shown as tuner-assisted starting points."
         );
     }
+    if matches!(
+        results.config.antenna_model,
+        Some(AntennaModel::OffCenterFedDipole)
+    ) {
+        println!(
+            "  OCFD mode: each compromise line shows a total wire length; leg splits are listed directly below."
+        );
+    }
     for (idx, c) in compromises.iter().take(10).enumerate() {
+        let is_ocfd = matches!(
+            results.config.antenna_model,
+            Some(AntennaModel::OffCenterFedDipole)
+        );
         match units {
             UnitSystem::Metric => println!(
                 "  {:2}. {:.2} m (worst-band delta: {:.2} m)",
@@ -1284,6 +1296,81 @@ fn print_resonant_compromises(results: &AppResults) {
                 c.worst_band_distance_m,
                 c.worst_band_distance_m / FEET_TO_METERS
             ),
+        }
+
+        if is_ocfd {
+            let split_33_short_m = c.length_m / 3.0;
+            let split_33_long_m = c.length_m * 2.0 / 3.0;
+            let split_20_short_m = c.length_m * 0.2;
+            let split_20_long_m = c.length_m * 0.8;
+            let split_33_short_ft = split_33_short_m / FEET_TO_METERS;
+            let split_33_long_ft = split_33_long_m / FEET_TO_METERS;
+            let split_20_short_ft = split_20_short_m / FEET_TO_METERS;
+            let split_20_long_ft = split_20_long_m / FEET_TO_METERS;
+
+            match units {
+                UnitSystem::Metric => {
+                    println!(
+                        "      33/67 legs: {:.2} m / {:.2} m",
+                        split_33_short_m, split_33_long_m
+                    );
+                    println!(
+                        "      20/80 legs: {:.2} m / {:.2} m",
+                        split_20_short_m, split_20_long_m
+                    );
+                }
+                UnitSystem::Imperial => {
+                    println!(
+                        "      33/67 legs: {:.2} ft / {:.2} ft",
+                        split_33_short_ft, split_33_long_ft
+                    );
+                    println!(
+                        "      20/80 legs: {:.2} ft / {:.2} ft",
+                        split_20_short_ft, split_20_long_ft
+                    );
+                }
+                UnitSystem::Both => {
+                    println!(
+                        "      33/67 legs: {:.2} m / {:.2} m ({:.2} ft / {:.2} ft)",
+                        split_33_short_m, split_33_long_m, split_33_short_ft, split_33_long_ft
+                    );
+                    println!(
+                        "      20/80 legs: {:.2} m / {:.2} m ({:.2} ft / {:.2} ft)",
+                        split_20_short_m, split_20_long_m, split_20_short_ft, split_20_long_ft
+                    );
+                }
+            }
+
+            if let Some(best) = optimize_ocfd_split_for_length(&results.calculations, c.length_m) {
+                match units {
+                    UnitSystem::Metric => println!(
+                        "      Optimized split: {:.0}/{:.0} -> {:.2} m / {:.2} m (worst-leg clearance: {:.2}%)",
+                        best.short_ratio * 100.0,
+                        best.long_ratio * 100.0,
+                        best.short_leg_m,
+                        best.long_leg_m,
+                        best.worst_leg_clearance_pct
+                    ),
+                    UnitSystem::Imperial => println!(
+                        "      Optimized split: {:.0}/{:.0} -> {:.2} ft / {:.2} ft (worst-leg clearance: {:.2}%)",
+                        best.short_ratio * 100.0,
+                        best.long_ratio * 100.0,
+                        best.short_leg_ft,
+                        best.long_leg_ft,
+                        best.worst_leg_clearance_pct
+                    ),
+                    UnitSystem::Both => println!(
+                        "      Optimized split: {:.0}/{:.0} -> {:.2} m / {:.2} m ({:.2} ft / {:.2} ft), worst-leg clearance: {:.2}%",
+                        best.short_ratio * 100.0,
+                        best.long_ratio * 100.0,
+                        best.short_leg_m,
+                        best.long_leg_m,
+                        best.short_leg_ft,
+                        best.long_leg_ft,
+                        best.worst_leg_clearance_pct
+                    ),
+                }
+            }
         }
     }
 

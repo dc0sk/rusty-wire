@@ -158,6 +158,17 @@ pub struct ResonantCompromise {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct OcfdSplitRecommendation {
+    pub short_ratio: f64,
+    pub long_ratio: f64,
+    pub short_leg_m: f64,
+    pub short_leg_ft: f64,
+    pub long_leg_m: f64,
+    pub long_leg_ft: f64,
+    pub worst_leg_clearance_pct: f64,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct NonResonantSearchConfig {
     pub min_len_m: f64,
     pub max_len_m: f64,
@@ -672,6 +683,84 @@ pub fn calculate_resonant_compromises(
         .collect()
 }
 
+pub fn optimize_ocfd_split_for_length(
+    calculations: &[WireCalculation],
+    total_len_m: f64,
+) -> Option<OcfdSplitRecommendation> {
+    if calculations.is_empty() || total_len_m <= 0.0 {
+        return None;
+    }
+
+    let mut best: Option<OcfdSplitRecommendation> = None;
+
+    for step in 20..=45 {
+        let short_ratio = f64::from(step) / 100.0;
+        let long_ratio = 1.0 - short_ratio;
+        let short_leg_m = total_len_m * short_ratio;
+        let long_leg_m = total_len_m * long_ratio;
+
+        let mut worst_leg_clearance_pct = f64::INFINITY;
+        for calc in calculations {
+            let quarter_wave = calc.corrected_quarter_wave_m;
+            if quarter_wave <= 0.0 {
+                continue;
+            }
+            let short_clearance = nearest_resonance_clearance_pct(short_leg_m, quarter_wave);
+            let long_clearance = nearest_resonance_clearance_pct(long_leg_m, quarter_wave);
+            worst_leg_clearance_pct = worst_leg_clearance_pct
+                .min(short_clearance)
+                .min(long_clearance);
+        }
+
+        if !worst_leg_clearance_pct.is_finite() {
+            continue;
+        }
+
+        let candidate = OcfdSplitRecommendation {
+            short_ratio,
+            long_ratio,
+            short_leg_m,
+            short_leg_ft: short_leg_m * METERS_TO_FEET,
+            long_leg_m,
+            long_leg_ft: long_leg_m * METERS_TO_FEET,
+            worst_leg_clearance_pct,
+        };
+
+        best = match best {
+            None => Some(candidate),
+            Some(current) => {
+                let better_clearance =
+                    candidate.worst_leg_clearance_pct > current.worst_leg_clearance_pct + 1e-9;
+                let tie_clearance =
+                    (candidate.worst_leg_clearance_pct - current.worst_leg_clearance_pct).abs()
+                        <= 1e-9;
+                let candidate_balance = (candidate.short_ratio - (1.0 / 3.0)).abs();
+                let current_balance = (current.short_ratio - (1.0 / 3.0)).abs();
+
+                if better_clearance || (tie_clearance && candidate_balance < current_balance) {
+                    Some(candidate)
+                } else {
+                    Some(current)
+                }
+            }
+        };
+    }
+
+    best
+}
+
+fn nearest_resonance_clearance_pct(length_m: f64, quarter_wave_m: f64) -> f64 {
+    if length_m <= 0.0 || quarter_wave_m <= 0.0 {
+        return 0.0;
+    }
+
+    let harmonic = (length_m / quarter_wave_m).floor().max(1.0);
+    let d1 = (length_m - (quarter_wave_m * harmonic)).abs();
+    let d2 = (length_m - (quarter_wave_m * (harmonic + 1.0))).abs();
+    let nearest = d1.min(d2);
+    (nearest / length_m) * 100.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -816,6 +905,21 @@ mod tests {
                 .abs()
                 < 1e-9
         );
+    }
+
+    #[test]
+    fn optimize_ocfd_split_for_length_returns_valid_recommendation() {
+        let band = sample_band();
+        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1);
+        let total = calc.corrected_half_wave_m;
+
+        let rec = optimize_ocfd_split_for_length(&[calc], total)
+            .expect("expected OCFD split recommendation");
+
+        assert!(rec.short_ratio >= 0.2 && rec.short_ratio <= 0.45);
+        assert!((rec.short_ratio + rec.long_ratio - 1.0).abs() < 1e-9);
+        assert!((rec.short_leg_m + rec.long_leg_m - total).abs() < 1e-9);
+        assert!(rec.worst_leg_clearance_pct >= 0.0);
     }
 
     #[test]
