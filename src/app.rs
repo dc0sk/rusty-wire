@@ -12,6 +12,8 @@ use crate::calculations::{
     NonResonantRecommendation, NonResonantSearchConfig, ResonantCompromise,
     TransformerRatio, WireCalculation, DEFAULT_NON_RESONANT_CONFIG,
 };
+use std::str::FromStr;
+use clap::ValueEnum;
 
 pub const FEET_TO_METERS: f64 = 0.3048;
 pub const DEFAULT_BAND_SELECTION: [usize; 7] = [4, 5, 6, 7, 8, 9, 10];
@@ -28,6 +30,31 @@ pub enum CalcMode {
     NonResonant,
 }
 
+impl FromStr for CalcMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "resonant" => Ok(CalcMode::Resonant),
+            "non-resonant" | "nonresonant" | "non_resonant" => Ok(CalcMode::NonResonant),
+            _ => Err(format!("Invalid calculation mode '{}'. Must be 'resonant' or 'non-resonant'.", s)),
+        }
+    }
+}
+
+impl ValueEnum for CalcMode {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[CalcMode::Resonant, CalcMode::NonResonant]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        match self {
+            CalcMode::Resonant => Some(clap::builder::PossibleValue::new("resonant").help("Calculate resonant wire lengths")),
+            CalcMode::NonResonant => Some(clap::builder::PossibleValue::new("non-resonant").help("Find optimal non-resonant wire length within constraints")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportFormat {
     Csv,
@@ -36,7 +63,10 @@ pub enum ExportFormat {
     Txt,
 }
 
+
+
 impl ExportFormat {
+    #[allow(dead_code)] // used in tests
     pub fn as_str(self) -> &'static str {
         match self {
             ExportFormat::Csv => "csv",
@@ -47,11 +77,67 @@ impl ExportFormat {
     }
 }
 
+impl FromStr for ExportFormat {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "csv" => Ok(ExportFormat::Csv),
+            "json" => Ok(ExportFormat::Json),
+            "markdown" | "md" => Ok(ExportFormat::Markdown),
+            "txt" | "text" => Ok(ExportFormat::Txt),
+            _ => Err(format!("Invalid export format '{}'. Must be 'csv', 'json', 'markdown', or 'txt'.", s)),
+        }
+    }
+}
+
+impl ValueEnum for ExportFormat {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[ExportFormat::Csv, ExportFormat::Json, ExportFormat::Markdown, ExportFormat::Txt]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        match self {
+            ExportFormat::Csv => Some(clap::builder::PossibleValue::new("csv").help("CSV format")),
+            ExportFormat::Json => Some(clap::builder::PossibleValue::new("json").help("JSON format")),
+            ExportFormat::Markdown => Some(clap::builder::PossibleValue::new("markdown").help("Markdown format")),
+            ExportFormat::Txt => Some(clap::builder::PossibleValue::new("txt").help("Plain text format")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnitSystem {
     Metric,
     Imperial,
     Both,
+}
+
+impl FromStr for UnitSystem {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "m" | "metric" => Ok(UnitSystem::Metric),
+            "ft" | "imperial" => Ok(UnitSystem::Imperial),
+            "both" => Ok(UnitSystem::Both),
+            _ => Err(format!("Invalid unit system '{}'. Must be 'm', 'ft', or 'both'.", s)),
+        }
+    }
+}
+
+impl ValueEnum for UnitSystem {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[UnitSystem::Metric, UnitSystem::Imperial, UnitSystem::Both]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        match self {
+            UnitSystem::Metric => Some(clap::builder::PossibleValue::new("m").help("Meters")),
+            UnitSystem::Imperial => Some(clap::builder::PossibleValue::new("ft").help("Feet")),
+            UnitSystem::Both => Some(clap::builder::PossibleValue::new("both").help("Both meters and feet")),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

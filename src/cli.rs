@@ -14,27 +14,188 @@ use crate::calculations::{
     DEFAULT_NON_RESONANT_CONFIG,
 };
 use crate::export::{default_output_name, export_results, validate_export_path};
+use clap::Parser;
 use std::io::{self, Write};
 
+
 // ---------------------------------------------------------------------------
-// CLI-only options struct (not part of the public app API)
+// CLI argument parsing with clap
 // ---------------------------------------------------------------------------
 
-struct CliOptions {
-    bands: Option<Vec<usize>>,
-    velocity_factor: f64,
-    export: Vec<ExportFormat>,
-    output: Option<String>,
-    wire_min_m: f64,
-    wire_max_m: f64,
-    wire_min_ft: Option<f64>,
-    wire_max_ft: Option<f64>,
+#[derive(Parser)]
+#[command(name = "rusty-wire")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
+#[command(about = "A Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.")]
+#[command(long_about = None)]
+#[command(arg_required_else_help = true)]
+struct Cli {
+    /// ITU Region (1=Europe/Africa/Middle East, 2=Americas, 3=Asia-Pacific)
+    #[arg(short, long, value_enum, default_value_t = DEFAULT_ITU_REGION)]
+    region: ITURegion,
+
+    /// Calculation mode
+    #[arg(short, long, value_enum, default_value_t = CalcMode::Resonant)]
     mode: CalcMode,
-    itu_region: ITURegion,
-    transformer_ratio: TransformerRatio,
-    list_bands: bool,
-    help: bool,
+
+    /// Band numbers (comma-separated, e.g., "4,5,6,7,8,9,10")
+    #[arg(short, long, value_delimiter = ',')]
+    bands: Option<Vec<usize>>,
+
+    /// Velocity factor (0.50-1.00)
+    #[arg(short, long, default_value_t = 0.95)]
+    velocity: f64,
+
+    /// Transformer ratio (1:1, 1:2, 1:4, 1:5, 1:6, 1:9, 1:16, 1:49, 1:56, 1:64)
+    #[arg(short, long, value_enum, default_value_t = DEFAULT_TRANSFORMER_RATIO)]
+    transformer: TransformerRatio,
+
+    /// Wire length window minimum in meters
+    #[arg(long)]
+    wire_min: Option<f64>,
+
+    /// Wire length window maximum in meters
+    #[arg(long)]
+    wire_max: Option<f64>,
+
+    /// Wire length window minimum in feet
+    #[arg(long)]
+    wire_min_ft: Option<f64>,
+
+    /// Wire length window maximum in feet
+    #[arg(long)]
+    wire_max_ft: Option<f64>,
+
+    /// Display units (m, ft, both)
+    #[arg(short, long, value_enum)]
     units: Option<UnitSystem>,
+
+    /// Export formats (comma-separated: csv, json, markdown, txt)
+    #[arg(short, long, value_delimiter = ',')]
+    export: Option<Vec<ExportFormat>>,
+
+    /// Output file path for exports
+    #[arg(short, long)]
+    output: Option<String>,
+
+    /// List available bands for the selected region
+    #[arg(long)]
+    list_bands: bool,
+
+    /// Launch interactive mode
+    #[arg(short = 'i', long)]
+    interactive: bool,
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum CliCalcMode {
+    Resonant,
+    NonResonant,
+}
+
+impl From<CliCalcMode> for CalcMode {
+    fn from(mode: CliCalcMode) -> Self {
+        match mode {
+            CliCalcMode::Resonant => CalcMode::Resonant,
+            CliCalcMode::NonResonant => CalcMode::NonResonant,
+        }
+    }
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum CliUnitSystem {
+    M,
+    Ft,
+    Both,
+}
+
+impl From<CliUnitSystem> for UnitSystem {
+    fn from(units: CliUnitSystem) -> Self {
+        match units {
+            CliUnitSystem::M => UnitSystem::Metric,
+            CliUnitSystem::Ft => UnitSystem::Imperial,
+            CliUnitSystem::Both => UnitSystem::Both,
+        }
+    }
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum CliExportFormat {
+    Csv,
+    Json,
+    Markdown,
+    Txt,
+}
+
+impl From<CliExportFormat> for ExportFormat {
+    fn from(format: CliExportFormat) -> Self {
+        match format {
+            CliExportFormat::Csv => ExportFormat::Csv,
+            CliExportFormat::Json => ExportFormat::Json,
+            CliExportFormat::Markdown => ExportFormat::Markdown,
+            CliExportFormat::Txt => ExportFormat::Txt,
+        }
+    }
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum CliTransformerRatio {
+    #[clap(name = "1:1")]
+    R1To1,
+    #[clap(name = "1:2")]
+    R1To2,
+    #[clap(name = "1:4")]
+    R1To4,
+    #[clap(name = "1:5")]
+    R1To5,
+    #[clap(name = "1:6")]
+    R1To6,
+    #[clap(name = "1:9")]
+    R1To9,
+    #[clap(name = "1:16")]
+    R1To16,
+    #[clap(name = "1:49")]
+    R1To49,
+    #[clap(name = "1:56")]
+    R1To56,
+    #[clap(name = "1:64")]
+    R1To64,
+}
+
+impl From<CliTransformerRatio> for TransformerRatio {
+    fn from(ratio: CliTransformerRatio) -> Self {
+        match ratio {
+            CliTransformerRatio::R1To1 => TransformerRatio::R1To1,
+            CliTransformerRatio::R1To2 => TransformerRatio::R1To2,
+            CliTransformerRatio::R1To4 => TransformerRatio::R1To4,
+            CliTransformerRatio::R1To5 => TransformerRatio::R1To5,
+            CliTransformerRatio::R1To6 => TransformerRatio::R1To6,
+            CliTransformerRatio::R1To9 => TransformerRatio::R1To9,
+            CliTransformerRatio::R1To16 => TransformerRatio::R1To16,
+            CliTransformerRatio::R1To49 => TransformerRatio::R1To49,
+            CliTransformerRatio::R1To56 => TransformerRatio::R1To56,
+            CliTransformerRatio::R1To64 => TransformerRatio::R1To64,
+        }
+    }
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum CliITURegion {
+    #[clap(name = "1")]
+    Region1,
+    #[clap(name = "2")]
+    Region2,
+    #[clap(name = "3")]
+    Region3,
+}
+
+impl From<CliITURegion> for ITURegion {
+    fn from(region: CliITURegion) -> Self {
+        match region {
+            CliITURegion::Region1 => ITURegion::Region1,
+            CliITURegion::Region2 => ITURegion::Region2,
+            CliITURegion::Region3 => ITURegion::Region3,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -43,17 +204,136 @@ struct CliOptions {
 
 /// Entry point when CLI arguments are present.
 pub fn run_from_args(args: &[String]) {
-    match parse_cli_args(args) {
-        Ok(opts) => run_non_interactive(opts),
-        Err(err) => {
-            eprintln!("Error: {}", err);
-            print_usage();
-            std::process::exit(2);
+    let cli = Cli::parse_from(args.iter().map(|s| s.as_str()));
+
+    if cli.interactive {
+        run_interactive();
+        return;
+    }
+
+    if cli.list_bands {
+        show_all_bands_for_region(cli.region);
+        return;
+    }
+
+    let bands = cli.bands.unwrap_or_else(|| DEFAULT_BAND_SELECTION.to_vec());
+
+    // Validate velocity factor
+    if !(0.5..=1.0).contains(&cli.velocity) {
+        eprintln!("Error: velocity factor must be between 0.50 and 1.00");
+        return;
+    }
+
+    // Validate wire length constraints
+    let using_ft = cli.wire_min_ft.is_some() || cli.wire_max_ft.is_some();
+    let using_m = cli.wire_min.is_some() || cli.wire_max.is_some();
+
+    if using_ft && using_m {
+        eprintln!("Error: cannot mix meter and feet constraints; choose one unit system");
+        return;
+    }
+
+    let (wire_min_m, wire_max_m) = if using_ft {
+        let min_ft = cli.wire_min_ft.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m / FEET_TO_METERS);
+        let max_ft = cli.wire_max_ft.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m / FEET_TO_METERS);
+
+        if min_ft <= 0.0 || max_ft <= min_ft {
+            eprintln!("Error: invalid wire length window in feet");
+            return;
         }
+
+        (min_ft * FEET_TO_METERS, max_ft * FEET_TO_METERS)
+    } else {
+        let min_m = cli.wire_min.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m);
+        let max_m = cli.wire_max.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m);
+
+        if min_m <= 0.0 || max_m <= min_m {
+            eprintln!("Error: invalid wire length window in meters");
+            return;
+        }
+
+        (min_m, max_m)
+    };
+
+    // Validate output path if provided
+    if let Some(ref output) = cli.output {
+        if let Err(err) = validate_export_path(output) {
+            eprintln!("Error: invalid output path: {}", err);
+            return;
+        }
+    }
+
+    let units = cli.units.map(UnitSystem::from).unwrap_or_else(|| {
+        if using_ft {
+            UnitSystem::Imperial
+        } else {
+            UnitSystem::Metric
+        }
+    });
+
+    let export_formats = cli.export.unwrap_or_default().into_iter().map(ExportFormat::from).collect::<Vec<_>>();
+
+    let config = AppConfig {
+        band_indices: bands,
+        velocity_factor: cli.velocity,
+        mode: CalcMode::from(cli.mode),
+        wire_min_m,
+        wire_max_m,
+        units,
+        itu_region: cli.region,
+        transformer_ratio: TransformerRatio::from(cli.transformer),
+    };
+
+    let results = run_calculation(config);
+    if results.calculations.is_empty() {
+        println!("No valid bands selected.");
+        return;
+    }
+
+    print_results(&results);
+    print_skipped_band_warnings(&results);
+
+    let single_output = cli.output;
+    let export_count = export_formats.len();
+    let export_recommendation = if results.config.mode == CalcMode::NonResonant {
+        results.recommendation.as_ref()
+    } else {
+        None
+    };
+
+    for (i, &fmt) in export_formats.iter().enumerate() {
+        let output = if export_count == 1 {
+            single_output
+                .clone()
+                .unwrap_or_else(|| default_output_name(fmt).to_string())
+        } else {
+            if i == 0 && single_output.is_some() {
+                eprintln!(
+                    "Warning: --output is ignored when multiple formats are selected; using default names."
+                );
+            }
+            default_output_name(fmt).to_string()
+        };
+        if let Err(err) = export_results(
+            fmt,
+            &output,
+            &results.calculations,
+            export_recommendation,
+            results.config.units,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
+        ) {
+            eprintln!("Failed to export {}: {}", output, err);
+            std::process::exit(1);
+        }
+        println!("Exported results to {}", output);
     }
 }
 
-/// Entry point for interactive (no-argument) mode.
+// ---------------------------------------------------------------------------
+// Interactive mode
+// ---------------------------------------------------------------------------
+
 pub fn run_interactive() {
     println!("============================================================");
     println!("Rusty Wire v{} - Resonant Length and Skip Distance Calculator", env!("CARGO_PKG_VERSION"));
@@ -91,107 +371,6 @@ pub fn run_interactive() {
             _ => println!("Invalid option. Try again.\n"),
         }
     }
-}
-
-// ---------------------------------------------------------------------------
-// Non-interactive (CLI) runner
-// ---------------------------------------------------------------------------
-
-fn run_non_interactive(opts: CliOptions) {
-    if opts.help {
-        print_usage();
-        return;
-    }
-
-    if opts.list_bands {
-        show_all_bands_for_region(opts.itu_region);
-    }
-
-    let indices = match opts.bands {
-        Some(v) => v,
-        None => {
-            if !opts.list_bands {
-                println!("No --bands provided; using default 40m-10m set (4,5,6,7,8,9,10).\n");
-            }
-            DEFAULT_BAND_SELECTION.to_vec()
-        }
-    };
-
-    let units = opts.units.unwrap_or(if opts.wire_min_ft.is_some() {
-        UnitSystem::Imperial
-    } else {
-        UnitSystem::Metric
-    });
-
-    let config = AppConfig {
-        band_indices: indices,
-        velocity_factor: opts.velocity_factor,
-        mode: opts.mode,
-        wire_min_m: opts.wire_min_m,
-        wire_max_m: opts.wire_max_m,
-        units,
-        itu_region: opts.itu_region,
-        transformer_ratio: opts.transformer_ratio,
-    };
-
-    let results = run_calculation(config);
-    if results.calculations.is_empty() {
-        println!("No valid bands selected.");
-        return;
-    }
-
-    print_results(&results);
-    print_skipped_band_warnings(&results);
-
-    let single_output = opts.output;
-    let export_count = opts.export.len();
-    let export_recommendation = if results.config.mode == CalcMode::NonResonant {
-        results.recommendation.as_ref()
-    } else {
-        None
-    };
-    for (i, &fmt) in opts.export.iter().enumerate() {
-        let output = if export_count == 1 {
-            single_output
-                .clone()
-                .unwrap_or_else(|| default_output_name(fmt).to_string())
-        } else {
-            if i == 0 && single_output.is_some() {
-                eprintln!(
-                    "Warning: --output is ignored when multiple formats are selected; using default names."
-                );
-            }
-            default_output_name(fmt).to_string()
-        };
-        if let Err(err) = export_results(
-            fmt,
-            &output,
-            &results.calculations,
-            export_recommendation,
-            results.config.units,
-            results.config.wire_min_m,
-            results.config.wire_max_m,
-        ) {
-            eprintln!("Failed to export {}: {}", output, err);
-            std::process::exit(1);
-        }
-        println!("Exported results to {}", output);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Interactive mode helpers
-// ---------------------------------------------------------------------------
-
-fn show_all_bands_for_region(region: ITURegion) {
-    let bands = get_bands_for_region(region);
-    println!("\nAvailable bands in Region {} ({} total):", region.short_name(), bands.len());
-    println!("  ({})", region.long_name());
-    println!("------------------------------------------------------------");
-    for (idx, band) in bands {
-        println!("{:2}. {}", idx + 1, band);
-    }
-    println!();
 }
 
 fn calculate_selected_bands(region: ITURegion) {
@@ -312,10 +491,6 @@ fn quick_calculation(region: ITURegion) {
         print_equivalent_cli_call(&results.config, &export_choices);
     }
 }
-
-// ---------------------------------------------------------------------------
-// Prompts
-// ---------------------------------------------------------------------------
 
 fn prompt_itu_region() -> ITURegion {
     println!("\nITU Regions:");
@@ -525,9 +700,11 @@ fn prompt_display_units(auto_units: UnitSystem) -> UnitSystem {
     if trimmed.is_empty() {
         return auto_units;
     }
-    match parse_unit_system(trimmed) {
-        Ok(u) => u,
-        Err(_) => {
+    match trimmed.to_ascii_lowercase().as_str() {
+        "m" | "metric" => UnitSystem::Metric,
+        "ft" | "imperial" => UnitSystem::Imperial,
+        "both" => UnitSystem::Both,
+        _ => {
             println!("Unknown unit system. Using {}.", label);
             auto_units
         }
@@ -548,12 +725,31 @@ fn interactive_export_prompt(results: &AppResults) -> Vec<(ExportFormat, String)
         return Vec::new();
     }
 
-    let formats = match parse_export_format_list(&fmt_raw) {
-        Ok(f) => f,
-        Err(e) => {
-            println!("{}: skipping export.", e);
+    let formats: Vec<ExportFormat> = {
+        let mut out = Vec::new();
+        let mut err_msg = None;
+        for token in fmt_raw.split(',') {
+            let token = token.trim();
+            if token.is_empty() {
+                continue;
+            }
+            match token {
+                "csv" => { if !out.contains(&ExportFormat::Csv) { out.push(ExportFormat::Csv); } }
+                "json" => { if !out.contains(&ExportFormat::Json) { out.push(ExportFormat::Json); } }
+                "markdown" | "md" => { if !out.contains(&ExportFormat::Markdown) { out.push(ExportFormat::Markdown); } }
+                "txt" | "text" => { if !out.contains(&ExportFormat::Txt) { out.push(ExportFormat::Txt); } }
+                other => { err_msg = Some(format!("unknown format '{}'; skipping export.", other)); break; }
+            }
+        }
+        if let Some(msg) = err_msg {
+            println!("{}", msg);
             return Vec::new();
         }
+        if out.is_empty() {
+            println!("--export requires at least one format; skipping export.");
+            return Vec::new();
+        }
+        out
     };
 
     let export_recommendation = if results.config.mode == CalcMode::NonResonant {
@@ -598,6 +794,85 @@ fn interactive_export_prompt(results: &AppResults) -> Vec<(ExportFormat, String)
     chosen
 }
 
+fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat, String)]) {
+    let bands_csv = config
+        .band_indices
+        .iter()
+        .map(|v| v.to_string())
+        .collect::<Vec<String>>()
+        .join(",");
+
+    let units_str = match config.units {
+        UnitSystem::Metric => "m",
+        UnitSystem::Imperial => "ft",
+        UnitSystem::Both => "both",
+    };
+    let mut cmd = format!(
+        "rusty-wire --region {} --mode {} --bands {} --velocity {:.2} --transformer {} --units {}",
+        shell_quote(config.itu_region.short_name()),
+        shell_quote(match config.mode {
+            CalcMode::Resonant => "resonant",
+            CalcMode::NonResonant => "non-resonant",
+        }),
+        shell_quote(&bands_csv),
+        config.velocity_factor,
+        shell_quote(config.transformer_ratio.as_label()),
+        shell_quote(units_str),
+    );
+
+    if config.mode == CalcMode::NonResonant {
+        cmd.push_str(&format!(
+            " --wire-min {:.2} --wire-max {:.2}",
+            config.wire_min_m, config.wire_max_m
+        ));
+    }
+
+    if !export_choices.is_empty() {
+        let fmts = export_choices
+            .iter()
+            .map(|(fmt, _)| fmt.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        cmd.push_str(&format!(" --export {}", shell_quote(&fmts)));
+        if export_choices.len() == 1 {
+            cmd.push_str(&format!(" --output {}", shell_quote(&export_choices[0].1)));
+        }
+    }
+
+    println!("Equivalent CLI call for this run:");
+    println!("  {}\n", cmd);
+}
+
+fn shell_quote(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+
+    let safe = value.chars().all(|ch| matches!(ch,
+        'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' | '/'
+    ));
+    if safe {
+        return value.to_string();
+    }
+
+    let escaped = value.replace('\'', "'\\''");
+    format!("'{}'", escaped)
+}
+
+// ---------------------------------------------------------------------------
+// Terminal display
+// ---------------------------------------------------------------------------
+
+fn show_all_bands_for_region(region: ITURegion) {
+    let bands = get_bands_for_region(region);
+    println!("\nAvailable bands in Region {} ({} total):", region.short_name(), bands.len());
+    println!("  ({})", region.long_name());
+    println!("------------------------------------------------------------");
+    for (idx, band) in bands {
+        println!("{:2}. {}", idx + 1, band);
+    }
+    println!();
+}
 // ---------------------------------------------------------------------------
 // Terminal display
 // ---------------------------------------------------------------------------
@@ -847,55 +1122,6 @@ fn print_resonant_compromises(results: &AppResults) {
     println!();
 }
 
-fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat, String)]) {
-    let bands_csv = config
-        .band_indices
-        .iter()
-        .map(|v| v.to_string())
-        .collect::<Vec<String>>()
-        .join(",");
-
-    let units_str = match config.units {
-        UnitSystem::Metric => "m",
-        UnitSystem::Imperial => "ft",
-        UnitSystem::Both => "both",
-    };
-    let mut cmd = format!(
-        "rusty-wire --region {} --mode {} --bands {} --velocity {:.2} --transformer {} --units {}",
-        shell_quote(config.itu_region.short_name()),
-        shell_quote(match config.mode {
-            CalcMode::Resonant => "resonant",
-            CalcMode::NonResonant => "non-resonant",
-        }),
-        shell_quote(&bands_csv),
-        config.velocity_factor,
-        shell_quote(config.transformer_ratio.as_label()),
-        shell_quote(units_str),
-    );
-
-    if config.mode == CalcMode::NonResonant {
-        cmd.push_str(&format!(
-            " --wire-min {:.2} --wire-max {:.2}",
-            config.wire_min_m, config.wire_max_m
-        ));
-    }
-
-    if !export_choices.is_empty() {
-        let fmts = export_choices
-            .iter()
-            .map(|(fmt, _)| fmt.as_str())
-            .collect::<Vec<_>>()
-            .join(",");
-        cmd.push_str(&format!(" --export {}", shell_quote(&fmts)));
-        if export_choices.len() == 1 {
-            cmd.push_str(&format!(" --output {}", shell_quote(&export_choices[0].1)));
-        }
-    }
-
-    println!("Equivalent CLI call for this run:");
-    println!("  {}\n", cmd);
-}
-
 fn print_skipped_band_warnings(results: &AppResults) {
     if results.skipped_band_indices.is_empty() {
         return;
@@ -911,23 +1137,6 @@ fn print_skipped_band_warnings(results: &AppResults) {
         "Warning: the following band selections were invalid and skipped: {}\n",
         skipped
     );
-}
-
-fn shell_quote(value: &str) -> String {
-    if value.is_empty() {
-        return "''".to_string();
-    }
-
-    let safe = value.chars().all(|ch| match ch {
-        'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' | '/' => true,
-        _ => false,
-    });
-    if safe {
-        return value.to_string();
-    }
-
-    let escaped = value.replace('\'', "'\\''");
-    format!("'{}'", escaped)
 }
 
 fn format_calc(c: &WireCalculation, units: UnitSystem) -> String {
@@ -954,512 +1163,6 @@ fn format_calc(c: &WireCalculation, units: UnitSystem) -> String {
     }
 }
 
-fn print_usage() {
-    println!("rusty-wire v{}", env!("CARGO_PKG_VERSION"));
-    println!();
-    println!("rusty-wire usage:");
-    println!("  rusty-wire                  # interactive mode");
-    println!("  rusty-wire --list-bands     # list bands for Region 1");
-    println!("  rusty-wire --list-bands --region 2");
-    println!("  rusty-wire [--region 1|2|3] [--mode resonant|non-resonant] [--bands 1,6,10] [--velocity 0.95] [--transformer 1:1|1:2|1:4|1:5|1:6|1:9|1:16|1:49|1:56|1:64] [--wire-min 8] [--wire-max 35] [--units m|ft|both] [--export csv,json,markdown,txt] [--output file]");
-    println!("  rusty-wire [--region 1|2|3] [--mode resonant|non-resonant] [--bands 1,6,10] [--velocity 0.95] [--transformer 1:1|1:2|1:4|1:5|1:6|1:9|1:16|1:49|1:56|1:64] [--wire-min-ft 26] [--wire-max-ft 115] [--units m|ft|both] [--export csv,json,markdown,txt] [--output file]");
-    println!("  (--export accepts a comma-separated list; --output applies only when a single format is selected)");
-    println!("\nNotes:");
-    println!("  - ITU Region: 1=Europe/Africa/Middle East, 2=Americas, 3=Asia-Pacific (default: 1)");
-    println!("  - Band numbers come from --list-bands");
-    println!("  - Default selected bands are 40m-10m: 4,5,6,7,8,9,10");
-    println!("  - Velocity factor range is 0.50 to 1.00");
-    println!("  - Transformer ratio defaults to 1:1");
-    println!("  - Default mode is resonant");
-    println!("  - --wire-min/--wire-max (meters) defaults to metric-only output");
-    println!("  - --wire-min-ft/--wire-max-ft (feet) defaults to imperial-only output");
-    println!("  - Use --units both to include all units in output and exports");
-}
 
-// ---------------------------------------------------------------------------
-// Argument parsers
-// ---------------------------------------------------------------------------
 
-fn parse_cli_args(args: &[String]) -> Result<CliOptions, String> {
-    let mut opts = CliOptions {
-        bands: None,
-        velocity_factor: 0.95,
-        export: Vec::new(),
-        output: None,
-        wire_min_m: DEFAULT_NON_RESONANT_CONFIG.min_len_m,
-        wire_max_m: DEFAULT_NON_RESONANT_CONFIG.max_len_m,
-        wire_min_ft: None,
-        wire_max_ft: None,
-        mode: CalcMode::Resonant,
-        itu_region: DEFAULT_ITU_REGION,
-        transformer_ratio: DEFAULT_TRANSFORMER_RATIO,
-        list_bands: false,
-        help: false,
-        units: None,
-    };
 
-    let mut i = 0;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--help" | "-h" => opts.help = true,
-            "--list-bands" => opts.list_bands = true,
-            "--region" => {
-                i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| "--region requires a value".to_string())?;
-                opts.itu_region = parse_itu_region(value)?;
-            }
-            "--bands" => {
-                i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| "--bands requires a value".to_string())?;
-                opts.bands = Some(parse_band_list(value)?);
-            }
-            "--velocity" => {
-                i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| "--velocity requires a value".to_string())?;
-                let vf = value
-                    .parse::<f64>()
-                    .map_err(|_| "invalid value for --velocity".to_string())?;
-                if !(0.5..=1.0).contains(&vf) {
-                    return Err("--velocity must be between 0.50 and 1.00".to_string());
-                }
-                opts.velocity_factor = vf;
-            }
-            "--export" => {
-                i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| "--export requires a value".to_string())?;
-                opts.export = parse_export_format_list(value)?;
-            }
-            "--output" => {
-                i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| "--output requires a value".to_string())?;
-                validate_export_path(value)
-                    .map_err(|e| format!("invalid --output: {}", e))?;
-                opts.output = Some(value.to_string());
-            }
-            "--wire-min" => {
-                i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| "--wire-min requires a value".to_string())?;
-                opts.wire_min_m = value
-                    .parse::<f64>()
-                    .map_err(|_| "invalid value for --wire-min".to_string())?;
-            }
-            "--wire-max" => {
-                i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| "--wire-max requires a value".to_string())?;
-                opts.wire_max_m = value
-                    .parse::<f64>()
-                    .map_err(|_| "invalid value for --wire-max".to_string())?;
-            }
-            "--wire-min-ft" => {
-                i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| "--wire-min-ft requires a value".to_string())?;
-                opts.wire_min_ft = Some(
-                    value
-                        .parse::<f64>()
-                        .map_err(|_| "invalid value for --wire-min-ft".to_string())?,
-                );
-            }
-            "--wire-max-ft" => {
-                i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| "--wire-max-ft requires a value".to_string())?;
-                opts.wire_max_ft = Some(
-                    value
-                        .parse::<f64>()
-                        .map_err(|_| "invalid value for --wire-max-ft".to_string())?,
-                );
-            }
-            "--mode" => {
-                i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| "--mode requires a value".to_string())?;
-                opts.mode = parse_calc_mode(value)?;
-            }
-            "--transformer" | "--unun" | "--balun" => {
-                i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| "--transformer requires a value".to_string())?;
-                opts.transformer_ratio = parse_transformer_ratio(value)?;
-            }
-            "--units" => {
-                i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| "--units requires a value".to_string())?;
-                opts.units = Some(parse_unit_system(value)?);
-            }
-            unknown => return Err(format!("unknown argument: {}", unknown)),
-        }
-        i += 1;
-    }
-
-    let using_ft = opts.wire_min_ft.is_some() || opts.wire_max_ft.is_some();
-    if using_ft {
-        if opts.wire_min_ft.is_none() || opts.wire_max_ft.is_none() {
-            return Err(
-                "both --wire-min-ft and --wire-max-ft are required when using feet".to_string(),
-            );
-        }
-        if opts.wire_min_m != DEFAULT_NON_RESONANT_CONFIG.min_len_m
-            || opts.wire_max_m != DEFAULT_NON_RESONANT_CONFIG.max_len_m
-        {
-            return Err(
-                "do not combine meter and feet constraints; choose one unit system".to_string(),
-            );
-        }
-
-        let min_ft = opts.wire_min_ft.unwrap_or_default();
-        let max_ft = opts.wire_max_ft.unwrap_or_default();
-        if min_ft <= 0.0 {
-            return Err("--wire-min-ft must be > 0".to_string());
-        }
-        if max_ft <= min_ft {
-            return Err("--wire-max-ft must be greater than --wire-min-ft".to_string());
-        }
-
-        opts.wire_min_m = min_ft * FEET_TO_METERS;
-        opts.wire_max_m = max_ft * FEET_TO_METERS;
-    }
-
-    if opts.mode == CalcMode::NonResonant {
-        if opts.wire_min_m <= 0.0 {
-            return Err("--wire-min must be > 0".to_string());
-        }
-        if opts.wire_max_m <= opts.wire_min_m {
-            return Err("--wire-max must be greater than --wire-min".to_string());
-        }
-    }
-
-    Ok(opts)
-}
-
-fn parse_band_list(raw: &str) -> Result<Vec<usize>, String> {
-    let values: Result<Vec<usize>, _> = raw
-        .split(',')
-        .filter(|s| !s.trim().is_empty())
-        .map(|s| s.trim().parse::<usize>())
-        .collect();
-    let bands = values.map_err(|_| "invalid --bands list".to_string())?;
-    if bands.is_empty() {
-        return Err("--bands cannot be empty".to_string());
-    }
-    Ok(bands)
-}
-
-fn parse_itu_region(raw: &str) -> Result<ITURegion, String> {
-    match raw.trim() {
-        "1" => Ok(ITURegion::Region1),
-        "2" => Ok(ITURegion::Region2),
-        "3" => Ok(ITURegion::Region3),
-        _ => Err(format!(
-            "invalid --region '{}'; must be 1, 2, or 3",
-            raw
-        )),
-    }
-}
-
-fn parse_transformer_ratio(raw: &str) -> Result<TransformerRatio, String> {
-    TransformerRatio::parse(raw).ok_or_else(|| {
-        "--transformer must be one of: 1:1,1:2,1:4,1:5,1:6,1:9,1:16,1:49,1:56,1:64"
-            .to_string()
-    })
-}
-
-fn parse_export_format(raw: &str) -> Result<ExportFormat, String> {
-    match raw.to_ascii_lowercase().as_str() {
-        "csv" => Ok(ExportFormat::Csv),
-        "json" => Ok(ExportFormat::Json),
-        "markdown" | "md" => Ok(ExportFormat::Markdown),
-        "txt" | "text" => Ok(ExportFormat::Txt),
-        _ => Err(format!(
-            "unknown export format '{}'; must be csv, json, markdown, or txt",
-            raw
-        )),
-    }
-}
-
-fn parse_export_format_list(raw: &str) -> Result<Vec<ExportFormat>, String> {
-    let mut formats: Vec<ExportFormat> = Vec::new();
-    for token in raw.split(',') {
-        let token = token.trim();
-        if token.is_empty() {
-            continue;
-        }
-        let fmt = parse_export_format(token)?;
-        if !formats.contains(&fmt) {
-            formats.push(fmt);
-        }
-    }
-    if formats.is_empty() {
-        return Err("--export requires at least one format".to_string());
-    }
-    Ok(formats)
-}
-
-fn parse_calc_mode(raw: &str) -> Result<CalcMode, String> {
-    match raw.to_ascii_lowercase().as_str() {
-        "resonant" => Ok(CalcMode::Resonant),
-        "non-resonant" | "nonresonant" | "non_resonant" => Ok(CalcMode::NonResonant),
-        _ => Err("--mode must be resonant or non-resonant".to_string()),
-    }
-}
-
-fn parse_unit_system(raw: &str) -> Result<UnitSystem, String> {
-    match raw.to_ascii_lowercase().as_str() {
-        "m" | "metric" => Ok(UnitSystem::Metric),
-        "ft" | "imperial" => Ok(UnitSystem::Imperial),
-        "both" => Ok(UnitSystem::Both),
-        _ => Err("--units must be m, ft, or both".to_string()),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_band_list_valid() {
-        let result = parse_band_list("1,6,10").unwrap();
-        assert_eq!(result, vec![1, 6, 10]);
-    }
-
-    #[test]
-    fn parse_band_list_with_spaces() {
-        let result = parse_band_list("1, 6 , 10").unwrap();
-        assert_eq!(result, vec![1, 6, 10]);
-    }
-
-    #[test]
-    fn parse_band_list_single() {
-        let result = parse_band_list("5").unwrap();
-        assert_eq!(result, vec![5]);
-    }
-
-    #[test]
-    fn parse_band_list_empty_error() {
-        assert!(parse_band_list("").is_err());
-        assert!(parse_band_list(",,").is_err());
-    }
-
-    #[test]
-    fn parse_band_list_invalid_format() {
-        assert!(parse_band_list("abc").is_err());
-        assert!(parse_band_list("1,abc,3").is_err());
-    }
-
-    #[test]
-    fn parse_itu_region_valid() {
-        assert_eq!(parse_itu_region("1").unwrap(), ITURegion::Region1);
-        assert_eq!(parse_itu_region("2").unwrap(), ITURegion::Region2);
-        assert_eq!(parse_itu_region("3").unwrap(), ITURegion::Region3);
-    }
-
-    #[test]
-    fn parse_itu_region_invalid() {
-        assert!(parse_itu_region("0").is_err());
-        assert!(parse_itu_region("4").is_err());
-        assert!(parse_itu_region("abc").is_err());
-    }
-
-    #[test]
-    fn parse_transformer_ratio_colon_format() {
-        assert_eq!(
-            parse_transformer_ratio("1:1").unwrap(),
-            TransformerRatio::R1To1
-        );
-        assert_eq!(
-            parse_transformer_ratio("1:4").unwrap(),
-            TransformerRatio::R1To4
-        );
-        assert_eq!(
-            parse_transformer_ratio("1:64").unwrap(),
-            TransformerRatio::R1To64
-        );
-    }
-
-    #[test]
-    fn parse_transformer_ratio_numeric_format() {
-        assert_eq!(
-            parse_transformer_ratio("1").unwrap(),
-            TransformerRatio::R1To1
-        );
-        assert_eq!(
-            parse_transformer_ratio("9").unwrap(),
-            TransformerRatio::R1To9
-        );
-        assert_eq!(
-            parse_transformer_ratio("49").unwrap(),
-            TransformerRatio::R1To49
-        );
-    }
-
-    #[test]
-    fn parse_transformer_ratio_invalid() {
-        assert!(parse_transformer_ratio("1:3").is_err());
-        assert!(parse_transformer_ratio("99").is_err());
-        assert!(parse_transformer_ratio("invalid").is_err());
-    }
-
-    #[test]
-    fn parse_export_format_single() {
-        let result = parse_export_format_list("csv").unwrap();
-        assert_eq!(result, vec![ExportFormat::Csv]);
-    }
-
-    #[test]
-    fn parse_export_format_multiple() {
-        let result = parse_export_format_list("csv,json,markdown,txt").unwrap();
-        assert_eq!(result.len(), 4);
-        assert!(result.contains(&ExportFormat::Csv));
-        assert!(result.contains(&ExportFormat::Json));
-    }
-
-    #[test]
-    fn parse_export_format_deduplication() {
-        let result = parse_export_format_list("csv,json,csv").unwrap();
-        assert_eq!(result.len(), 2);
-    }
-
-    #[test]
-    fn parse_export_format_with_spaces() {
-        let result = parse_export_format_list(" csv , json ").unwrap();
-        assert_eq!(result.len(), 2);
-    }
-
-    #[test]
-    fn parse_export_format_case_insensitive() {
-        let result = parse_export_format_list("CSV,Json,MARKDOWN").unwrap();
-        assert_eq!(result.len(), 3);
-    }
-
-    #[test]
-    fn parse_export_format_markdown_alias() {
-        let result = parse_export_format_list("md").unwrap();
-        assert_eq!(result, vec![ExportFormat::Markdown]);
-    }
-
-    #[test]
-    fn parse_export_format_invalid() {
-        assert!(parse_export_format_list("invalid").is_err());
-        assert!(parse_export_format_list("csv,invalid").is_err());
-    }
-
-    #[test]
-    fn parse_export_format_empty_error() {
-        assert!(parse_export_format_list("").is_err());
-        assert!(parse_export_format_list(",,").is_err());
-    }
-
-    #[test]
-    fn parse_calc_mode_resonant() {
-        assert_eq!(
-            parse_calc_mode("resonant").unwrap(),
-            CalcMode::Resonant
-        );
-        assert_eq!(
-            parse_calc_mode("RESONANT").unwrap(),
-            CalcMode::Resonant
-        );
-    }
-
-    #[test]
-    fn parse_calc_mode_non_resonant() {
-        assert_eq!(
-            parse_calc_mode("non-resonant").unwrap(),
-            CalcMode::NonResonant
-        );
-        assert_eq!(
-            parse_calc_mode("nonresonant").unwrap(),
-            CalcMode::NonResonant
-        );
-        assert_eq!(
-            parse_calc_mode("non_resonant").unwrap(),
-            CalcMode::NonResonant
-        );
-    }
-
-    #[test]
-    fn parse_calc_mode_invalid() {
-        assert!(parse_calc_mode("invalid").is_err());
-        assert!(parse_calc_mode("half-resonant").is_err());
-    }
-
-    #[test]
-    fn parse_unit_system_metric() {
-        assert_eq!(parse_unit_system("m").unwrap(), UnitSystem::Metric);
-        assert_eq!(parse_unit_system("metric").unwrap(), UnitSystem::Metric);
-        assert_eq!(parse_unit_system("M").unwrap(), UnitSystem::Metric);
-    }
-
-    #[test]
-    fn parse_unit_system_imperial() {
-        assert_eq!(parse_unit_system("ft").unwrap(), UnitSystem::Imperial);
-        assert_eq!(parse_unit_system("imperial").unwrap(), UnitSystem::Imperial);
-    }
-
-    #[test]
-    fn parse_unit_system_both() {
-        assert_eq!(parse_unit_system("both").unwrap(), UnitSystem::Both);
-        assert_eq!(parse_unit_system("BOTH").unwrap(), UnitSystem::Both);
-    }
-
-    #[test]
-    fn parse_unit_system_invalid() {
-        assert!(parse_unit_system("feet").is_err());
-        assert!(parse_unit_system("meters").is_err());
-        assert!(parse_unit_system("invalid").is_err());
-    }
-
-    #[test]
-    fn shell_quote_safe_characters() {
-        // Safe characters don't need quoting
-        assert_eq!(
-            shell_quote("bands-1.2.3/test"),
-            "bands-1.2.3/test"
-        );
-        assert_eq!(shell_quote("simple"), "simple");
-        assert_eq!(shell_quote("123"), "123");
-    }
-
-    #[test]
-    fn shell_quote_empty_string() {
-        assert_eq!(shell_quote(""), "''");
-    }
-
-    #[test]
-    fn shell_quote_with_spaces() {
-        let quoted = shell_quote("hello world");
-        assert!(quoted.starts_with('\'') && quoted.ends_with('\''));
-    }
-
-    #[test]
-    fn shell_quote_with_special_chars() {
-        let quoted = shell_quote("test@file$var");
-        assert!(quoted.starts_with('\'') && quoted.ends_with('\''));
-    }
-
-    #[test]
-    fn shell_quote_with_single_quote() {
-        let quoted = shell_quote("it's");
-        assert!(quoted.contains("'\\'"));
-    }
-}

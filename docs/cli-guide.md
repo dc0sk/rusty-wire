@@ -14,7 +14,6 @@ It supports:
 - ITU region-aware amateur band handling (Region 1/2/3)
 - Multiple export formats: CSV, JSON, Markdown, and plain text
 - Unit system filtering: metric-only, imperial-only, or both
-- Empirical test validation
 
 ## Features
 
@@ -33,26 +32,23 @@ It supports:
   - `--units both`: both systems (default when mixing unit inputs)
 - Multiple export formats: CSV, JSON, Markdown, plain text
 - Comma-separated export format selection: `--export csv,json,markdown,txt`
-- Equivalent CLI command printed from interactive runs
 
 ## Interactive Mode
 
-Run the binary without CLI flags:
+Interactive mode is available explicitly:
 
 ```bash
-rusty-wire
+rusty-wire --interactive
 ```
 
-Interactive mode lets you:
+It lets you:
 - List all available bands
 - Select one or multiple bands
-- Choose calculation mode (default: resonant)
+- Choose calculation mode
 - Set velocity factor
-- **Resonant mode**: display units prompt only (wire window uses defaults)
-- **Non-resonant mode**: wire length window with units (m or ft), then display units
-- Optionally export results to one or more formats (CSV, JSON, Markdown, TXT)
-
-At the end of a run, Rusty Wire prints the equivalent CLI command for reproducibility.
+- Choose transformer ratio
+- Configure non-resonant wire windows interactively
+- Export results and print an equivalent CLI command
 
 ## CLI Usage
 
@@ -69,6 +65,7 @@ cargo run -- [OPTIONS]
 ### Core options
 
 - `--help` — Display help message
+- `--interactive` — Launch interactive menu mode
 - `--list-bands` — List all available bands
 - `--region <1|2|3>` — ITU region selection (default: `1`)
 - `--bands <csv>` — Comma-separated band numbers (e.g., `6,10,40`)

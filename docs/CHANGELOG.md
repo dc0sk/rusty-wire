@@ -2,11 +2,24 @@
 
 All notable changes to Rusty Wire are documented here.
 
+## [Unreleased]
+
+### Changed
+- **CLI rewritten with clap**: replaced manual argument parsing with a clap-based parser. All flags and validation behaviour are unchanged; the new parser provides built-in `--help` output and type-safe argument handling.
+- **No-argument behavior changed**: running the binary without arguments now shows clap help instead of immediately starting an interactive or default calculation flow.
+- **Interactive mode retained behind a flag**: the stdin-driven workflow is still available, but now requires `--interactive`.
+
+### Removed
+- **30 CLI-parser unit tests**: tests for the old hand-written parse functions (`parse_band_list`, `parse_itu_region`, `parse_export_format_list`, etc.) were removed alongside those functions. Equivalent input validation is now enforced by clap's type system, with current behavior covered by CLI integration tests.
+
+### Added
+- **CLI integration tests**: added binary-level tests for no-argument help output, CLI validation branches, region-aware band listing, and export-path selection behavior.
+
 ## [1.3.0] - 2026-04-09
 
 ### Added
 - **Non-resonant search-window local optima**: non-resonant mode now lists multiple local optimum wire lengths (clearance maxima) within the active search window.
-- **Comprehensive unit test suite**: added 75 tests covering calculations, band database, CLI parsers, and app logic for improved code quality and regression prevention.
+- **Comprehensive unit test suite**: added 45 tests covering calculations, band database, and app logic for improved code quality and regression prevention.
 
 ### Changed
 - **Non-resonant output detail**: output now distinguishes between local window optima and equal global optima, marking the selected recommendation in the local-optima list.
@@ -18,8 +31,8 @@ All notable changes to Rusty Wire are documented here.
 - **Band calculations**: velocity factor effects, unit conversions, distance averaging (8 tests)
 - **Optimization algorithms**: non-resonant optima, resonant compromises, window-local candidates (7 tests)
 - **Band database**: region-specific frequencies, ITU adjustments (13 tests)
-- **CLI parsers**: bands, regions, transformer ratios, export formats, modes, units (31 tests)
 - **Application logic**: configuration, multi-region support, calculation modes (8 tests)
+- **Export**: path validation, format rejection (4 tests)
 
 ## [1.2.0] - 2026-04-09
 

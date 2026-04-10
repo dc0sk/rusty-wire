@@ -1,6 +1,8 @@
 /// Wire length calculations for resonant dipoles and related measurements
 use crate::bands::Band;
 use std::fmt;
+use std::str::FromStr;
+use clap::ValueEnum;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransformerRatio {
@@ -61,6 +63,35 @@ impl TransformerRatio {
             "1:64" | "64" => Some(TransformerRatio::R1To64),
             _ => None,
         }
+    }
+}
+
+impl FromStr for TransformerRatio {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s).ok_or_else(|| format!("Invalid transformer ratio '{}'. Must be one of: 1:1, 1:2, 1:4, 1:5, 1:6, 1:9, 1:16, 1:49, 1:56, 1:64", s))
+    }
+}
+
+impl ValueEnum for TransformerRatio {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[
+            TransformerRatio::R1To1,
+            TransformerRatio::R1To2,
+            TransformerRatio::R1To4,
+            TransformerRatio::R1To5,
+            TransformerRatio::R1To6,
+            TransformerRatio::R1To9,
+            TransformerRatio::R1To16,
+            TransformerRatio::R1To49,
+            TransformerRatio::R1To56,
+            TransformerRatio::R1To64,
+        ]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        Some(clap::builder::PossibleValue::new(self.as_label()))
     }
 }
 
