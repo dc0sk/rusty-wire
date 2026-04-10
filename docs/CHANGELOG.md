@@ -4,6 +4,8 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-04-11
+
 ### Added
 - **OCFD antenna model mode**: added `--antenna ocfd` with off-center-fed dipole leg split output (33/67 and 20/80 variants).
 - **OCFD integration coverage**: added CLI integration tests validating OCFD-filtered output and tuner-assisted compromise guidance labeling.
