@@ -1270,6 +1270,14 @@ fn print_resonant_compromises(results: &AppResults) {
     }
     if matches!(
         results.config.antenna_model,
+        Some(AntennaModel::InvertedVDipole)
+    ) {
+        println!(
+            "  Inverted-V mode: each compromise line shows a total wire length; per-leg and span estimates are listed directly below."
+        );
+    }
+    if matches!(
+        results.config.antenna_model,
         Some(AntennaModel::OffCenterFedDipole)
     ) {
         println!(
@@ -1277,6 +1285,10 @@ fn print_resonant_compromises(results: &AppResults) {
         );
     }
     for (idx, c) in compromises.iter().take(10).enumerate() {
+        let is_inverted_v = matches!(
+            results.config.antenna_model,
+            Some(AntennaModel::InvertedVDipole)
+        );
         let is_ocfd = matches!(
             results.config.antenna_model,
             Some(AntennaModel::OffCenterFedDipole)
@@ -1302,6 +1314,39 @@ fn print_resonant_compromises(results: &AppResults) {
                 c.worst_band_distance_m,
                 c.worst_band_distance_m / FEET_TO_METERS
             ),
+        }
+
+        if is_inverted_v {
+            let leg_m = c.length_m / 2.0;
+            let leg_ft = leg_m / FEET_TO_METERS;
+            let span_90_m = leg_m * std::f64::consts::SQRT_2;
+            let span_90_ft = span_90_m / FEET_TO_METERS;
+            let span_120_m = leg_m * 3.0_f64.sqrt();
+            let span_120_ft = span_120_m / FEET_TO_METERS;
+
+            match units {
+                UnitSystem::Metric => {
+                    println!("      each leg: {:.2} m", leg_m);
+                    println!("      span at 90 deg apex: {:.2} m", span_90_m);
+                    println!("      span at 120 deg apex: {:.2} m", span_120_m);
+                }
+                UnitSystem::Imperial => {
+                    println!("      each leg: {:.2} ft", leg_ft);
+                    println!("      span at 90 deg apex: {:.2} ft", span_90_ft);
+                    println!("      span at 120 deg apex: {:.2} ft", span_120_ft);
+                }
+                UnitSystem::Both => {
+                    println!("      each leg: {:.2} m ({:.2} ft)", leg_m, leg_ft);
+                    println!(
+                        "      span at 90 deg apex: {:.2} m ({:.2} ft)",
+                        span_90_m, span_90_ft
+                    );
+                    println!(
+                        "      span at 120 deg apex: {:.2} m ({:.2} ft)",
+                        span_120_m, span_120_ft
+                    );
+                }
+            }
         }
 
         if is_ocfd {

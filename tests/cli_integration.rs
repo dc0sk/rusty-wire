@@ -210,6 +210,8 @@ fn inverted_v_antenna_mode_shows_inverted_v_guidance_compromises() {
     assert!(
         stdout.contains("Closest combined compromises to resonant points (inverted-V guidance):")
     );
+    assert!(stdout.contains("Inverted-V mode: each compromise line shows a total wire length"));
+    assert!(stdout.contains("each leg:"));
 }
 
 #[test]
