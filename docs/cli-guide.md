@@ -123,6 +123,10 @@ Example regional differences currently modeled:
 - If `--antenna ocfd` is selected, output is filtered to off-center-fed dipole leg splits.
 - Resonant point summary remains dipole-oriented and is shown for `dipole` or when all models are shown.
 - Compromise lengths are shown for all antenna selections; in `efhw`, `loop`, and `ocfd` modes they are labeled as tuner-assisted, dipole-derived guidance.
+- In `ocfd` mode, each compromise line is a total wire length and now includes:
+  - explicit 33/67 leg lengths
+  - explicit 20/80 leg lengths
+  - an optimized split ratio recommendation with worst-leg resonance-clearance percentage
 
 ### Export options
 
