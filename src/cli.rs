@@ -5,18 +5,17 @@
 /// The computation itself is delegated to `app::run_calculation`; the only
 /// imports from the core modules that this file needs are for display helpers.
 use crate::app::{
-    AppConfig, AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION,
-    DEFAULT_ITU_REGION, DEFAULT_TRANSFORMER_RATIO, FEET_TO_METERS, run_calculation,
+    run_calculation, AntennaModel, AppConfig, AppResults, CalcMode, ExportFormat, UnitSystem,
+    DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION, DEFAULT_TRANSFORMER_RATIO, FEET_TO_METERS,
 };
-use crate::bands::{get_bands_for_region, ALL_REGIONS, ITURegion};
+use crate::bands::{get_bands_for_region, ITURegion, ALL_REGIONS};
 use crate::calculations::{
-    calculate_average_max_distance, calculate_average_min_distance, TransformerRatio, WireCalculation,
-    DEFAULT_NON_RESONANT_CONFIG,
+    calculate_average_max_distance, calculate_average_min_distance, TransformerRatio,
+    WireCalculation, DEFAULT_NON_RESONANT_CONFIG,
 };
 use crate::export::{default_output_name, export_results, validate_export_path};
 use clap::Parser;
 use std::io::{self, Write};
-
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing with clap
@@ -25,7 +24,9 @@ use std::io::{self, Write};
 #[derive(Parser)]
 #[command(name = "rusty-wire")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
-#[command(about = "A Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.")]
+#[command(
+    about = "A Rust-based utility for wire-antenna planning across ham-radio and shortwave bands."
+)]
 #[command(long_about = None)]
 #[command(arg_required_else_help = true)]
 struct Cli {
@@ -48,6 +49,10 @@ struct Cli {
     /// Transformer ratio (1:1, 1:2, 1:4, 1:5, 1:6, 1:9, 1:16, 1:49, 1:56, 1:64)
     #[arg(short, long, value_enum, default_value_t = DEFAULT_TRANSFORMER_RATIO)]
     transformer: TransformerRatio,
+
+    /// Antenna model (omit to show all models per band)
+    #[arg(long, value_enum)]
+    antenna: Option<AntennaModel>,
 
     /// Wire length window minimum in meters
     #[arg(long)]
@@ -234,8 +239,12 @@ pub fn run_from_args(args: &[String]) {
     }
 
     let (wire_min_m, wire_max_m) = if using_ft {
-        let min_ft = cli.wire_min_ft.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m / FEET_TO_METERS);
-        let max_ft = cli.wire_max_ft.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m / FEET_TO_METERS);
+        let min_ft = cli
+            .wire_min_ft
+            .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m / FEET_TO_METERS);
+        let max_ft = cli
+            .wire_max_ft
+            .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m / FEET_TO_METERS);
 
         if min_ft <= 0.0 || max_ft <= min_ft {
             eprintln!("Error: invalid wire length window in feet");
@@ -244,8 +253,12 @@ pub fn run_from_args(args: &[String]) {
 
         (min_ft * FEET_TO_METERS, max_ft * FEET_TO_METERS)
     } else {
-        let min_m = cli.wire_min.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m);
-        let max_m = cli.wire_max.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m);
+        let min_m = cli
+            .wire_min
+            .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m);
+        let max_m = cli
+            .wire_max
+            .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m);
 
         if min_m <= 0.0 || max_m <= min_m {
             eprintln!("Error: invalid wire length window in meters");
@@ -271,7 +284,12 @@ pub fn run_from_args(args: &[String]) {
         }
     });
 
-    let export_formats = cli.export.unwrap_or_default().into_iter().map(ExportFormat::from).collect::<Vec<_>>();
+    let export_formats = cli
+        .export
+        .unwrap_or_default()
+        .into_iter()
+        .map(ExportFormat::from)
+        .collect::<Vec<_>>();
 
     let config = AppConfig {
         band_indices: bands,
@@ -282,6 +300,7 @@ pub fn run_from_args(args: &[String]) {
         units,
         itu_region: cli.region,
         transformer_ratio: TransformerRatio::from(cli.transformer),
+        antenna_model: cli.antenna,
     };
 
     let results = run_calculation(config);
@@ -336,14 +355,20 @@ pub fn run_from_args(args: &[String]) {
 
 pub fn run_interactive() {
     println!("============================================================");
-    println!("Rusty Wire v{} - Resonant Length and Skip Distance Calculator", env!("CARGO_PKG_VERSION"));
+    println!(
+        "Rusty Wire v{} - Resonant Length and Skip Distance Calculator",
+        env!("CARGO_PKG_VERSION")
+    );
     println!("============================================================\n");
 
     let mut itu_region = prompt_itu_region();
 
     loop {
         println!("Menu:");
-        println!("  1) List all bands (for Region {})", itu_region.short_name());
+        println!(
+            "  1) List all bands (for Region {})",
+            itu_region.short_name()
+        );
         println!("  2) Calculate selected bands");
         println!("  3) Quick single-band calculation");
         println!("  4) Change ITU Region");
@@ -403,12 +428,17 @@ fn calculate_selected_bands(region: ITURegion) {
     };
 
     let mode = prompt_calc_mode();
+    let antenna_model = prompt_antenna_model();
     let velocity = prompt_velocity_factor();
     let transformer_ratio = prompt_transformer_ratio();
     let (wire_min_m, wire_max_m, auto_units) = if mode == CalcMode::NonResonant {
         prompt_wire_length_window()
     } else {
-        (DEFAULT_NON_RESONANT_CONFIG.min_len_m, DEFAULT_NON_RESONANT_CONFIG.max_len_m, UnitSystem::Both)
+        (
+            DEFAULT_NON_RESONANT_CONFIG.min_len_m,
+            DEFAULT_NON_RESONANT_CONFIG.max_len_m,
+            UnitSystem::Both,
+        )
     };
     let units = prompt_display_units(auto_units);
 
@@ -421,6 +451,7 @@ fn calculate_selected_bands(region: ITURegion) {
         units,
         itu_region: region,
         transformer_ratio,
+        antenna_model,
     };
 
     let results = run_calculation(config);
@@ -457,12 +488,17 @@ fn quick_calculation(region: ITURegion) {
     };
 
     let mode = prompt_calc_mode();
+    let antenna_model = prompt_antenna_model();
     let velocity = prompt_velocity_factor();
     let transformer_ratio = prompt_transformer_ratio();
     let (wire_min_m, wire_max_m, auto_units) = if mode == CalcMode::NonResonant {
         prompt_wire_length_window()
     } else {
-        (DEFAULT_NON_RESONANT_CONFIG.min_len_m, DEFAULT_NON_RESONANT_CONFIG.max_len_m, UnitSystem::Both)
+        (
+            DEFAULT_NON_RESONANT_CONFIG.min_len_m,
+            DEFAULT_NON_RESONANT_CONFIG.max_len_m,
+            UnitSystem::Both,
+        )
     };
     let units = prompt_display_units(auto_units);
 
@@ -475,6 +511,7 @@ fn quick_calculation(region: ITURegion) {
         units,
         itu_region: region,
         transformer_ratio,
+        antenna_model,
     };
 
     let results = run_calculation(config);
@@ -497,9 +534,17 @@ fn prompt_itu_region() -> ITURegion {
     for region in ALL_REGIONS {
         let is_default = *region == DEFAULT_ITU_REGION;
         let default_str = if is_default { " (default)" } else { "" };
-        println!("  {}) Region {}{}", region.short_name(), region.long_name(), default_str);
+        println!(
+            "  {}) Region {}{}",
+            region.short_name(),
+            region.long_name(),
+            default_str
+        );
     }
-    print!("Select region (1/2/3, Enter for {}): ", DEFAULT_ITU_REGION.short_name());
+    print!(
+        "Select region (1/2/3, Enter for {}): ",
+        DEFAULT_ITU_REGION.short_name()
+    );
     io::stdout().flush().expect("failed to flush stdout");
 
     let mut input = String::new();
@@ -512,7 +557,10 @@ fn prompt_itu_region() -> ITURegion {
         "2" => ITURegion::Region2,
         "3" => ITURegion::Region3,
         _ => {
-            println!("Invalid region. Using default Region {}.", DEFAULT_ITU_REGION.short_name());
+            println!(
+                "Invalid region. Using default Region {}.",
+                DEFAULT_ITU_REGION.short_name()
+            );
             DEFAULT_ITU_REGION
         }
     }
@@ -533,6 +581,27 @@ fn prompt_calc_mode() -> CalcMode {
         _ => {
             println!("Unknown mode. Using resonant.");
             CalcMode::Resonant
+        }
+    }
+}
+
+fn prompt_antenna_model() -> Option<AntennaModel> {
+    print!("Antenna model: (d)ipole, (e)nd-fed half-wave, (l)oop, (a)ll [a]: ");
+    io::stdout().flush().expect("failed to flush stdout");
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("failed to read antenna model");
+
+    match input.trim().to_ascii_lowercase().as_str() {
+        "" | "a" | "all" => None,
+        "d" | "dipole" => Some(AntennaModel::Dipole),
+        "e" | "efhw" | "end-fed" | "end-fed-half-wave" => Some(AntennaModel::EndFedHalfWave),
+        "l" | "loop" | "full-wave-loop" => Some(AntennaModel::FullWaveLoop),
+        _ => {
+            println!("Unknown antenna model. Showing all models per band.");
+            None
         }
     }
 }
@@ -602,22 +671,36 @@ fn prompt_wire_length_window() -> (f64, f64, UnitSystem) {
         let default_min_ft = DEFAULT_NON_RESONANT_CONFIG.min_len_m / FEET_TO_METERS;
         let default_max_ft = DEFAULT_NON_RESONANT_CONFIG.max_len_m / FEET_TO_METERS;
 
-        print!("Wire min length in feet (Enter for {:.1}): ", default_min_ft);
+        print!(
+            "Wire min length in feet (Enter for {:.1}): ",
+            default_min_ft
+        );
         io::stdout().flush().expect("failed to flush stdout");
         let mut min_input = String::new();
         io::stdin()
             .read_line(&mut min_input)
             .expect("failed to read wire min length");
 
-        print!("Wire max length in feet (Enter for {:.1}): ", default_max_ft);
+        print!(
+            "Wire max length in feet (Enter for {:.1}): ",
+            default_max_ft
+        );
         io::stdout().flush().expect("failed to flush stdout");
         let mut max_input = String::new();
         io::stdin()
             .read_line(&mut max_input)
             .expect("failed to read wire max length");
 
-        let min_ft = min_input.trim().parse::<f64>().ok().unwrap_or(default_min_ft);
-        let max_ft = max_input.trim().parse::<f64>().ok().unwrap_or(default_max_ft);
+        let min_ft = min_input
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .unwrap_or(default_min_ft);
+        let max_ft = max_input
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .unwrap_or(default_max_ft);
 
         if min_ft > 0.0 && max_ft > min_ft {
             return (
@@ -734,11 +817,30 @@ fn interactive_export_prompt(results: &AppResults) -> Vec<(ExportFormat, String)
                 continue;
             }
             match token {
-                "csv" => { if !out.contains(&ExportFormat::Csv) { out.push(ExportFormat::Csv); } }
-                "json" => { if !out.contains(&ExportFormat::Json) { out.push(ExportFormat::Json); } }
-                "markdown" | "md" => { if !out.contains(&ExportFormat::Markdown) { out.push(ExportFormat::Markdown); } }
-                "txt" | "text" => { if !out.contains(&ExportFormat::Txt) { out.push(ExportFormat::Txt); } }
-                other => { err_msg = Some(format!("unknown format '{}'; skipping export.", other)); break; }
+                "csv" => {
+                    if !out.contains(&ExportFormat::Csv) {
+                        out.push(ExportFormat::Csv);
+                    }
+                }
+                "json" => {
+                    if !out.contains(&ExportFormat::Json) {
+                        out.push(ExportFormat::Json);
+                    }
+                }
+                "markdown" | "md" => {
+                    if !out.contains(&ExportFormat::Markdown) {
+                        out.push(ExportFormat::Markdown);
+                    }
+                }
+                "txt" | "text" => {
+                    if !out.contains(&ExportFormat::Txt) {
+                        out.push(ExportFormat::Txt);
+                    }
+                }
+                other => {
+                    err_msg = Some(format!("unknown format '{}'; skipping export.", other));
+                    break;
+                }
             }
         }
         if let Some(msg) = err_msg {
@@ -827,6 +929,15 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
         ));
     }
 
+    if let Some(antenna_model) = config.antenna_model {
+        let antenna = match antenna_model {
+            AntennaModel::Dipole => "dipole",
+            AntennaModel::EndFedHalfWave => "efhw",
+            AntennaModel::FullWaveLoop => "loop",
+        };
+        cmd.push_str(&format!(" --antenna {}", shell_quote(antenna)));
+    }
+
     if !export_choices.is_empty() {
         let fmts = export_choices
             .iter()
@@ -848,9 +959,11 @@ fn shell_quote(value: &str) -> String {
         return "''".to_string();
     }
 
-    let safe = value.chars().all(|ch| matches!(ch,
-        'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' | '/'
-    ));
+    let safe = value.chars().all(|ch| {
+        matches!(ch,
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' | '/'
+        )
+    });
     if safe {
         return value.to_string();
     }
@@ -865,7 +978,11 @@ fn shell_quote(value: &str) -> String {
 
 fn show_all_bands_for_region(region: ITURegion) {
     let bands = get_bands_for_region(region);
-    println!("\nAvailable bands in Region {} ({} total):", region.short_name(), bands.len());
+    println!(
+        "\nAvailable bands in Region {} ({} total):",
+        region.short_name(),
+        bands.len()
+    );
     println!("  ({})", region.long_name());
     println!("------------------------------------------------------------");
     for (idx, band) in bands {
@@ -894,9 +1011,21 @@ fn print_results(results: &AppResults) {
         "Using transformer ratio: {}",
         results.config.transformer_ratio.as_label()
     );
+    println!(
+        "Antenna model: {}",
+        match results.config.antenna_model {
+            None => "all",
+            Some(AntennaModel::Dipole) => "dipole",
+            Some(AntennaModel::EndFedHalfWave) => "end-fed half-wave",
+            Some(AntennaModel::FullWaveLoop) => "full-wave loop",
+        }
+    );
     println!("------------------------------------------------------------");
     for calc in calculations {
-        println!("{}\n", format_calc(calc, units));
+        println!(
+            "{}\n",
+            format_calc(calc, units, results.config.antenna_model)
+        );
     }
     println!("Summary for {} band(s):", calculations.len());
     println!(
@@ -910,7 +1039,12 @@ fn print_results(results: &AppResults) {
 
     match mode {
         CalcMode::Resonant => {
-            print_resonant_points_in_window(results);
+            if matches!(
+                results.config.antenna_model,
+                None | Some(AntennaModel::Dipole)
+            ) {
+                print_resonant_points_in_window(results);
+            }
             print_resonant_compromises(results);
         }
         CalcMode::NonResonant => {
@@ -1033,15 +1167,22 @@ fn print_non_resonant_recommendation(results: &AppResults) {
             match units {
                 UnitSystem::Metric => println!(
                     "    {:2}. {:.2} m (clearance: {:.2}%)",
-                    idx + 1, o.length_m, o.min_resonance_clearance_pct
+                    idx + 1,
+                    o.length_m,
+                    o.min_resonance_clearance_pct
                 ),
                 UnitSystem::Imperial => println!(
                     "    {:2}. {:.2} ft (clearance: {:.2}%)",
-                    idx + 1, o.length_ft, o.min_resonance_clearance_pct
+                    idx + 1,
+                    o.length_ft,
+                    o.min_resonance_clearance_pct
                 ),
                 UnitSystem::Both => println!(
                     "    {:2}. {:.2} m ({:.2} ft, clearance: {:.2}%)",
-                    idx + 1, o.length_m, o.length_ft, o.min_resonance_clearance_pct
+                    idx + 1,
+                    o.length_m,
+                    o.length_ft,
+                    o.min_resonance_clearance_pct
                 ),
             }
         }
@@ -1083,14 +1224,32 @@ fn print_non_resonant_recommendation(results: &AppResults) {
 
 fn print_resonant_compromises(results: &AppResults) {
     let compromises = &results.resonant_compromises;
+    let heading = match results.config.antenna_model {
+        Some(AntennaModel::EndFedHalfWave) => {
+            "Closest combined compromises to resonant points (tuner-assisted EFHW guidance):"
+        }
+        Some(AntennaModel::FullWaveLoop) => {
+            "Closest combined compromises to resonant points (tuner-assisted loop guidance):"
+        }
+        _ => "Closest combined compromises to resonant points:",
+    };
+
     if compromises.is_empty() {
-        println!("Closest combined compromises to resonant points:");
+        println!("{}", heading);
         println!("  (none available in this window)\n");
         return;
     }
 
     let units = results.config.units;
-    println!("Closest combined compromises to resonant points:");
+    println!("{}", heading);
+    if matches!(
+        results.config.antenna_model,
+        Some(AntennaModel::EndFedHalfWave) | Some(AntennaModel::FullWaveLoop)
+    ) {
+        println!(
+            "  Note: These are dipole-derived compromise lengths shown as tuner-assisted starting points."
+        );
+    }
     for (idx, c) in compromises.iter().take(10).enumerate() {
         match units {
             UnitSystem::Metric => println!(
@@ -1117,7 +1276,10 @@ fn print_resonant_compromises(results: &AppResults) {
     }
 
     if compromises.len() > 10 {
-        println!("  ... and {} more equal compromises", compromises.len() - 10);
+        println!(
+            "  ... and {} more equal compromises",
+            compromises.len() - 10
+        );
     }
     println!();
 }
@@ -1139,30 +1301,147 @@ fn print_skipped_band_warnings(results: &AppResults) {
     );
 }
 
-fn format_calc(c: &WireCalculation, units: UnitSystem) -> String {
+fn format_calc(
+    c: &WireCalculation,
+    units: UnitSystem,
+    antenna_model: Option<AntennaModel>,
+) -> String {
     match units {
-        UnitSystem::Metric => format!(
-            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} m (base: {:.2} m)\n  Full-wave: {:.2} m (base: {:.2} m)\n  Quarter-wave: {:.2} m (base: {:.2} m)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-            c.band_name, c.frequency_mhz,
-            c.transformer_ratio_label,
-            c.corrected_half_wave_m, c.half_wave_m,
-            c.corrected_full_wave_m, c.full_wave_m,
-            c.corrected_quarter_wave_m, c.quarter_wave_m,
-            c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
-        ),
-        UnitSystem::Imperial => format!(
-            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} ft (base: {:.2} ft)\n  Full-wave: {:.2} ft (base: {:.2} ft)\n  Quarter-wave: {:.2} ft (base: {:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-            c.band_name, c.frequency_mhz,
-            c.transformer_ratio_label,
-            c.corrected_half_wave_ft, c.half_wave_ft,
-            c.corrected_full_wave_ft, c.full_wave_ft,
-            c.corrected_quarter_wave_ft, c.quarter_wave_ft,
-            c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
-        ),
-        UnitSystem::Both => format!("{}", c),
+        UnitSystem::Metric => match antenna_model {
+            Some(AntennaModel::Dipole) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} m (base: {:.2} m)\n  Full-wave: {:.2} m (base: {:.2} m)\n  Quarter-wave: {:.2} m (base: {:.2} m)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name, c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.corrected_half_wave_m, c.half_wave_m,
+                c.corrected_full_wave_m, c.full_wave_m,
+                c.corrected_quarter_wave_m, c.quarter_wave_m,
+                c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
+            ),
+            Some(AntennaModel::EndFedHalfWave) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  End-fed half-wave: {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.end_fed_half_wave_m,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
+            Some(AntennaModel::FullWaveLoop) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Full-wave loop circumference: {:.2} m\n  Full-wave loop square side: {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.full_wave_loop_circumference_m,
+                c.full_wave_loop_square_side_m,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
+            None => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} m (base: {:.2} m)\n  Full-wave: {:.2} m (base: {:.2} m)\n  Quarter-wave: {:.2} m (base: {:.2} m)\n  End-fed half-wave: {:.2} m\n  Full-wave loop circumference: {:.2} m\n  Full-wave loop square side: {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name, c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.corrected_half_wave_m, c.half_wave_m,
+                c.corrected_full_wave_m, c.full_wave_m,
+                c.corrected_quarter_wave_m, c.quarter_wave_m,
+                c.end_fed_half_wave_m,
+                c.full_wave_loop_circumference_m,
+                c.full_wave_loop_square_side_m,
+                c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
+            ),
+        },
+        UnitSystem::Imperial => match antenna_model {
+            Some(AntennaModel::Dipole) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} ft (base: {:.2} ft)\n  Full-wave: {:.2} ft (base: {:.2} ft)\n  Quarter-wave: {:.2} ft (base: {:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name, c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.corrected_half_wave_ft, c.half_wave_ft,
+                c.corrected_full_wave_ft, c.full_wave_ft,
+                c.corrected_quarter_wave_ft, c.quarter_wave_ft,
+                c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
+            ),
+            Some(AntennaModel::EndFedHalfWave) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  End-fed half-wave: {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.end_fed_half_wave_ft,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
+            Some(AntennaModel::FullWaveLoop) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Full-wave loop circumference: {:.2} ft\n  Full-wave loop square side: {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.full_wave_loop_circumference_ft,
+                c.full_wave_loop_square_side_ft,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
+            None => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} ft (base: {:.2} ft)\n  Full-wave: {:.2} ft (base: {:.2} ft)\n  Quarter-wave: {:.2} ft (base: {:.2} ft)\n  End-fed half-wave: {:.2} ft\n  Full-wave loop circumference: {:.2} ft\n  Full-wave loop square side: {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name, c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.corrected_half_wave_ft, c.half_wave_ft,
+                c.corrected_full_wave_ft, c.full_wave_ft,
+                c.corrected_quarter_wave_ft, c.quarter_wave_ft,
+                c.end_fed_half_wave_ft,
+                c.full_wave_loop_circumference_ft,
+                c.full_wave_loop_square_side_ft,
+                c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
+            ),
+        },
+        UnitSystem::Both => match antenna_model {
+            Some(AntennaModel::Dipole) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} m ({:.2} ft, base: {:.2} m/{:.2} ft)\n  Full-wave: {:.2} m ({:.2} ft, base: {:.2} m/{:.2} ft)\n  Quarter-wave: {:.2} m ({:.2} ft, base: {:.2} m/{:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.corrected_half_wave_m,
+                c.corrected_half_wave_ft,
+                c.half_wave_m,
+                c.half_wave_ft,
+                c.corrected_full_wave_m,
+                c.corrected_full_wave_ft,
+                c.full_wave_m,
+                c.full_wave_ft,
+                c.corrected_quarter_wave_m,
+                c.corrected_quarter_wave_ft,
+                c.quarter_wave_m,
+                c.quarter_wave_ft,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
+            Some(AntennaModel::EndFedHalfWave) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  End-fed half-wave: {:.2} m ({:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.end_fed_half_wave_m,
+                c.end_fed_half_wave_ft,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
+            Some(AntennaModel::FullWaveLoop) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Full-wave loop circumference: {:.2} m ({:.2} ft)\n  Full-wave loop square side: {:.2} m ({:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.full_wave_loop_circumference_m,
+                c.full_wave_loop_circumference_ft,
+                c.full_wave_loop_square_side_m,
+                c.full_wave_loop_square_side_ft,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
+            None => format!("{}", c),
+        },
     }
 }
-
-
-
-

@@ -1,8 +1,8 @@
 /// Wire length calculations for resonant dipoles and related measurements
 use crate::bands::Band;
+use clap::ValueEnum;
 use std::fmt;
 use std::str::FromStr;
-use clap::ValueEnum;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransformerRatio {
@@ -100,12 +100,12 @@ pub struct WireCalculation {
     pub band_name: String,
     pub frequency_mhz: f64,
     pub transformer_ratio_label: &'static str,
-    
+
     // Dipole lengths (in meters)
     pub half_wave_m: f64,
     pub full_wave_m: f64,
     pub quarter_wave_m: f64,
-    
+
     // Dipole lengths (in feet)
     pub half_wave_ft: f64,
     pub full_wave_ft: f64,
@@ -118,7 +118,15 @@ pub struct WireCalculation {
     pub corrected_half_wave_ft: f64,
     pub corrected_full_wave_ft: f64,
     pub corrected_quarter_wave_ft: f64,
-    
+
+    // First-batch derived antenna model lengths
+    pub end_fed_half_wave_m: f64,
+    pub end_fed_half_wave_ft: f64,
+    pub full_wave_loop_circumference_m: f64,
+    pub full_wave_loop_circumference_ft: f64,
+    pub full_wave_loop_square_side_m: f64,
+    pub full_wave_loop_square_side_ft: f64,
+
     // Skip distances
     pub skip_distance_min_km: f64,
     pub skip_distance_max_km: f64,
@@ -160,7 +168,7 @@ impl fmt::Display for WireCalculation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Full-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Quarter-wave: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Skip distance: {:.0}-{:.0}km (avg: {:.0}km)",
+            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Full-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Quarter-wave: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  End-fed half-wave: {:.2}m ({:.2}ft)\n  Full-wave loop circumference: {:.2}m ({:.2}ft)\n  Full-wave loop square side: {:.2}m ({:.2}ft)\n  Skip distance: {:.0}-{:.0}km (avg: {:.0}km)",
             self.band_name,
             self.frequency_mhz,
             self.transformer_ratio_label,
@@ -176,6 +184,12 @@ impl fmt::Display for WireCalculation {
             self.corrected_quarter_wave_ft,
             self.quarter_wave_m,
             self.quarter_wave_ft,
+            self.end_fed_half_wave_m,
+            self.end_fed_half_wave_ft,
+            self.full_wave_loop_circumference_m,
+            self.full_wave_loop_circumference_ft,
+            self.full_wave_loop_square_side_m,
+            self.full_wave_loop_square_side_ft,
             self.skip_distance_min_km,
             self.skip_distance_max_km,
             self.skip_distance_avg_km,
@@ -186,7 +200,7 @@ impl fmt::Display for WireCalculation {
 const METERS_TO_FEET: f64 = 3.28084;
 
 /// Calculate resonant dipole wire lengths for a given frequency
-/// 
+///
 /// Using the standard formulas:
 /// - Half-wave dipole (feet): 468 / frequency_MHz
 /// - Full-wave dipole (feet): 936 / frequency_MHz
@@ -211,15 +225,21 @@ pub fn calculate_for_band_with_velocity(
     // consistent impact across resonant families and optimization behavior.
     let corrected_half_wave_ft = impedance_corrected_length_ft(half_wave_ft, 73.0, transformer);
     let corrected_full_wave_ft = impedance_corrected_length_ft(full_wave_ft, 73.0, transformer);
-    let corrected_quarter_wave_ft = impedance_corrected_length_ft(quarter_wave_ft, 73.0, transformer);
+    let corrected_quarter_wave_ft =
+        impedance_corrected_length_ft(quarter_wave_ft, 73.0, transformer);
     let corrected_half_wave_m = corrected_half_wave_ft / METERS_TO_FEET;
     let corrected_full_wave_m = corrected_full_wave_ft / METERS_TO_FEET;
     let corrected_quarter_wave_m = corrected_quarter_wave_ft / METERS_TO_FEET;
-    
+    let end_fed_half_wave_ft = corrected_half_wave_ft;
+    let end_fed_half_wave_m = corrected_half_wave_m;
+    let full_wave_loop_circumference_ft = corrected_full_wave_ft;
+    let full_wave_loop_circumference_m = corrected_full_wave_m;
+    let full_wave_loop_square_side_ft = full_wave_loop_circumference_ft / 4.0;
+    let full_wave_loop_square_side_m = full_wave_loop_circumference_m / 4.0;
+
     // Calculate skip distance average
-    let skip_distance_avg_km =
-        (band.typical_skip_km.0 + band.typical_skip_km.1) / 2.0;
-    
+    let skip_distance_avg_km = (band.typical_skip_km.0 + band.typical_skip_km.1) / 2.0;
+
     WireCalculation {
         band_name: band.name.to_string(),
         frequency_mhz: freq,
@@ -236,13 +256,23 @@ pub fn calculate_for_band_with_velocity(
         corrected_half_wave_ft,
         corrected_full_wave_ft,
         corrected_quarter_wave_ft,
+        end_fed_half_wave_m,
+        end_fed_half_wave_ft,
+        full_wave_loop_circumference_m,
+        full_wave_loop_circumference_ft,
+        full_wave_loop_square_side_m,
+        full_wave_loop_square_side_ft,
         skip_distance_min_km: band.typical_skip_km.0,
         skip_distance_max_km: band.typical_skip_km.1,
         skip_distance_avg_km,
     }
 }
 
-fn impedance_corrected_length_ft(base_len_ft: f64, nominal_feedpoint_ohm: f64, transformer: TransformerRatio) -> f64 {
+fn impedance_corrected_length_ft(
+    base_len_ft: f64,
+    nominal_feedpoint_ohm: f64,
+    transformer: TransformerRatio,
+) -> f64 {
     if transformer == TransformerRatio::R1To1 {
         return base_len_ft;
     }
@@ -260,7 +290,7 @@ pub fn calculate_average_max_distance(calculations: &[WireCalculation]) -> f64 {
     if calculations.is_empty() {
         return 0.0;
     }
-    
+
     let sum: f64 = calculations.iter().map(|c| c.skip_distance_max_km).sum();
     sum / calculations.len() as f64
 }
@@ -270,7 +300,7 @@ pub fn calculate_average_min_distance(calculations: &[WireCalculation]) -> f64 {
     if calculations.is_empty() {
         return 0.0;
     }
-    
+
     let sum: f64 = calculations.iter().map(|c| c.skip_distance_min_km).sum();
     sum / calculations.len() as f64
 }
@@ -289,10 +319,7 @@ pub fn calculate_non_resonant_optima(
         return Vec::new();
     }
 
-    if config.min_len_m <= 0.0
-        || config.max_len_m <= config.min_len_m
-        || config.step_m <= 0.0
-    {
+    if config.min_len_m <= 0.0 || config.max_len_m <= config.min_len_m || config.step_m <= 0.0 {
         return Vec::new();
     }
 
@@ -300,7 +327,8 @@ pub fn calculate_non_resonant_optima(
     let max_len_m = config.max_len_m;
     let step_m = config.step_m;
 
-    let resonance_points_m = build_non_resonant_resonance_points(calculations, min_len_m, max_len_m);
+    let resonance_points_m =
+        build_non_resonant_resonance_points(calculations, min_len_m, max_len_m);
 
     // Keep API stability while calculations now consume corrected per-band values.
     let _ = velocity_factor;
@@ -354,10 +382,7 @@ pub fn calculate_non_resonant_window_optima(
         return Vec::new();
     }
 
-    if config.min_len_m <= 0.0
-        || config.max_len_m <= config.min_len_m
-        || config.step_m <= 0.0
-    {
+    if config.min_len_m <= 0.0 || config.max_len_m <= config.min_len_m || config.step_m <= 0.0 {
         return Vec::new();
     }
 
@@ -365,7 +390,8 @@ pub fn calculate_non_resonant_window_optima(
     let max_len_m = config.max_len_m;
     let step_m = config.step_m;
 
-    let resonance_points_m = build_non_resonant_resonance_points(calculations, min_len_m, max_len_m);
+    let resonance_points_m =
+        build_non_resonant_resonance_points(calculations, min_len_m, max_len_m);
 
     // Keep API symmetry with non-resonant calculations.
     let _ = velocity_factor;
@@ -411,9 +437,11 @@ pub fn calculate_non_resonant_window_optima(
     }
 
     if local_maxima.is_empty() {
-        if let Some(global_best) = samples.iter().cloned().max_by(|a, b| {
-            a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)
-        }) {
+        if let Some(global_best) = samples
+            .iter()
+            .cloned()
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+        {
             local_maxima.push(global_best);
         }
     }
@@ -492,10 +520,7 @@ pub fn calculate_resonant_compromises(
     if calculations.is_empty() {
         return Vec::new();
     }
-    if config.min_len_m <= 0.0
-        || config.max_len_m <= config.min_len_m
-        || config.step_m <= 0.0
-    {
+    if config.min_len_m <= 0.0 || config.max_len_m <= config.min_len_m || config.step_m <= 0.0 {
         return Vec::new();
     }
 
@@ -575,9 +600,11 @@ pub fn calculate_resonant_compromises(
     }
 
     if local_minima.is_empty() {
-        if let Some(global_best) = samples.iter().cloned().min_by(|a, b| {
-            a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)
-        }) {
+        if let Some(global_best) = samples
+            .iter()
+            .cloned()
+            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+        {
             local_minima.push(global_best);
         }
     }
@@ -646,16 +673,28 @@ mod tests {
 
     #[test]
     fn transformer_ratio_parse_colon_format() {
-        assert_eq!(TransformerRatio::parse("1:1"), Some(TransformerRatio::R1To1));
-        assert_eq!(TransformerRatio::parse("1:2"), Some(TransformerRatio::R1To2));
-        assert_eq!(TransformerRatio::parse("1:64"), Some(TransformerRatio::R1To64));
+        assert_eq!(
+            TransformerRatio::parse("1:1"),
+            Some(TransformerRatio::R1To1)
+        );
+        assert_eq!(
+            TransformerRatio::parse("1:2"),
+            Some(TransformerRatio::R1To2)
+        );
+        assert_eq!(
+            TransformerRatio::parse("1:64"),
+            Some(TransformerRatio::R1To64)
+        );
     }
 
     #[test]
     fn transformer_ratio_parse_numeric_format() {
         assert_eq!(TransformerRatio::parse("1"), Some(TransformerRatio::R1To1));
         assert_eq!(TransformerRatio::parse("4"), Some(TransformerRatio::R1To4));
-        assert_eq!(TransformerRatio::parse("64"), Some(TransformerRatio::R1To64));
+        assert_eq!(
+            TransformerRatio::parse("64"),
+            Some(TransformerRatio::R1To64)
+        );
     }
 
     #[test]
@@ -699,6 +738,31 @@ mod tests {
     }
 
     #[test]
+    fn calculate_for_band_derived_antenna_models() {
+        let band = sample_band();
+        let result = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1);
+
+        assert!((result.end_fed_half_wave_m - result.corrected_half_wave_m).abs() < 1e-9);
+        assert!((result.end_fed_half_wave_ft - result.corrected_half_wave_ft).abs() < 1e-9);
+        assert!(
+            (result.full_wave_loop_circumference_m - result.corrected_full_wave_m).abs() < 1e-9
+        );
+        assert!(
+            (result.full_wave_loop_circumference_ft - result.corrected_full_wave_ft).abs() < 1e-9
+        );
+        assert!(
+            (result.full_wave_loop_square_side_m * 4.0 - result.full_wave_loop_circumference_m)
+                .abs()
+                < 1e-9
+        );
+        assert!(
+            (result.full_wave_loop_square_side_ft * 4.0 - result.full_wave_loop_circumference_ft)
+                .abs()
+                < 1e-9
+        );
+    }
+
+    #[test]
     fn calculate_average_distances_empty() {
         let empty: Vec<WireCalculation> = Vec::new();
         assert_eq!(calculate_average_min_distance(&empty), 0.0);
@@ -730,8 +794,14 @@ mod tests {
         let avg_min = calculate_average_min_distance(&[calc1.clone(), calc2.clone()]);
         let avg_max = calculate_average_max_distance(&[calc1.clone(), calc2.clone()]);
 
-        assert_eq!(avg_min, (calc1.skip_distance_min_km + calc2.skip_distance_min_km) / 2.0);
-        assert_eq!(avg_max, (calc1.skip_distance_max_km + calc2.skip_distance_max_km) / 2.0);
+        assert_eq!(
+            avg_min,
+            (calc1.skip_distance_min_km + calc2.skip_distance_min_km) / 2.0
+        );
+        assert_eq!(
+            avg_max,
+            (calc1.skip_distance_max_km + calc2.skip_distance_max_km) / 2.0
+        );
     }
 
     #[test]
@@ -812,7 +882,9 @@ mod tests {
         let best = calculate_best_non_resonant_length(&[calc], 0.95, config).unwrap();
 
         // Best recommendation should be one of the optima
-        assert!(optima.iter().any(|o| (o.length_m - best.length_m).abs() < 1e-6));
+        assert!(optima
+            .iter()
+            .any(|o| (o.length_m - best.length_m).abs() < 1e-6));
     }
 
     #[test]

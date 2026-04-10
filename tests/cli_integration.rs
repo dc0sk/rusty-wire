@@ -12,10 +12,8 @@ fn temp_test_dir(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system clock should be after unix epoch")
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!(
-        "rusty-wire-{name}-{}-{unique}",
-        std::process::id()
-    ));
+    let dir =
+        std::env::temp_dir().join(format!("rusty-wire-{name}-{}-{unique}", std::process::id()));
     fs::create_dir_all(&dir).expect("failed to create temp test dir");
     dir
 }
@@ -138,8 +136,11 @@ fn selected_antenna_model_filters_output_and_resonant_summary() {
     assert!(stdout.contains("End-fed half-wave:"));
     assert!(!stdout.contains("Half-wave:"));
     assert!(!stdout.contains("Full-wave loop circumference:"));
-    assert!(stdout.contains("Closest combined compromises to resonant points (tuner-assisted EFHW guidance):"));
-    assert!(stdout.contains("dipole-derived compromise lengths shown as tuner-assisted starting points"));
+    assert!(stdout.contains(
+        "Closest combined compromises to resonant points (tuner-assisted EFHW guidance):"
+    ));
+    assert!(stdout
+        .contains("dipole-derived compromise lengths shown as tuner-assisted starting points"));
 }
 
 #[test]
@@ -156,6 +157,9 @@ fn loop_antenna_mode_shows_loop_guidance_compromises() {
     assert!(stdout.contains("Full-wave loop square side:"));
     assert!(!stdout.contains("Half-wave:"));
     assert!(!stdout.contains("End-fed half-wave:"));
-    assert!(stdout.contains("Closest combined compromises to resonant points (tuner-assisted loop guidance):"));
-    assert!(stdout.contains("dipole-derived compromise lengths shown as tuner-assisted starting points"));
+    assert!(stdout.contains(
+        "Closest combined compromises to resonant points (tuner-assisted loop guidance):"
+    ));
+    assert!(stdout
+        .contains("dipole-derived compromise lengths shown as tuner-assisted starting points"));
 }
