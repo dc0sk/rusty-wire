@@ -1,6 +1,6 @@
 # Rusty Wire
 
-**Version 1.5.1**
+**Version 1.5.2**
 
 A Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.
 
