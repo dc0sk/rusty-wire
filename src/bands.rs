@@ -1,12 +1,12 @@
+use clap::ValueEnum;
 /// Define ham radio and shortwave bands with their characteristics
 use std::fmt;
 use std::str::FromStr;
-use clap::ValueEnum;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BandType {
-    HF,     // High Frequency (3-30 MHz)
-    MF,     // Medium Frequency (300 kHz - 3 MHz)
+    HF, // High Frequency (3-30 MHz)
+    MF, // Medium Frequency (300 kHz - 3 MHz)
 }
 
 impl fmt::Display for BandType {
@@ -338,15 +338,13 @@ pub fn get_bands_for_region(region: ITURegion) -> Vec<(usize, Band)> {
 }
 
 pub fn get_band_by_index_for_region(index: usize, region: ITURegion) -> Option<Band> {
-    BANDS
-        .get(index)
-        .and_then(|band| {
-            if band.regions.contains(&region) {
-                Some(band_for_region(band, index, region))
-            } else {
-                None
-            }
-        })
+    BANDS.get(index).and_then(|band| {
+        if band.regions.contains(&region) {
+            Some(band_for_region(band, index, region))
+        } else {
+            None
+        }
+    })
 }
 
 #[cfg(test)]
@@ -359,7 +357,10 @@ mod tests {
         assert_eq!(ITURegion::Region2.short_name(), "2");
         assert_eq!(ITURegion::Region3.short_name(), "3");
 
-        assert_eq!(ITURegion::Region1.long_name(), "Europe, Africa, Middle East");
+        assert_eq!(
+            ITURegion::Region1.long_name(),
+            "Europe, Africa, Middle East"
+        );
         assert_eq!(ITURegion::Region2.long_name(), "Americas");
         assert_eq!(ITURegion::Region3.long_name(), "Asia-Pacific");
     }

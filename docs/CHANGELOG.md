@@ -4,6 +4,19 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-04-10
+
+### Added
+- **Antenna model selection mode**: new `--antenna dipole|efhw|loop` option for filtering per-band output to a selected model.
+- **Interactive antenna model parity**: interactive flow now prompts for antenna model selection, aligned with CLI behavior.
+- **Derived antenna model dimensions**: per-band outputs and exports now include end-fed half-wave and full-wave loop dimensions.
+- **Loop-mode integration coverage**: added CLI integration coverage validating loop-model output filtering and tuner-assisted compromise labeling.
+
+### Changed
+- **Resonant output behavior by model**: dipole resonant-point summary is shown for dipole/all, while compromise guidance is shown for all models.
+- **Tuner-assisted guidance labeling**: in EFHW and loop modes, resonant compromise suggestions are explicitly labeled as dipole-derived tuner-assisted starting points.
+- **Export payload expansion**: CSV/JSON/Markdown/TXT exports now carry first-batch derived antenna fields.
+
 ## [1.4.0] - 2026-04-10
 
 ### Changed

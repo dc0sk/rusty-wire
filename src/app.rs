@@ -8,12 +8,11 @@ use crate::bands::{get_band_by_index_for_region, ITURegion};
 use crate::calculations::{
     calculate_best_non_resonant_length, calculate_for_band_with_velocity,
     calculate_non_resonant_optima, calculate_non_resonant_window_optima,
-    calculate_resonant_compromises,
-    NonResonantRecommendation, NonResonantSearchConfig, ResonantCompromise,
-    TransformerRatio, WireCalculation, DEFAULT_NON_RESONANT_CONFIG,
+    calculate_resonant_compromises, NonResonantRecommendation, NonResonantSearchConfig,
+    ResonantCompromise, TransformerRatio, WireCalculation, DEFAULT_NON_RESONANT_CONFIG,
 };
-use std::str::FromStr;
 use clap::ValueEnum;
+use std::str::FromStr;
 
 pub const FEET_TO_METERS: f64 = 0.3048;
 pub const DEFAULT_BAND_SELECTION: [usize; 7] = [4, 5, 6, 7, 8, 9, 10];
@@ -37,7 +36,10 @@ impl FromStr for CalcMode {
         match s.to_ascii_lowercase().as_str() {
             "resonant" => Ok(CalcMode::Resonant),
             "non-resonant" | "nonresonant" | "non_resonant" => Ok(CalcMode::NonResonant),
-            _ => Err(format!("Invalid calculation mode '{}'. Must be 'resonant' or 'non-resonant'.", s)),
+            _ => Err(format!(
+                "Invalid calculation mode '{}'. Must be 'resonant' or 'non-resonant'.",
+                s
+            )),
         }
     }
 }
@@ -49,8 +51,14 @@ impl ValueEnum for CalcMode {
 
     fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
         match self {
-            CalcMode::Resonant => Some(clap::builder::PossibleValue::new("resonant").help("Calculate resonant wire lengths")),
-            CalcMode::NonResonant => Some(clap::builder::PossibleValue::new("non-resonant").help("Find optimal non-resonant wire length within constraints")),
+            CalcMode::Resonant => Some(
+                clap::builder::PossibleValue::new("resonant")
+                    .help("Calculate resonant wire lengths"),
+            ),
+            CalcMode::NonResonant => Some(
+                clap::builder::PossibleValue::new("non-resonant")
+                    .help("Find optimal non-resonant wire length within constraints"),
+            ),
         }
     }
 }
@@ -62,8 +70,6 @@ pub enum ExportFormat {
     Markdown,
     Txt,
 }
-
-
 
 impl ExportFormat {
     #[allow(dead_code)] // used in tests
@@ -86,22 +92,36 @@ impl FromStr for ExportFormat {
             "json" => Ok(ExportFormat::Json),
             "markdown" | "md" => Ok(ExportFormat::Markdown),
             "txt" | "text" => Ok(ExportFormat::Txt),
-            _ => Err(format!("Invalid export format '{}'. Must be 'csv', 'json', 'markdown', or 'txt'.", s)),
+            _ => Err(format!(
+                "Invalid export format '{}'. Must be 'csv', 'json', 'markdown', or 'txt'.",
+                s
+            )),
         }
     }
 }
 
 impl ValueEnum for ExportFormat {
     fn value_variants<'a>() -> &'a [Self] {
-        &[ExportFormat::Csv, ExportFormat::Json, ExportFormat::Markdown, ExportFormat::Txt]
+        &[
+            ExportFormat::Csv,
+            ExportFormat::Json,
+            ExportFormat::Markdown,
+            ExportFormat::Txt,
+        ]
     }
 
     fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
         match self {
             ExportFormat::Csv => Some(clap::builder::PossibleValue::new("csv").help("CSV format")),
-            ExportFormat::Json => Some(clap::builder::PossibleValue::new("json").help("JSON format")),
-            ExportFormat::Markdown => Some(clap::builder::PossibleValue::new("markdown").help("Markdown format")),
-            ExportFormat::Txt => Some(clap::builder::PossibleValue::new("txt").help("Plain text format")),
+            ExportFormat::Json => {
+                Some(clap::builder::PossibleValue::new("json").help("JSON format"))
+            }
+            ExportFormat::Markdown => {
+                Some(clap::builder::PossibleValue::new("markdown").help("Markdown format"))
+            }
+            ExportFormat::Txt => {
+                Some(clap::builder::PossibleValue::new("txt").help("Plain text format"))
+            }
         }
     }
 }
@@ -121,7 +141,10 @@ impl FromStr for UnitSystem {
             "m" | "metric" => Ok(UnitSystem::Metric),
             "ft" | "imperial" => Ok(UnitSystem::Imperial),
             "both" => Ok(UnitSystem::Both),
-            _ => Err(format!("Invalid unit system '{}'. Must be 'm', 'ft', or 'both'.", s)),
+            _ => Err(format!(
+                "Invalid unit system '{}'. Must be 'm', 'ft', or 'both'.",
+                s
+            )),
         }
     }
 }
@@ -135,7 +158,56 @@ impl ValueEnum for UnitSystem {
         match self {
             UnitSystem::Metric => Some(clap::builder::PossibleValue::new("m").help("Meters")),
             UnitSystem::Imperial => Some(clap::builder::PossibleValue::new("ft").help("Feet")),
-            UnitSystem::Both => Some(clap::builder::PossibleValue::new("both").help("Both meters and feet")),
+            UnitSystem::Both => {
+                Some(clap::builder::PossibleValue::new("both").help("Both meters and feet"))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AntennaModel {
+    Dipole,
+    EndFedHalfWave,
+    FullWaveLoop,
+}
+
+impl FromStr for AntennaModel {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "dipole" => Ok(AntennaModel::Dipole),
+            "efhw" | "end-fed" | "end-fed-half-wave" => Ok(AntennaModel::EndFedHalfWave),
+            "loop" | "full-wave-loop" => Ok(AntennaModel::FullWaveLoop),
+            _ => Err(format!(
+                "Invalid antenna model '{}'. Must be 'dipole', 'efhw', or 'loop'.",
+                s
+            )),
+        }
+    }
+}
+
+impl ValueEnum for AntennaModel {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[
+            AntennaModel::Dipole,
+            AntennaModel::EndFedHalfWave,
+            AntennaModel::FullWaveLoop,
+        ]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        match self {
+            AntennaModel::Dipole => {
+                Some(clap::builder::PossibleValue::new("dipole").help("Center-fed dipole model"))
+            }
+            AntennaModel::EndFedHalfWave => {
+                Some(clap::builder::PossibleValue::new("efhw").help("End-fed half-wave model"))
+            }
+            AntennaModel::FullWaveLoop => {
+                Some(clap::builder::PossibleValue::new("loop").help("Full-wave loop model"))
+            }
         }
     }
 }
@@ -154,6 +226,7 @@ pub struct AppConfig {
     pub units: UnitSystem,
     pub itu_region: ITURegion,
     pub transformer_ratio: TransformerRatio,
+    pub antenna_model: Option<AntennaModel>,
 }
 
 impl Default for AppConfig {
@@ -167,6 +240,7 @@ impl Default for AppConfig {
             units: UnitSystem::Both,
             itu_region: DEFAULT_ITU_REGION,
             transformer_ratio: DEFAULT_TRANSFORMER_RATIO,
+            antenna_model: None,
         }
     }
 }
@@ -348,6 +422,7 @@ mod tests {
         assert_eq!(config.velocity_factor, 0.95);
         assert_eq!(config.itu_region, ITURegion::Region1);
         assert_eq!(config.transformer_ratio, TransformerRatio::R1To1);
+        assert_eq!(config.antenna_model, None);
         assert_eq!(config.band_indices, vec![4, 5, 6, 7, 8, 9, 10]);
     }
 
@@ -406,7 +481,10 @@ mod tests {
             config.band_indices = vec![1];
 
             let results = run_calculation(config);
-            assert_eq!(results.calculations[0].transformer_ratio_label, ratio.as_label());
+            assert_eq!(
+                results.calculations[0].transformer_ratio_label,
+                ratio.as_label()
+            );
         }
     }
 

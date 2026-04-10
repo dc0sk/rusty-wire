@@ -37,7 +37,10 @@ pub fn validate_export_path(output: &str) -> Result<PathBuf, String> {
         return Err("absolute output paths are not permitted".to_string());
     }
 
-    if path.components().any(|component| matches!(component, Component::ParentDir)) {
+    if path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
         return Err("output path must not contain parent directory references ('..')".to_string());
     }
 
@@ -113,53 +116,62 @@ pub fn to_csv(
     };
     let mut out = match units {
         UnitSystem::Metric => String::from(
-            "band,frequency_mhz,transformer_ratio,half_wave_m,half_wave_corrected_m,full_wave_m,full_wave_corrected_m,quarter_wave_m,quarter_wave_corrected_m,skip_min_km,skip_max_km,skip_avg_km,best_non_resonant_m,resonance_clearance_pct,resonant_points_in_window\n",
+            "band,frequency_mhz,transformer_ratio,half_wave_m,half_wave_corrected_m,full_wave_m,full_wave_corrected_m,quarter_wave_m,quarter_wave_corrected_m,end_fed_half_wave_m,full_wave_loop_circumference_m,full_wave_loop_square_side_m,skip_min_km,skip_max_km,skip_avg_km,best_non_resonant_m,resonance_clearance_pct,resonant_points_in_window\n",
         ),
         UnitSystem::Imperial => String::from(
-            "band,frequency_mhz,transformer_ratio,half_wave_ft,half_wave_corrected_ft,full_wave_ft,full_wave_corrected_ft,quarter_wave_ft,quarter_wave_corrected_ft,skip_min_km,skip_max_km,skip_avg_km,best_non_resonant_ft,resonance_clearance_pct,resonant_points_in_window\n",
+            "band,frequency_mhz,transformer_ratio,half_wave_ft,half_wave_corrected_ft,full_wave_ft,full_wave_corrected_ft,quarter_wave_ft,quarter_wave_corrected_ft,end_fed_half_wave_ft,full_wave_loop_circumference_ft,full_wave_loop_square_side_ft,skip_min_km,skip_max_km,skip_avg_km,best_non_resonant_ft,resonance_clearance_pct,resonant_points_in_window\n",
         ),
         UnitSystem::Both => String::from(
-            "band,frequency_mhz,transformer_ratio,half_wave_m,half_wave_corrected_m,full_wave_m,full_wave_corrected_m,quarter_wave_m,quarter_wave_corrected_m,half_wave_ft,half_wave_corrected_ft,full_wave_ft,full_wave_corrected_ft,quarter_wave_ft,quarter_wave_corrected_ft,skip_min_km,skip_max_km,skip_avg_km,best_non_resonant_m,best_non_resonant_ft,resonance_clearance_pct,resonant_points_in_window\n",
+            "band,frequency_mhz,transformer_ratio,half_wave_m,half_wave_corrected_m,full_wave_m,full_wave_corrected_m,quarter_wave_m,quarter_wave_corrected_m,end_fed_half_wave_m,full_wave_loop_circumference_m,full_wave_loop_square_side_m,half_wave_ft,half_wave_corrected_ft,full_wave_ft,full_wave_corrected_ft,quarter_wave_ft,quarter_wave_corrected_ft,end_fed_half_wave_ft,full_wave_loop_circumference_ft,full_wave_loop_square_side_ft,skip_min_km,skip_max_km,skip_avg_km,best_non_resonant_m,best_non_resonant_ft,resonance_clearance_pct,resonant_points_in_window\n",
         ),
     };
     for c in calculations {
         let points = csv_escape(&format_band_resonant_points(
-            c,
-            wire_min_m,
-            wire_max_m,
-            units,
+            c, wire_min_m, wire_max_m, units,
         ));
         let row = match units {
             UnitSystem::Metric => format!(
-                "\"{}\",{:.3},\"{}\",{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.0},{:.0},{:.0},{:.2},{:.2},\"{}\"\n",
+                "\"{}\",{:.3},\"{}\",{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.0},{:.0},{:.0},{:.2},{:.2},\"{}\"\n",
                 c.band_name, c.frequency_mhz,
                 c.transformer_ratio_label,
                 c.half_wave_m, c.corrected_half_wave_m,
                 c.full_wave_m, c.corrected_full_wave_m,
                 c.quarter_wave_m, c.corrected_quarter_wave_m,
+                c.end_fed_half_wave_m,
+                c.full_wave_loop_circumference_m,
+                c.full_wave_loop_square_side_m,
                 c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
                 best_m, clear_pct, points,
             ),
             UnitSystem::Imperial => format!(
-                "\"{}\",{:.3},\"{}\",{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.0},{:.0},{:.0},{:.2},{:.2},\"{}\"\n",
+                "\"{}\",{:.3},\"{}\",{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.0},{:.0},{:.0},{:.2},{:.2},\"{}\"\n",
                 c.band_name, c.frequency_mhz,
                 c.transformer_ratio_label,
                 c.half_wave_ft, c.corrected_half_wave_ft,
                 c.full_wave_ft, c.corrected_full_wave_ft,
                 c.quarter_wave_ft, c.corrected_quarter_wave_ft,
+                c.end_fed_half_wave_ft,
+                c.full_wave_loop_circumference_ft,
+                c.full_wave_loop_square_side_ft,
                 c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
                 best_ft, clear_pct, points,
             ),
             UnitSystem::Both => format!(
-                "\"{}\",{:.3},\"{}\",{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.0},{:.0},{:.0},{:.2},{:.2},{:.2},\"{}\"\n",
+                "\"{}\",{:.3},\"{}\",{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.0},{:.0},{:.0},{:.2},{:.2},{:.2},\"{}\"\n",
                 c.band_name, c.frequency_mhz,
                 c.transformer_ratio_label,
                 c.half_wave_m, c.corrected_half_wave_m,
                 c.full_wave_m, c.corrected_full_wave_m,
                 c.quarter_wave_m, c.corrected_quarter_wave_m,
+                c.end_fed_half_wave_m,
+                c.full_wave_loop_circumference_m,
+                c.full_wave_loop_square_side_m,
                 c.half_wave_ft, c.corrected_half_wave_ft,
                 c.full_wave_ft, c.corrected_full_wave_ft,
                 c.quarter_wave_ft, c.corrected_quarter_wave_ft,
+                c.end_fed_half_wave_ft,
+                c.full_wave_loop_circumference_ft,
+                c.full_wave_loop_square_side_ft,
                 c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
                 best_m, best_ft, clear_pct, points,
             ),
@@ -181,37 +193,49 @@ pub fn to_json(
         let comma = if i + 1 == calculations.len() { "" } else { "," };
         let length_fields = match units {
             UnitSystem::Metric => format!(
-                "\"half_wave_m\": {:.2},\n    \"half_wave_corrected_m\": {:.2},\n    \"full_wave_m\": {:.2},\n    \"full_wave_corrected_m\": {:.2},\n    \"quarter_wave_m\": {:.2},\n    \"quarter_wave_corrected_m\": {:.2}",
+                "\"half_wave_m\": {:.2},\n    \"half_wave_corrected_m\": {:.2},\n    \"full_wave_m\": {:.2},\n    \"full_wave_corrected_m\": {:.2},\n    \"quarter_wave_m\": {:.2},\n    \"quarter_wave_corrected_m\": {:.2},\n    \"end_fed_half_wave_m\": {:.2},\n    \"full_wave_loop_circumference_m\": {:.2},\n    \"full_wave_loop_square_side_m\": {:.2}",
                 c.half_wave_m,
                 c.corrected_half_wave_m,
                 c.full_wave_m,
                 c.corrected_full_wave_m,
                 c.quarter_wave_m,
                 c.corrected_quarter_wave_m,
+                c.end_fed_half_wave_m,
+                c.full_wave_loop_circumference_m,
+                c.full_wave_loop_square_side_m,
             ),
             UnitSystem::Imperial => format!(
-                "\"half_wave_ft\": {:.2},\n    \"half_wave_corrected_ft\": {:.2},\n    \"full_wave_ft\": {:.2},\n    \"full_wave_corrected_ft\": {:.2},\n    \"quarter_wave_ft\": {:.2},\n    \"quarter_wave_corrected_ft\": {:.2}",
+                "\"half_wave_ft\": {:.2},\n    \"half_wave_corrected_ft\": {:.2},\n    \"full_wave_ft\": {:.2},\n    \"full_wave_corrected_ft\": {:.2},\n    \"quarter_wave_ft\": {:.2},\n    \"quarter_wave_corrected_ft\": {:.2},\n    \"end_fed_half_wave_ft\": {:.2},\n    \"full_wave_loop_circumference_ft\": {:.2},\n    \"full_wave_loop_square_side_ft\": {:.2}",
                 c.half_wave_ft,
                 c.corrected_half_wave_ft,
                 c.full_wave_ft,
                 c.corrected_full_wave_ft,
                 c.quarter_wave_ft,
                 c.corrected_quarter_wave_ft,
+                c.end_fed_half_wave_ft,
+                c.full_wave_loop_circumference_ft,
+                c.full_wave_loop_square_side_ft,
             ),
             UnitSystem::Both => format!(
-                "\"half_wave_m\": {:.2},\n    \"half_wave_corrected_m\": {:.2},\n    \"full_wave_m\": {:.2},\n    \"full_wave_corrected_m\": {:.2},\n    \"quarter_wave_m\": {:.2},\n    \"quarter_wave_corrected_m\": {:.2},\n    \"half_wave_ft\": {:.2},\n    \"half_wave_corrected_ft\": {:.2},\n    \"full_wave_ft\": {:.2},\n    \"full_wave_corrected_ft\": {:.2},\n    \"quarter_wave_ft\": {:.2},\n    \"quarter_wave_corrected_ft\": {:.2}",
+                "\"half_wave_m\": {:.2},\n    \"half_wave_corrected_m\": {:.2},\n    \"full_wave_m\": {:.2},\n    \"full_wave_corrected_m\": {:.2},\n    \"quarter_wave_m\": {:.2},\n    \"quarter_wave_corrected_m\": {:.2},\n    \"end_fed_half_wave_m\": {:.2},\n    \"full_wave_loop_circumference_m\": {:.2},\n    \"full_wave_loop_square_side_m\": {:.2},\n    \"half_wave_ft\": {:.2},\n    \"half_wave_corrected_ft\": {:.2},\n    \"full_wave_ft\": {:.2},\n    \"full_wave_corrected_ft\": {:.2},\n    \"quarter_wave_ft\": {:.2},\n    \"quarter_wave_corrected_ft\": {:.2},\n    \"end_fed_half_wave_ft\": {:.2},\n    \"full_wave_loop_circumference_ft\": {:.2},\n    \"full_wave_loop_square_side_ft\": {:.2}",
                 c.half_wave_m,
                 c.corrected_half_wave_m,
                 c.full_wave_m,
                 c.corrected_full_wave_m,
                 c.quarter_wave_m,
                 c.corrected_quarter_wave_m,
+                c.end_fed_half_wave_m,
+                c.full_wave_loop_circumference_m,
+                c.full_wave_loop_square_side_m,
                 c.half_wave_ft,
                 c.corrected_half_wave_ft,
                 c.full_wave_ft,
                 c.corrected_full_wave_ft,
                 c.quarter_wave_ft,
                 c.corrected_quarter_wave_ft,
+                c.end_fed_half_wave_ft,
+                c.full_wave_loop_circumference_ft,
+                c.full_wave_loop_square_side_ft,
             ),
         };
         let recommendation_json = match (recommendation, units) {
@@ -260,11 +284,11 @@ pub fn to_markdown(
 
     match units {
         UnitSystem::Metric => {
-            out.push_str("| Band | Ratio | Freq (MHz) | Half-wave (m) | Half-wave corrected (m) | Full-wave (m) | Full-wave corrected (m) | Quarter-wave (m) | Quarter-wave corrected (m) | Skip Min (km) | Skip Max (km) | Skip Avg (km) |\n");
-            out.push_str("|------|-------|------------|---------------|--------------------------|---------------|--------------------------|------------------|-----------------------------|---------------|---------------|---------------|\n");
+            out.push_str("| Band | Ratio | Freq (MHz) | Half-wave (m) | Half-wave corrected (m) | Full-wave (m) | Full-wave corrected (m) | Quarter-wave (m) | Quarter-wave corrected (m) | EFHW (m) | Loop circumference (m) | Loop side (m) | Skip Min (km) | Skip Max (km) | Skip Avg (km) |\n");
+            out.push_str("|------|-------|------------|---------------|--------------------------|---------------|--------------------------|------------------|-----------------------------|----------|------------------------|---------------|---------------|---------------|---------------|\n");
             for c in calculations {
                 out.push_str(&format!(
-                    "| {} | {} | {:.3} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.0} | {:.0} | {:.0} |\n",
+                    "| {} | {} | {:.3} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.0} | {:.0} | {:.0} |\n",
                     c.band_name,
                     c.transformer_ratio_label,
                     c.frequency_mhz,
@@ -274,16 +298,19 @@ pub fn to_markdown(
                     c.corrected_full_wave_m,
                     c.quarter_wave_m,
                     c.corrected_quarter_wave_m,
+                    c.end_fed_half_wave_m,
+                    c.full_wave_loop_circumference_m,
+                    c.full_wave_loop_square_side_m,
                     c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
                 ));
             }
         }
         UnitSystem::Imperial => {
-            out.push_str("| Band | Ratio | Freq (MHz) | Half-wave (ft) | Half-wave corrected (ft) | Full-wave (ft) | Full-wave corrected (ft) | Quarter-wave (ft) | Quarter-wave corrected (ft) | Skip Min (km) | Skip Max (km) | Skip Avg (km) |\n");
-            out.push_str("|------|-------|------------|----------------|--------------------------|----------------|--------------------------|-------------------|-----------------------------|---------------|---------------|---------------|\n");
+            out.push_str("| Band | Ratio | Freq (MHz) | Half-wave (ft) | Half-wave corrected (ft) | Full-wave (ft) | Full-wave corrected (ft) | Quarter-wave (ft) | Quarter-wave corrected (ft) | EFHW (ft) | Loop circumference (ft) | Loop side (ft) | Skip Min (km) | Skip Max (km) | Skip Avg (km) |\n");
+            out.push_str("|------|-------|------------|----------------|--------------------------|----------------|--------------------------|-------------------|-----------------------------|-----------|-------------------------|----------------|---------------|---------------|---------------|\n");
             for c in calculations {
                 out.push_str(&format!(
-                    "| {} | {} | {:.3} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.0} | {:.0} | {:.0} |\n",
+                    "| {} | {} | {:.3} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.0} | {:.0} | {:.0} |\n",
                     c.band_name,
                     c.transformer_ratio_label,
                     c.frequency_mhz,
@@ -293,16 +320,19 @@ pub fn to_markdown(
                     c.corrected_full_wave_ft,
                     c.quarter_wave_ft,
                     c.corrected_quarter_wave_ft,
+                    c.end_fed_half_wave_ft,
+                    c.full_wave_loop_circumference_ft,
+                    c.full_wave_loop_square_side_ft,
                     c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
                 ));
             }
         }
         UnitSystem::Both => {
-            out.push_str("| Band | Ratio | Freq (MHz) | Half-wave (m) | Half-wave corr (m) | Half-wave (ft) | Half-wave corr (ft) | Full-wave (m) | Full-wave corr (m) | Full-wave (ft) | Full-wave corr (ft) | Quarter-wave (m) | Quarter-wave corr (m) | Quarter-wave (ft) | Quarter-wave corr (ft) | Skip Min (km) | Skip Max (km) | Skip Avg (km) |\n");
-            out.push_str("|------|-------|------------|---------------|--------------------|----------------|---------------------|---------------|--------------------|----------------|---------------------|------------------|-----------------------|-------------------|------------------------|---------------|---------------|---------------|\n");
+            out.push_str("| Band | Ratio | Freq (MHz) | Half-wave (m) | Half-wave corr (m) | Half-wave (ft) | Half-wave corr (ft) | Full-wave (m) | Full-wave corr (m) | Full-wave (ft) | Full-wave corr (ft) | Quarter-wave (m) | Quarter-wave corr (m) | Quarter-wave (ft) | Quarter-wave corr (ft) | EFHW (m) | EFHW (ft) | Loop circ. (m) | Loop circ. (ft) | Loop side (m) | Loop side (ft) | Skip Min (km) | Skip Max (km) | Skip Avg (km) |\n");
+            out.push_str("|------|-------|------------|---------------|--------------------|----------------|---------------------|---------------|--------------------|----------------|---------------------|------------------|-----------------------|-------------------|------------------------|----------|-----------|----------------|-----------------|---------------|----------------|---------------|---------------|---------------|\n");
             for c in calculations {
                 out.push_str(&format!(
-                    "| {} | {} | {:.3} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.0} | {:.0} | {:.0} |\n",
+                    "| {} | {} | {:.3} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {:.0} | {:.0} | {:.0} |\n",
                     c.band_name,
                     c.transformer_ratio_label,
                     c.frequency_mhz,
@@ -312,6 +342,9 @@ pub fn to_markdown(
                     c.full_wave_ft, c.corrected_full_wave_ft,
                     c.quarter_wave_m, c.corrected_quarter_wave_m,
                     c.quarter_wave_ft, c.corrected_quarter_wave_ft,
+                    c.end_fed_half_wave_m, c.end_fed_half_wave_ft,
+                    c.full_wave_loop_circumference_m, c.full_wave_loop_circumference_ft,
+                    c.full_wave_loop_square_side_m, c.full_wave_loop_square_side_ft,
                     c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
                 ));
             }
@@ -323,17 +356,26 @@ pub fn to_markdown(
         (Some(r), UnitSystem::Metric) => {
             out.push_str("| Length (m) | Resonance Clearance (%) |\n");
             out.push_str("|------------|-------------------------|\n");
-            out.push_str(&format!("| {:.2} | {:.2} |\n", r.length_m, r.min_resonance_clearance_pct));
+            out.push_str(&format!(
+                "| {:.2} | {:.2} |\n",
+                r.length_m, r.min_resonance_clearance_pct
+            ));
         }
         (Some(r), UnitSystem::Imperial) => {
             out.push_str("| Length (ft) | Resonance Clearance (%) |\n");
             out.push_str("|-------------|-------------------------|\n");
-            out.push_str(&format!("| {:.2} | {:.2} |\n", r.length_ft, r.min_resonance_clearance_pct));
+            out.push_str(&format!(
+                "| {:.2} | {:.2} |\n",
+                r.length_ft, r.min_resonance_clearance_pct
+            ));
         }
         (Some(r), UnitSystem::Both) => {
             out.push_str("| Length (m) | Length (ft) | Resonance Clearance (%) |\n");
             out.push_str("|------------|-------------|-------------------------|\n");
-            out.push_str(&format!("| {:.2} | {:.2} | {:.2} |\n", r.length_m, r.length_ft, r.min_resonance_clearance_pct));
+            out.push_str(&format!(
+                "| {:.2} | {:.2} | {:.2} |\n",
+                r.length_m, r.length_ft, r.min_resonance_clearance_pct
+            ));
         }
         (None, _) => out.push_str("No recommendation available.\n"),
     }
@@ -385,7 +427,7 @@ pub fn to_txt(
     for c in calculations {
         let lengths = match units {
             UnitSystem::Metric => format!(
-                "  Transformer ratio: {}\n  Half-wave: {:.2} m (corrected: {:.2} m)\n  Full-wave: {:.2} m (corrected: {:.2} m)\n  Quarter-wave: {:.2} m (corrected: {:.2} m)",
+                "  Transformer ratio: {}\n  Half-wave: {:.2} m (corrected: {:.2} m)\n  Full-wave: {:.2} m (corrected: {:.2} m)\n  Quarter-wave: {:.2} m (corrected: {:.2} m)\n  End-fed half-wave: {:.2} m\n  Full-wave loop circumference: {:.2} m\n  Full-wave loop square side: {:.2} m",
                 c.transformer_ratio_label,
                 c.half_wave_m,
                 c.corrected_half_wave_m,
@@ -393,9 +435,12 @@ pub fn to_txt(
                 c.corrected_full_wave_m,
                 c.quarter_wave_m,
                 c.corrected_quarter_wave_m,
+                c.end_fed_half_wave_m,
+                c.full_wave_loop_circumference_m,
+                c.full_wave_loop_square_side_m,
             ),
             UnitSystem::Imperial => format!(
-                "  Transformer ratio: {}\n  Half-wave: {:.2} ft (corrected: {:.2} ft)\n  Full-wave: {:.2} ft (corrected: {:.2} ft)\n  Quarter-wave: {:.2} ft (corrected: {:.2} ft)",
+                "  Transformer ratio: {}\n  Half-wave: {:.2} ft (corrected: {:.2} ft)\n  Full-wave: {:.2} ft (corrected: {:.2} ft)\n  Quarter-wave: {:.2} ft (corrected: {:.2} ft)\n  End-fed half-wave: {:.2} ft\n  Full-wave loop circumference: {:.2} ft\n  Full-wave loop square side: {:.2} ft",
                 c.transformer_ratio_label,
                 c.half_wave_ft,
                 c.corrected_half_wave_ft,
@@ -403,9 +448,12 @@ pub fn to_txt(
                 c.corrected_full_wave_ft,
                 c.quarter_wave_ft,
                 c.corrected_quarter_wave_ft,
+                c.end_fed_half_wave_ft,
+                c.full_wave_loop_circumference_ft,
+                c.full_wave_loop_square_side_ft,
             ),
             UnitSystem::Both => format!(
-                "  Transformer ratio: {}\n  Half-wave: {:.2} m ({:.2} ft), corrected: {:.2} m ({:.2} ft)\n  Full-wave: {:.2} m ({:.2} ft), corrected: {:.2} m ({:.2} ft)\n  Quarter-wave: {:.2} m ({:.2} ft), corrected: {:.2} m ({:.2} ft)",
+                "  Transformer ratio: {}\n  Half-wave: {:.2} m ({:.2} ft), corrected: {:.2} m ({:.2} ft)\n  Full-wave: {:.2} m ({:.2} ft), corrected: {:.2} m ({:.2} ft)\n  Quarter-wave: {:.2} m ({:.2} ft), corrected: {:.2} m ({:.2} ft)\n  End-fed half-wave: {:.2} m ({:.2} ft)\n  Full-wave loop circumference: {:.2} m ({:.2} ft)\n  Full-wave loop square side: {:.2} m ({:.2} ft)",
                 c.transformer_ratio_label,
                 c.half_wave_m,
                 c.half_wave_ft,
@@ -419,12 +467,22 @@ pub fn to_txt(
                 c.quarter_wave_ft,
                 c.corrected_quarter_wave_m,
                 c.corrected_quarter_wave_ft,
+                c.end_fed_half_wave_m,
+                c.end_fed_half_wave_ft,
+                c.full_wave_loop_circumference_m,
+                c.full_wave_loop_circumference_ft,
+                c.full_wave_loop_square_side_m,
+                c.full_wave_loop_square_side_ft,
             ),
         };
         out.push_str(&format!(
             "{}\n  Frequency: {:.3} MHz\n{}\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)\n\n",
-            c.band_name, c.frequency_mhz, lengths,
-            c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
+            c.band_name,
+            c.frequency_mhz,
+            lengths,
+            c.skip_distance_min_km,
+            c.skip_distance_max_km,
+            c.skip_distance_avg_km,
         ));
     }
 
@@ -641,8 +699,14 @@ mod tests {
 
     #[test]
     fn validate_export_path_accepts_relative_paths() {
-        assert_eq!(validate_export_path("results.txt").unwrap(), PathBuf::from("results.txt"));
-        assert_eq!(validate_export_path("dir/sub/output.json").unwrap(), PathBuf::from("dir/sub/output.json"));
+        assert_eq!(
+            validate_export_path("results.txt").unwrap(),
+            PathBuf::from("results.txt")
+        );
+        assert_eq!(
+            validate_export_path("dir/sub/output.json").unwrap(),
+            PathBuf::from("dir/sub/output.json")
+        );
     }
 
     #[test]
