@@ -6,11 +6,20 @@ All notable changes to Rusty Wire are documented here.
 
 ### Added
 - **Non-resonant search-window local optima**: non-resonant mode now lists multiple local optimum wire lengths (clearance maxima) within the active search window.
+- **Comprehensive unit test suite**: added 75 tests covering calculations, band database, CLI parsers, and app logic for improved code quality and regression prevention.
 
 ### Changed
 - **Non-resonant output detail**: output now distinguishes between local window optima and equal global optima, marking the selected recommendation in the local-optima list.
 - **Export security hardening**: export output paths are now validated to reject absolute paths and parent-directory traversal (`..`) before writing files.
 - **Documentation updates**: README and CLI guide now describe the new non-resonant search-window local-optima output.
+
+### Tests Added
+- **Transformer ratio**: parsing, labels, impedance calculations (5 tests)
+- **Band calculations**: velocity factor effects, unit conversions, distance averaging (8 tests)
+- **Optimization algorithms**: non-resonant optima, resonant compromises, window-local candidates (7 tests)
+- **Band database**: region-specific frequencies, ITU adjustments (13 tests)
+- **CLI parsers**: bands, regions, transformer ratios, export formats, modes, units (31 tests)
+- **Application logic**: configuration, multi-region support, calculation modes (8 tests)
 
 ## [1.2.0] - 2026-04-09
 

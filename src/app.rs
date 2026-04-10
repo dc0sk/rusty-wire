@@ -211,4 +211,127 @@ mod tests {
         assert_eq!(results.calculations[0].band_name, "160m");
         assert_eq!(results.skipped_band_indices, vec![0, 100]);
     }
+
+    #[test]
+    fn run_calculation_resonant_mode() {
+        let mut config = AppConfig::default();
+        config.mode = CalcMode::Resonant;
+        config.band_indices = vec![1, 2];
+
+        let results = run_calculation(config);
+
+        assert_eq!(results.calculations.len(), 2);
+        assert!(results.window_optima.is_empty());
+        assert!(results.optima.is_empty());
+        assert!(!results.resonant_compromises.is_empty());
+    }
+
+    #[test]
+    fn run_calculation_non_resonant_mode() {
+        let mut config = AppConfig::default();
+        config.mode = CalcMode::NonResonant;
+        config.band_indices = vec![1, 2];
+        config.wire_min_m = 8.0;
+        config.wire_max_m = 35.0;
+
+        let results = run_calculation(config);
+
+        assert_eq!(results.calculations.len(), 2);
+        assert!(!results.window_optima.is_empty());
+        assert!(!results.optima.is_empty());
+        assert!(results.resonant_compromises.is_empty());
+    }
+
+    #[test]
+    fn run_calculation_stores_config() {
+        let mut config = AppConfig::default();
+        config.velocity_factor = 0.85;
+        config.mode = CalcMode::Resonant;
+
+        let results = run_calculation(config);
+
+        assert_eq!(results.config.velocity_factor, 0.85);
+        assert_eq!(results.config.mode, CalcMode::Resonant);
+    }
+
+    #[test]
+    fn app_config_default() {
+        let config = AppConfig::default();
+
+        assert_eq!(config.mode, CalcMode::Resonant);
+        assert_eq!(config.velocity_factor, 0.95);
+        assert_eq!(config.itu_region, ITURegion::Region1);
+        assert_eq!(config.transformer_ratio, TransformerRatio::R1To1);
+        assert_eq!(config.band_indices, vec![4, 5, 6, 7, 8, 9, 10]);
+    }
+
+    #[test]
+    fn calc_mode_enum_values() {
+        let resonant = CalcMode::Resonant;
+        let non_resonant = CalcMode::NonResonant;
+
+        assert!(resonant == CalcMode::Resonant);
+        assert!(non_resonant == CalcMode::NonResonant);
+        assert!(resonant != non_resonant);
+    }
+
+    #[test]
+    fn export_format_as_str() {
+        assert_eq!(ExportFormat::Csv.as_str(), "csv");
+        assert_eq!(ExportFormat::Json.as_str(), "json");
+        assert_eq!(ExportFormat::Markdown.as_str(), "markdown");
+        assert_eq!(ExportFormat::Txt.as_str(), "txt");
+    }
+
+    #[test]
+    fn unit_system_enum_values() {
+        let metric = UnitSystem::Metric;
+        let imperial = UnitSystem::Imperial;
+        let both = UnitSystem::Both;
+
+        assert!(metric == UnitSystem::Metric);
+        assert!(imperial == UnitSystem::Imperial);
+        assert!(both == UnitSystem::Both);
+    }
+
+    #[test]
+    fn run_calculation_multiple_regions() {
+        for region in &[ITURegion::Region1, ITURegion::Region2, ITURegion::Region3] {
+            let mut config = AppConfig::default();
+            config.itu_region = *region;
+            config.band_indices = vec![1, 2, 3];
+
+            let results = run_calculation(config);
+            assert!(!results.calculations.is_empty());
+        }
+    }
+
+    #[test]
+    fn run_calculation_all_transformer_ratios() {
+        for ratio in &[
+            TransformerRatio::R1To1,
+            TransformerRatio::R1To2,
+            TransformerRatio::R1To4,
+            TransformerRatio::R1To9,
+            TransformerRatio::R1To64,
+        ] {
+            let mut config = AppConfig::default();
+            config.transformer_ratio = *ratio;
+            config.band_indices = vec![1];
+
+            let results = run_calculation(config);
+            assert_eq!(results.calculations[0].transformer_ratio_label, ratio.as_label());
+        }
+    }
+
+    #[test]
+    fn run_calculation_velocity_factor_range() {
+        for vf in &[0.5, 0.75, 0.95, 1.0] {
+            let mut config = AppConfig::default();
+            config.velocity_factor = *vf;
+
+            let results = run_calculation(config);
+            assert_eq!(results.config.velocity_factor, *vf);
+        }
+    }
 }

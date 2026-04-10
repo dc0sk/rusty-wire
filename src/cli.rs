@@ -1231,3 +1231,235 @@ fn parse_unit_system(raw: &str) -> Result<UnitSystem, String> {
         _ => Err("--units must be m, ft, or both".to_string()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_band_list_valid() {
+        let result = parse_band_list("1,6,10").unwrap();
+        assert_eq!(result, vec![1, 6, 10]);
+    }
+
+    #[test]
+    fn parse_band_list_with_spaces() {
+        let result = parse_band_list("1, 6 , 10").unwrap();
+        assert_eq!(result, vec![1, 6, 10]);
+    }
+
+    #[test]
+    fn parse_band_list_single() {
+        let result = parse_band_list("5").unwrap();
+        assert_eq!(result, vec![5]);
+    }
+
+    #[test]
+    fn parse_band_list_empty_error() {
+        assert!(parse_band_list("").is_err());
+        assert!(parse_band_list(",,").is_err());
+    }
+
+    #[test]
+    fn parse_band_list_invalid_format() {
+        assert!(parse_band_list("abc").is_err());
+        assert!(parse_band_list("1,abc,3").is_err());
+    }
+
+    #[test]
+    fn parse_itu_region_valid() {
+        assert_eq!(parse_itu_region("1").unwrap(), ITURegion::Region1);
+        assert_eq!(parse_itu_region("2").unwrap(), ITURegion::Region2);
+        assert_eq!(parse_itu_region("3").unwrap(), ITURegion::Region3);
+    }
+
+    #[test]
+    fn parse_itu_region_invalid() {
+        assert!(parse_itu_region("0").is_err());
+        assert!(parse_itu_region("4").is_err());
+        assert!(parse_itu_region("abc").is_err());
+    }
+
+    #[test]
+    fn parse_transformer_ratio_colon_format() {
+        assert_eq!(
+            parse_transformer_ratio("1:1").unwrap(),
+            TransformerRatio::R1To1
+        );
+        assert_eq!(
+            parse_transformer_ratio("1:4").unwrap(),
+            TransformerRatio::R1To4
+        );
+        assert_eq!(
+            parse_transformer_ratio("1:64").unwrap(),
+            TransformerRatio::R1To64
+        );
+    }
+
+    #[test]
+    fn parse_transformer_ratio_numeric_format() {
+        assert_eq!(
+            parse_transformer_ratio("1").unwrap(),
+            TransformerRatio::R1To1
+        );
+        assert_eq!(
+            parse_transformer_ratio("9").unwrap(),
+            TransformerRatio::R1To9
+        );
+        assert_eq!(
+            parse_transformer_ratio("49").unwrap(),
+            TransformerRatio::R1To49
+        );
+    }
+
+    #[test]
+    fn parse_transformer_ratio_invalid() {
+        assert!(parse_transformer_ratio("1:3").is_err());
+        assert!(parse_transformer_ratio("99").is_err());
+        assert!(parse_transformer_ratio("invalid").is_err());
+    }
+
+    #[test]
+    fn parse_export_format_single() {
+        let result = parse_export_format_list("csv").unwrap();
+        assert_eq!(result, vec![ExportFormat::Csv]);
+    }
+
+    #[test]
+    fn parse_export_format_multiple() {
+        let result = parse_export_format_list("csv,json,markdown,txt").unwrap();
+        assert_eq!(result.len(), 4);
+        assert!(result.contains(&ExportFormat::Csv));
+        assert!(result.contains(&ExportFormat::Json));
+    }
+
+    #[test]
+    fn parse_export_format_deduplication() {
+        let result = parse_export_format_list("csv,json,csv").unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn parse_export_format_with_spaces() {
+        let result = parse_export_format_list(" csv , json ").unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn parse_export_format_case_insensitive() {
+        let result = parse_export_format_list("CSV,Json,MARKDOWN").unwrap();
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    fn parse_export_format_markdown_alias() {
+        let result = parse_export_format_list("md").unwrap();
+        assert_eq!(result, vec![ExportFormat::Markdown]);
+    }
+
+    #[test]
+    fn parse_export_format_invalid() {
+        assert!(parse_export_format_list("invalid").is_err());
+        assert!(parse_export_format_list("csv,invalid").is_err());
+    }
+
+    #[test]
+    fn parse_export_format_empty_error() {
+        assert!(parse_export_format_list("").is_err());
+        assert!(parse_export_format_list(",,").is_err());
+    }
+
+    #[test]
+    fn parse_calc_mode_resonant() {
+        assert_eq!(
+            parse_calc_mode("resonant").unwrap(),
+            CalcMode::Resonant
+        );
+        assert_eq!(
+            parse_calc_mode("RESONANT").unwrap(),
+            CalcMode::Resonant
+        );
+    }
+
+    #[test]
+    fn parse_calc_mode_non_resonant() {
+        assert_eq!(
+            parse_calc_mode("non-resonant").unwrap(),
+            CalcMode::NonResonant
+        );
+        assert_eq!(
+            parse_calc_mode("nonresonant").unwrap(),
+            CalcMode::NonResonant
+        );
+        assert_eq!(
+            parse_calc_mode("non_resonant").unwrap(),
+            CalcMode::NonResonant
+        );
+    }
+
+    #[test]
+    fn parse_calc_mode_invalid() {
+        assert!(parse_calc_mode("invalid").is_err());
+        assert!(parse_calc_mode("half-resonant").is_err());
+    }
+
+    #[test]
+    fn parse_unit_system_metric() {
+        assert_eq!(parse_unit_system("m").unwrap(), UnitSystem::Metric);
+        assert_eq!(parse_unit_system("metric").unwrap(), UnitSystem::Metric);
+        assert_eq!(parse_unit_system("M").unwrap(), UnitSystem::Metric);
+    }
+
+    #[test]
+    fn parse_unit_system_imperial() {
+        assert_eq!(parse_unit_system("ft").unwrap(), UnitSystem::Imperial);
+        assert_eq!(parse_unit_system("imperial").unwrap(), UnitSystem::Imperial);
+    }
+
+    #[test]
+    fn parse_unit_system_both() {
+        assert_eq!(parse_unit_system("both").unwrap(), UnitSystem::Both);
+        assert_eq!(parse_unit_system("BOTH").unwrap(), UnitSystem::Both);
+    }
+
+    #[test]
+    fn parse_unit_system_invalid() {
+        assert!(parse_unit_system("feet").is_err());
+        assert!(parse_unit_system("meters").is_err());
+        assert!(parse_unit_system("invalid").is_err());
+    }
+
+    #[test]
+    fn shell_quote_safe_characters() {
+        // Safe characters don't need quoting
+        assert_eq!(
+            shell_quote("bands-1.2.3/test"),
+            "bands-1.2.3/test"
+        );
+        assert_eq!(shell_quote("simple"), "simple");
+        assert_eq!(shell_quote("123"), "123");
+    }
+
+    #[test]
+    fn shell_quote_empty_string() {
+        assert_eq!(shell_quote(""), "''");
+    }
+
+    #[test]
+    fn shell_quote_with_spaces() {
+        let quoted = shell_quote("hello world");
+        assert!(quoted.starts_with('\'') && quoted.ends_with('\''));
+    }
+
+    #[test]
+    fn shell_quote_with_special_chars() {
+        let quoted = shell_quote("test@file$var");
+        assert!(quoted.starts_with('\'') && quoted.ends_with('\''));
+    }
+
+    #[test]
+    fn shell_quote_with_single_quote() {
+        let quoted = shell_quote("it's");
+        assert!(quoted.contains("'\\'"));
+    }
+}
