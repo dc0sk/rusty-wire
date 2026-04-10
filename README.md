@@ -14,10 +14,16 @@ See [docs/CHANGELOG.md](docs/CHANGELOG.md) for the full release history.
 cargo build --release
 ```
 
-### Run with defaults (interactive mode)
+### Show CLI help
 
 ```bash
 ./target/release/rusty-wire
+```
+
+### Run interactive mode
+
+```bash
+./target/release/rusty-wire --interactive
 ```
 
 ### Run from Cargo during development
@@ -37,25 +43,30 @@ cargo run -- [OPTIONS]
 - **Velocity factor control**: Adjust for different wire types and insulation
 - **Multiple export formats**: CSV, JSON, Markdown, plain text
 - **Unit system flexibility**: Metric-only, imperial-only, or both
-- **Interactive and CLI modes**: Choose your workflow
 - **ITU region support**: Region-aware amateur band ranges (default: Region 1)
 - **Band database**: Pre-configured ham and shortwave bands
 
 ## Documentation
 
 For comprehensive CLI documentation and examples, see [docs/cli-guide.md](docs/cli-guide.md).
+For test execution details, see [docs/testing.md](docs/testing.md).
+For module layout and system design, see [docs/architecture.md](docs/architecture.md).
 
 Key topics:
 - CLI usage and all options
+- Interactive mode via `--interactive`
 - ITU region selection (`--region 1|2|3`)
 - Resonant vs. non-resonant mode differences
 - Wire search window (non-resonant only)
 - Export format selection
 - Unit system input/output control
 - Multi-optima feature
-- Testing with the included test script
+- Testing with `cargo test` and the included shell scripts
+- Project architecture and module boundaries
 
 ## Testing
+
+For the full testing guide, including `cargo test` and all bundled regression scripts, see [docs/testing.md](docs/testing.md).
 
 Verify the multi-optima feature:
 
@@ -73,14 +84,15 @@ Verify ITU region band ranges:
 
 This script checks all listed band ranges for Regions 1, 2, and 3.
 
+Interactive mode is available explicitly via:
+
+```bash
+cargo run -- --interactive
+```
+
 ## Architecture
 
-- **src/main.rs**: Program entry point and mode dispatch
-- **src/cli.rs**: CLI interface, interactive prompts, display and export logic
-- **src/calculations.rs**: Core physics calculations and optimization algorithms
-- **src/bands.rs**: Region-aware band database and frequency ranges
-- **scripts/test-multi-optima.sh**: Empirical validation test for multi-optima feature
-- **scripts/test-itu-region-bands.sh**: Regression test for ITU region band ranges
+For a full architectural overview, see [docs/architecture.md](docs/architecture.md).
 
 ## Examples
 
