@@ -13,7 +13,7 @@ use crate::calculations::{
     calculate_average_max_distance, calculate_average_min_distance, TransformerRatio, WireCalculation,
     DEFAULT_NON_RESONANT_CONFIG,
 };
-use crate::export::{default_output_name, export_results};
+use crate::export::{default_output_name, export_results, validate_export_path};
 use std::io::{self, Write};
 
 // ---------------------------------------------------------------------------
@@ -141,6 +141,7 @@ fn run_non_interactive(opts: CliOptions) {
     }
 
     print_results(&results);
+    print_skipped_band_warnings(&results);
 
     let single_output = opts.output;
     let export_count = opts.export.len();
@@ -250,6 +251,7 @@ fn calculate_selected_bands(region: ITURegion) {
     }
 
     print_results(&results);
+    print_skipped_band_warnings(&results);
     print_equivalent_cli_call(&results.config, &[]);
     let export_choices = interactive_export_prompt(&results);
     if !export_choices.is_empty() {
@@ -303,6 +305,7 @@ fn quick_calculation(region: ITURegion) {
     }
 
     print_results(&results);
+    print_skipped_band_warnings(&results);
     print_equivalent_cli_call(&results.config, &[]);
     let export_choices = interactive_export_prompt(&results);
     if !export_choices.is_empty() {
@@ -859,15 +862,15 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
     };
     let mut cmd = format!(
         "rusty-wire --region {} --mode {} --bands {} --velocity {:.2} --transformer {} --units {}",
-        config.itu_region.short_name(),
-        match config.mode {
+        shell_quote(config.itu_region.short_name()),
+        shell_quote(match config.mode {
             CalcMode::Resonant => "resonant",
             CalcMode::NonResonant => "non-resonant",
-        },
-        bands_csv,
+        }),
+        shell_quote(&bands_csv),
         config.velocity_factor,
-        config.transformer_ratio.as_label(),
-        units_str,
+        shell_quote(config.transformer_ratio.as_label()),
+        shell_quote(units_str),
     );
 
     if config.mode == CalcMode::NonResonant {
@@ -883,14 +886,48 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
             .map(|(fmt, _)| fmt.as_str())
             .collect::<Vec<_>>()
             .join(",");
-        cmd.push_str(&format!(" --export {}", fmts));
+        cmd.push_str(&format!(" --export {}", shell_quote(&fmts)));
         if export_choices.len() == 1 {
-            cmd.push_str(&format!(" --output {}", export_choices[0].1));
+            cmd.push_str(&format!(" --output {}", shell_quote(&export_choices[0].1)));
         }
     }
 
     println!("Equivalent CLI call for this run:");
     println!("  {}\n", cmd);
+}
+
+fn print_skipped_band_warnings(results: &AppResults) {
+    if results.skipped_band_indices.is_empty() {
+        return;
+    }
+
+    let skipped = results
+        .skipped_band_indices
+        .iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!(
+        "Warning: the following band selections were invalid and skipped: {}\n",
+        skipped
+    );
+}
+
+fn shell_quote(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+
+    let safe = value.chars().all(|ch| match ch {
+        'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' | '/' => true,
+        _ => false,
+    });
+    if safe {
+        return value.to_string();
+    }
+
+    let escaped = value.replace('\'', "'\\''");
+    format!("'{}'", escaped)
 }
 
 fn format_calc(c: &WireCalculation, units: UnitSystem) -> String {
@@ -1005,6 +1042,8 @@ fn parse_cli_args(args: &[String]) -> Result<CliOptions, String> {
                 let value = args
                     .get(i)
                     .ok_or_else(|| "--output requires a value".to_string())?;
+                validate_export_path(value)
+                    .map_err(|e| format!("invalid --output: {}", e))?;
                 opts.output = Some(value.to_string());
             }
             "--wire-min" => {

@@ -117,7 +117,7 @@ Example regional differences currently modeled:
   - `json` — JSON format
   - `markdown` — Markdown table format
   - `txt` — Plain text table format
-- `--output <file>` — Output file path for exports (default: generates filename per format)
+- `--output <file>` — Output file path for exports (default: generates filename per format). Only relative file paths are accepted; absolute paths and parent-directory references (`..`) are rejected for safety.
 
 Exports also include resonant points within the active search window for each selected band.
 In resonant mode, non-resonant recommendation payloads are omitted from exports.

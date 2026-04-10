@@ -7,6 +7,7 @@ use crate::app::{ExportFormat, UnitSystem};
 use crate::calculations::{NonResonantRecommendation, WireCalculation};
 use std::fs;
 use std::io;
+use std::path::{Component, Path, PathBuf};
 
 // ---------------------------------------------------------------------------
 // File-name helpers
@@ -25,6 +26,48 @@ pub fn default_output_name(format: ExportFormat) -> &'static str {
 // File write
 // ---------------------------------------------------------------------------
 
+pub fn validate_export_path(output: &str) -> Result<PathBuf, String> {
+    let raw = output.trim();
+    if raw.is_empty() {
+        return Err("output path cannot be empty".to_string());
+    }
+
+    let path = Path::new(raw);
+    if path.is_absolute() {
+        return Err("absolute output paths are not permitted".to_string());
+    }
+
+    if path.components().any(|component| matches!(component, Component::ParentDir)) {
+        return Err("output path must not contain parent directory references ('..')".to_string());
+    }
+
+    if path.file_name().and_then(|name| name.to_str()).is_none() {
+        return Err("output path must end with a file name".to_string());
+    }
+
+    if path
+        .components()
+        .any(|component| matches!(component, Component::Normal(part) if part.to_string_lossy().contains('\0')))
+    {
+        return Err("output path contains invalid characters".to_string());
+    }
+
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => continue,
+            Component::Normal(part) => normalized.push(part),
+            _ => continue,
+        }
+    }
+
+    if normalized.as_os_str().is_empty() {
+        return Err("output path must end with a file name".to_string());
+    }
+
+    Ok(normalized)
+}
+
 pub fn export_results(
     format: ExportFormat,
     output: &str,
@@ -34,6 +77,14 @@ pub fn export_results(
     wire_min_m: f64,
     wire_max_m: f64,
 ) -> io::Result<()> {
+    let output_path = validate_export_path(output)
+        .map_err(|msg| io::Error::new(io::ErrorKind::InvalidInput, msg))?;
+    if let Some(parent) = output_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+
     let content = match format {
         ExportFormat::Csv => to_csv(calculations, recommendation, units, wire_min_m, wire_max_m),
         ExportFormat::Json => to_json(calculations, recommendation, units, wire_min_m, wire_max_m),
@@ -42,7 +93,7 @@ pub fn export_results(
         }
         ExportFormat::Txt => to_txt(calculations, recommendation, units, wire_min_m, wire_max_m),
     };
-    fs::write(output, content)
+    fs::write(output_path, content)
 }
 
 // ---------------------------------------------------------------------------
@@ -580,5 +631,45 @@ fn append_markdown_points_rows(
                 out.push_str("| (none) | - | - | - |\n");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::ExportFormat;
+
+    #[test]
+    fn validate_export_path_accepts_relative_paths() {
+        assert_eq!(validate_export_path("results.txt").unwrap(), PathBuf::from("results.txt"));
+        assert_eq!(validate_export_path("dir/sub/output.json").unwrap(), PathBuf::from("dir/sub/output.json"));
+    }
+
+    #[test]
+    fn validate_export_path_rejects_absolute_paths() {
+        assert!(validate_export_path("/tmp/output.txt").is_err());
+    }
+
+    #[test]
+    fn validate_export_path_rejects_parent_directory_references() {
+        assert!(validate_export_path("../evil.txt").is_err());
+        assert!(validate_export_path("dir/../evil.txt").is_err());
+    }
+
+    #[test]
+    fn export_results_rejects_invalid_output_path() {
+        let calculations: Vec<WireCalculation> = Vec::new();
+        let err = export_results(
+            ExportFormat::Txt,
+            "../evil.txt",
+            &calculations,
+            None,
+            UnitSystem::Metric,
+            8.0,
+            35.0,
+        )
+        .unwrap_err();
+
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
     }
 }
