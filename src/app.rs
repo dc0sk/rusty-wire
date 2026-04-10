@@ -103,6 +103,8 @@ pub struct AppResults {
     pub resonant_compromises: Vec<ResonantCompromise>,
     /// The configuration that produced these results.
     pub config: AppConfig,
+    /// Band indices that were invalid for the selected ITU region and skipped.
+    pub skipped_band_indices: Vec<usize>,
 }
 
 // ---------------------------------------------------------------------------
@@ -114,7 +116,7 @@ pub struct AppResults {
 /// This is a pure, I/O-free function suitable for use from both the CLI and
 /// any future GUI front-end.
 pub fn run_calculation(config: AppConfig) -> AppResults {
-    let calculations = build_calculations(
+    let (calculations, skipped_band_indices) = build_calculations(
         &config.band_indices,
         config.velocity_factor,
         config.itu_region,
@@ -155,6 +157,7 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
         window_optima,
         resonant_compromises,
         config,
+        skipped_band_indices,
     }
 }
 
@@ -167,18 +170,45 @@ fn build_calculations(
     velocity: f64,
     region: ITURegion,
     transformer_ratio: TransformerRatio,
-) -> Vec<WireCalculation> {
+) -> (Vec<WireCalculation>, Vec<usize>) {
     let mut calculations = Vec::new();
-    for idx in indices {
-        if let Some(band) = get_band_by_index_for_region(idx.saturating_sub(1), region) {
+    let mut skipped_band_indices = Vec::new();
+
+    for &idx in indices {
+        if idx == 0 {
+            skipped_band_indices.push(idx);
+            continue;
+        }
+
+        let band_index = idx - 1;
+        if let Some(band) = get_band_by_index_for_region(band_index, region) {
             calculations.push(calculate_for_band_with_velocity(
                 &band,
                 velocity,
                 transformer_ratio,
             ));
         } else {
-            eprintln!("Band {} not found in Region {}; skipped.", idx, region.short_name());
+            skipped_band_indices.push(idx);
         }
     }
-    calculations
+
+    (calculations, skipped_band_indices)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_calculation_skips_invalid_band_indices() {
+        let mut config = AppConfig::default();
+        config.band_indices = vec![0, 1, 100];
+        config.mode = CalcMode::Resonant;
+
+        let results = run_calculation(config);
+
+        assert_eq!(results.calculations.len(), 1);
+        assert_eq!(results.calculations[0].band_name, "160m");
+        assert_eq!(results.skipped_band_indices, vec![0, 100]);
+    }
 }

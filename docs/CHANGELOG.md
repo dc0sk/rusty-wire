@@ -9,6 +9,7 @@ All notable changes to Rusty Wire are documented here.
 
 ### Changed
 - **Non-resonant output detail**: output now distinguishes between local window optima and equal global optima, marking the selected recommendation in the local-optima list.
+- **Export security hardening**: export output paths are now validated to reject absolute paths and parent-directory traversal (`..`) before writing files.
 - **Documentation updates**: README and CLI guide now describe the new non-resonant search-window local-optima output.
 
 ## [1.2.0] - 2026-04-09
