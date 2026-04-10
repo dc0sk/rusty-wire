@@ -579,3 +579,242 @@ pub fn calculate_resonant_compromises(
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bands::Band;
+
+    fn sample_band() -> Band {
+        Band {
+            name: "20m",
+            band_type: crate::bands::BandType::HF,
+            freq_low_mhz: 14.0,
+            freq_high_mhz: 14.35,
+            freq_center_mhz: 14.175,
+            typical_skip_km: (150.0, 800.0),
+            regions: &[crate::bands::ITURegion::Region1],
+        }
+    }
+
+    #[test]
+    fn transformer_ratio_impedance_values() {
+        assert_eq!(TransformerRatio::R1To1.impedance_ratio(), 1.0);
+        assert_eq!(TransformerRatio::R1To2.impedance_ratio(), 2.0);
+        assert_eq!(TransformerRatio::R1To4.impedance_ratio(), 4.0);
+        assert_eq!(TransformerRatio::R1To9.impedance_ratio(), 9.0);
+        assert_eq!(TransformerRatio::R1To64.impedance_ratio(), 64.0);
+    }
+
+    #[test]
+    fn transformer_ratio_labels() {
+        assert_eq!(TransformerRatio::R1To1.as_label(), "1:1");
+        assert_eq!(TransformerRatio::R1To2.as_label(), "1:2");
+        assert_eq!(TransformerRatio::R1To16.as_label(), "1:16");
+    }
+
+    #[test]
+    fn transformer_ratio_parse_colon_format() {
+        assert_eq!(TransformerRatio::parse("1:1"), Some(TransformerRatio::R1To1));
+        assert_eq!(TransformerRatio::parse("1:2"), Some(TransformerRatio::R1To2));
+        assert_eq!(TransformerRatio::parse("1:64"), Some(TransformerRatio::R1To64));
+    }
+
+    #[test]
+    fn transformer_ratio_parse_numeric_format() {
+        assert_eq!(TransformerRatio::parse("1"), Some(TransformerRatio::R1To1));
+        assert_eq!(TransformerRatio::parse("4"), Some(TransformerRatio::R1To4));
+        assert_eq!(TransformerRatio::parse("64"), Some(TransformerRatio::R1To64));
+    }
+
+    #[test]
+    fn transformer_ratio_parse_invalid() {
+        assert_eq!(TransformerRatio::parse("invalid"), None);
+        assert_eq!(TransformerRatio::parse("1:3"), None);
+        assert_eq!(TransformerRatio::parse("99"), None);
+    }
+
+    #[test]
+    fn calculate_for_band_basic_lengths() {
+        let band = sample_band();
+        let result = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1);
+
+        assert_eq!(result.band_name, "20m");
+        assert_eq!(result.frequency_mhz, 14.175);
+        assert!(result.half_wave_m > 0.0);
+        assert!(result.full_wave_m > result.half_wave_m);
+        assert!(result.quarter_wave_m > 0.0);
+        assert!(result.quarter_wave_m < result.half_wave_m);
+    }
+
+    #[test]
+    fn calculate_for_band_velocity_factor_effect() {
+        let band = sample_band();
+        let slow = calculate_for_band_with_velocity(&band, 0.8, TransformerRatio::R1To1);
+        let fast = calculate_for_band_with_velocity(&band, 1.0, TransformerRatio::R1To1);
+
+        assert!(slow.half_wave_m < fast.half_wave_m);
+        assert!(slow.quarter_wave_m < fast.quarter_wave_m);
+    }
+
+    #[test]
+    fn calculate_for_band_unit_conversion() {
+        let band = sample_band();
+        let result = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1);
+
+        let m_to_ft = 3.28084;
+        assert!((result.half_wave_ft - result.half_wave_m * m_to_ft).abs() < 0.01);
+        assert!((result.full_wave_ft - result.full_wave_m * m_to_ft).abs() < 0.01);
+    }
+
+    #[test]
+    fn calculate_average_distances_empty() {
+        let empty: Vec<WireCalculation> = Vec::new();
+        assert_eq!(calculate_average_min_distance(&empty), 0.0);
+        assert_eq!(calculate_average_max_distance(&empty), 0.0);
+    }
+
+    #[test]
+    fn calculate_average_distances_single() {
+        let band = sample_band();
+        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1);
+
+        let avg_min = calculate_average_min_distance(&[calc.clone()]);
+        let avg_max = calculate_average_max_distance(&[calc.clone()]);
+
+        assert_eq!(avg_min, calc.skip_distance_min_km);
+        assert_eq!(avg_max, calc.skip_distance_max_km);
+    }
+
+    #[test]
+    fn calculate_average_distances_multiple() {
+        let band1 = sample_band();
+        let calc1 = calculate_for_band_with_velocity(&band1, 0.95, TransformerRatio::R1To1);
+
+        let mut band2 = sample_band();
+        band2.name = "10m";
+        band2.typical_skip_km = (250.0, 1200.0);
+        let calc2 = calculate_for_band_with_velocity(&band2, 0.95, TransformerRatio::R1To1);
+
+        let avg_min = calculate_average_min_distance(&[calc1.clone(), calc2.clone()]);
+        let avg_max = calculate_average_max_distance(&[calc1.clone(), calc2.clone()]);
+
+        assert_eq!(avg_min, (calc1.skip_distance_min_km + calc2.skip_distance_min_km) / 2.0);
+        assert_eq!(avg_max, (calc1.skip_distance_max_km + calc2.skip_distance_max_km) / 2.0);
+    }
+
+    #[test]
+    fn calculate_non_resonant_optima_empty() {
+        let empty: Vec<WireCalculation> = Vec::new();
+        let config = NonResonantSearchConfig {
+            min_len_m: 8.0,
+            max_len_m: 35.0,
+            step_m: 0.05,
+            preferred_center_m: 20.0,
+        };
+        let result = calculate_non_resonant_optima(&empty, 0.95, config);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn calculate_non_resonant_optima_invalid_config() {
+        let band = sample_band();
+        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1);
+
+        // Invalid config: min > max
+        let config = NonResonantSearchConfig {
+            min_len_m: 35.0,
+            max_len_m: 8.0,
+            step_m: 0.05,
+            preferred_center_m: 20.0,
+        };
+        let result = calculate_non_resonant_optima(&[calc], 0.95, config);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn calculate_non_resonant_optima_result_structure() {
+        let band = sample_band();
+        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1);
+
+        let config = NonResonantSearchConfig {
+            min_len_m: 8.0,
+            max_len_m: 35.0,
+            step_m: 0.05,
+            preferred_center_m: 20.0,
+        };
+        let result = calculate_non_resonant_optima(&[calc], 0.95, config);
+
+        assert!(!result.is_empty());
+        for rec in &result {
+            assert!(rec.length_m >= config.min_len_m);
+            assert!(rec.length_m <= config.max_len_m);
+            assert!(rec.min_resonance_clearance_pct > 0.0);
+        }
+    }
+
+    #[test]
+    fn calculate_best_non_resonant_length_empty() {
+        let empty: Vec<WireCalculation> = Vec::new();
+        let config = NonResonantSearchConfig {
+            min_len_m: 8.0,
+            max_len_m: 35.0,
+            step_m: 0.05,
+            preferred_center_m: 20.0,
+        };
+        let result = calculate_best_non_resonant_length(&empty, 0.95, config);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn calculate_best_non_resonant_length_from_optima() {
+        let band = sample_band();
+        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1);
+
+        let config = NonResonantSearchConfig {
+            min_len_m: 8.0,
+            max_len_m: 35.0,
+            step_m: 0.1,
+            preferred_center_m: 20.0,
+        };
+        let optima = calculate_non_resonant_optima(&[calc.clone()], 0.95, config);
+        let best = calculate_best_non_resonant_length(&[calc], 0.95, config).unwrap();
+
+        // Best recommendation should be one of the optima
+        assert!(optima.iter().any(|o| (o.length_m - best.length_m).abs() < 1e-6));
+    }
+
+    #[test]
+    fn calculate_resonant_compromises_empty() {
+        let empty: Vec<WireCalculation> = Vec::new();
+        let config = NonResonantSearchConfig {
+            min_len_m: 8.0,
+            max_len_m: 35.0,
+            step_m: 0.05,
+            preferred_center_m: 20.0,
+        };
+        let result = calculate_resonant_compromises(&empty, config);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn calculate_resonant_compromises_result_structure() {
+        let band = sample_band();
+        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1);
+
+        let config = NonResonantSearchConfig {
+            min_len_m: 8.0,
+            max_len_m: 35.0,
+            step_m: 0.2,
+            preferred_center_m: 20.0,
+        };
+        let result = calculate_resonant_compromises(&[calc], config);
+
+        assert!(!result.is_empty());
+        for comp in &result {
+            assert!(comp.length_m >= config.min_len_m);
+            assert!(comp.length_m <= config.max_len_m);
+            assert!(comp.worst_band_distance_m >= 0.0);
+        }
+    }
+}
