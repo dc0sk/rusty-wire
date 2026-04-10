@@ -122,6 +122,14 @@ pub struct WireCalculation {
     // First-batch derived antenna model lengths
     pub end_fed_half_wave_m: f64,
     pub end_fed_half_wave_ft: f64,
+    pub inverted_v_total_m: f64,
+    pub inverted_v_total_ft: f64,
+    pub inverted_v_leg_m: f64,
+    pub inverted_v_leg_ft: f64,
+    pub inverted_v_span_90_m: f64,
+    pub inverted_v_span_90_ft: f64,
+    pub inverted_v_span_120_m: f64,
+    pub inverted_v_span_120_ft: f64,
     pub full_wave_loop_circumference_m: f64,
     pub full_wave_loop_circumference_ft: f64,
     pub full_wave_loop_square_side_m: f64,
@@ -187,7 +195,7 @@ impl fmt::Display for WireCalculation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Full-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Quarter-wave: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  End-fed half-wave: {:.2}m ({:.2}ft)\n  Full-wave loop circumference: {:.2}m ({:.2}ft)\n  Full-wave loop square side: {:.2}m ({:.2}ft)\n  OCFD 33/67 legs: {:.2}m/{:.2}m ({:.2}ft/{:.2}ft)\n  OCFD 20/80 legs: {:.2}m/{:.2}m ({:.2}ft/{:.2}ft)\n  Skip distance: {:.0}-{:.0}km (avg: {:.0}km)",
+            "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Full-wave total: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  Quarter-wave: {:.2}m ({:.2}ft) [base: {:.2}m ({:.2}ft)]\n  End-fed half-wave: {:.2}m ({:.2}ft)\n  Inverted-V total: {:.2}m ({:.2}ft)\n  Inverted-V each leg: {:.2}m ({:.2}ft)\n  Inverted-V span at 90 deg apex: {:.2}m ({:.2}ft)\n  Inverted-V span at 120 deg apex: {:.2}m ({:.2}ft)\n  Full-wave loop circumference: {:.2}m ({:.2}ft)\n  Full-wave loop square side: {:.2}m ({:.2}ft)\n  OCFD 33/67 legs: {:.2}m/{:.2}m ({:.2}ft/{:.2}ft)\n  OCFD 20/80 legs: {:.2}m/{:.2}m ({:.2}ft/{:.2}ft)\n  Skip distance: {:.0}-{:.0}km (avg: {:.0}km)",
             self.band_name,
             self.frequency_mhz,
             self.transformer_ratio_label,
@@ -205,6 +213,14 @@ impl fmt::Display for WireCalculation {
             self.quarter_wave_ft,
             self.end_fed_half_wave_m,
             self.end_fed_half_wave_ft,
+            self.inverted_v_total_m,
+            self.inverted_v_total_ft,
+            self.inverted_v_leg_m,
+            self.inverted_v_leg_ft,
+            self.inverted_v_span_90_m,
+            self.inverted_v_span_90_ft,
+            self.inverted_v_span_120_m,
+            self.inverted_v_span_120_ft,
             self.full_wave_loop_circumference_m,
             self.full_wave_loop_circumference_ft,
             self.full_wave_loop_square_side_m,
@@ -259,6 +275,14 @@ pub fn calculate_for_band_with_velocity(
     let corrected_quarter_wave_m = corrected_quarter_wave_ft / METERS_TO_FEET;
     let end_fed_half_wave_ft = corrected_half_wave_ft;
     let end_fed_half_wave_m = corrected_half_wave_m;
+    let inverted_v_total_ft = corrected_half_wave_ft;
+    let inverted_v_total_m = corrected_half_wave_m;
+    let inverted_v_leg_ft = inverted_v_total_ft / 2.0;
+    let inverted_v_leg_m = inverted_v_total_m / 2.0;
+    let inverted_v_span_90_ft = inverted_v_leg_ft * std::f64::consts::SQRT_2;
+    let inverted_v_span_90_m = inverted_v_leg_m * std::f64::consts::SQRT_2;
+    let inverted_v_span_120_ft = inverted_v_leg_ft * 3.0_f64.sqrt();
+    let inverted_v_span_120_m = inverted_v_leg_m * 3.0_f64.sqrt();
     let full_wave_loop_circumference_ft = corrected_full_wave_ft;
     let full_wave_loop_circumference_m = corrected_full_wave_m;
     let full_wave_loop_square_side_ft = full_wave_loop_circumference_ft / 4.0;
@@ -295,6 +319,14 @@ pub fn calculate_for_band_with_velocity(
         corrected_quarter_wave_ft,
         end_fed_half_wave_m,
         end_fed_half_wave_ft,
+        inverted_v_total_m,
+        inverted_v_total_ft,
+        inverted_v_leg_m,
+        inverted_v_leg_ft,
+        inverted_v_span_90_m,
+        inverted_v_span_90_ft,
+        inverted_v_span_120_m,
+        inverted_v_span_120_ft,
         full_wave_loop_circumference_m,
         full_wave_loop_circumference_ft,
         full_wave_loop_square_side_m,
@@ -867,6 +899,10 @@ mod tests {
 
         assert!((result.end_fed_half_wave_m - result.corrected_half_wave_m).abs() < 1e-9);
         assert!((result.end_fed_half_wave_ft - result.corrected_half_wave_ft).abs() < 1e-9);
+        assert!((result.inverted_v_total_m - result.corrected_half_wave_m).abs() < 1e-9);
+        assert!((result.inverted_v_leg_m * 2.0 - result.inverted_v_total_m).abs() < 1e-9);
+        assert!((result.inverted_v_leg_ft * 2.0 - result.inverted_v_total_ft).abs() < 1e-9);
+        assert!(result.inverted_v_span_120_m > result.inverted_v_span_90_m);
         assert!(
             (result.full_wave_loop_circumference_m - result.corrected_full_wave_m).abs() < 1e-9
         );

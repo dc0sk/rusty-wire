@@ -109,6 +109,30 @@ fn single_export_uses_requested_output_name() {
 }
 
 #[test]
+fn exports_include_inverted_v_fields() {
+    let dir = temp_test_dir("inverted-v-export");
+    let output = binary()
+        .current_dir(&dir)
+        .args(["--bands", "4", "--units", "both", "--export", "csv,json"])
+        .output()
+        .expect("failed to run rusty-wire");
+
+    assert!(output.status.success());
+
+    let csv =
+        fs::read_to_string(dir.join("rusty-wire-results.csv")).expect("failed to read csv export");
+    let json = fs::read_to_string(dir.join("rusty-wire-results.json"))
+        .expect("failed to read json export");
+
+    assert!(csv.contains("inverted_v_total_m"));
+    assert!(csv.contains("inverted_v_span_90_ft"));
+    assert!(json.contains("\"inverted_v_total_m\""));
+    assert!(json.contains("\"inverted_v_span_120_ft\""));
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn default_antenna_mode_shows_all_models_per_band() {
     let output = binary()
         .args(["--bands", "4"])
@@ -121,6 +145,7 @@ fn default_antenna_mode_shows_all_models_per_band() {
     assert!(stdout.contains("Half-wave:"));
     assert!(stdout.contains("End-fed half-wave:"));
     assert!(stdout.contains("Full-wave loop circumference:"));
+    assert!(stdout.contains("Inverted-V total:"));
     assert!(stdout.contains("OCFD 33/67 legs:"));
 }
 
@@ -163,6 +188,28 @@ fn loop_antenna_mode_shows_loop_guidance_compromises() {
     ));
     assert!(stdout
         .contains("dipole-derived compromise lengths shown as tuner-assisted starting points"));
+}
+
+#[test]
+fn inverted_v_antenna_mode_shows_inverted_v_guidance_compromises() {
+    let output = binary()
+        .args(["--bands", "4", "--antenna", "inverted-v"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Antenna model: inverted-v dipole"));
+    assert!(stdout.contains("Inverted-V total:"));
+    assert!(stdout.contains("Inverted-V each leg:"));
+    assert!(stdout.contains("Inverted-V span at 90 deg apex:"));
+    assert!(stdout.contains("Inverted-V span at 120 deg apex:"));
+    assert!(!stdout.contains("Half-wave:"));
+    assert!(!stdout.contains("End-fed half-wave:"));
+    assert!(!stdout.contains("Full-wave loop circumference:"));
+    assert!(
+        stdout.contains("Closest combined compromises to resonant points (inverted-V guidance):")
+    );
 }
 
 #[test]

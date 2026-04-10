@@ -587,7 +587,7 @@ fn prompt_calc_mode() -> CalcMode {
 
 fn prompt_antenna_model() -> Option<AntennaModel> {
     print!(
-        "Antenna model: (d)ipole, (e)nd-fed half-wave, (l)oop, (o)ff-center-fed dipole, (a)ll [a]: "
+        "Antenna model: (d)ipole, (i)nverted-V, (e)nd-fed half-wave, (l)oop, (o)ff-center-fed dipole, (a)ll [a]: "
     );
     io::stdout().flush().expect("failed to flush stdout");
 
@@ -599,6 +599,7 @@ fn prompt_antenna_model() -> Option<AntennaModel> {
     match input.trim().to_ascii_lowercase().as_str() {
         "" | "a" | "all" => None,
         "d" | "dipole" => Some(AntennaModel::Dipole),
+        "i" | "inverted-v" | "inv-v" | "invertedv" | "invv" => Some(AntennaModel::InvertedVDipole),
         "e" | "efhw" | "end-fed" | "end-fed-half-wave" => Some(AntennaModel::EndFedHalfWave),
         "l" | "loop" | "full-wave-loop" => Some(AntennaModel::FullWaveLoop),
         "o" | "ocfd" | "off-center-fed" | "off-center-fed-dipole" | "windom" => {
@@ -937,6 +938,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
     if let Some(antenna_model) = config.antenna_model {
         let antenna = match antenna_model {
             AntennaModel::Dipole => "dipole",
+            AntennaModel::InvertedVDipole => "inverted-v",
             AntennaModel::EndFedHalfWave => "efhw",
             AntennaModel::FullWaveLoop => "loop",
             AntennaModel::OffCenterFedDipole => "ocfd",
@@ -1022,6 +1024,7 @@ fn print_results(results: &AppResults) {
         match results.config.antenna_model {
             None => "all",
             Some(AntennaModel::Dipole) => "dipole",
+            Some(AntennaModel::InvertedVDipole) => "inverted-v dipole",
             Some(AntennaModel::EndFedHalfWave) => "end-fed half-wave",
             Some(AntennaModel::FullWaveLoop) => "full-wave loop",
             Some(AntennaModel::OffCenterFedDipole) => "off-center-fed dipole",
@@ -1048,7 +1051,7 @@ fn print_results(results: &AppResults) {
         CalcMode::Resonant => {
             if matches!(
                 results.config.antenna_model,
-                None | Some(AntennaModel::Dipole)
+                None | Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole)
             ) {
                 print_resonant_points_in_window(results);
             }
@@ -1232,6 +1235,9 @@ fn print_non_resonant_recommendation(results: &AppResults) {
 fn print_resonant_compromises(results: &AppResults) {
     let compromises = &results.resonant_compromises;
     let heading = match results.config.antenna_model {
+        Some(AntennaModel::InvertedVDipole) => {
+            "Closest combined compromises to resonant points (inverted-V guidance):"
+        }
         Some(AntennaModel::EndFedHalfWave) => {
             "Closest combined compromises to resonant points (tuner-assisted EFHW guidance):"
         }
@@ -1426,6 +1432,19 @@ fn format_calc(
                 c.skip_distance_max_km,
                 c.skip_distance_avg_km,
             ),
+            Some(AntennaModel::InvertedVDipole) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Inverted-V total: {:.2} m\n  Inverted-V each leg: {:.2} m\n  Inverted-V span at 90 deg apex: {:.2} m\n  Inverted-V span at 120 deg apex: {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.inverted_v_total_m,
+                c.inverted_v_leg_m,
+                c.inverted_v_span_90_m,
+                c.inverted_v_span_120_m,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
             Some(AntennaModel::FullWaveLoop) => format!(
                 "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Full-wave loop circumference: {:.2} m\n  Full-wave loop square side: {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
                 c.band_name,
@@ -1451,13 +1470,17 @@ fn format_calc(
                 c.skip_distance_avg_km,
             ),
             None => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} m (base: {:.2} m)\n  Full-wave: {:.2} m (base: {:.2} m)\n  Quarter-wave: {:.2} m (base: {:.2} m)\n  End-fed half-wave: {:.2} m\n  Full-wave loop circumference: {:.2} m\n  Full-wave loop square side: {:.2} m\n  OCFD 33/67 legs: {:.2} m / {:.2} m\n  OCFD 20/80 legs: {:.2} m / {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} m (base: {:.2} m)\n  Full-wave: {:.2} m (base: {:.2} m)\n  Quarter-wave: {:.2} m (base: {:.2} m)\n  End-fed half-wave: {:.2} m\n  Inverted-V total: {:.2} m\n  Inverted-V each leg: {:.2} m\n  Inverted-V span at 90 deg apex: {:.2} m\n  Inverted-V span at 120 deg apex: {:.2} m\n  Full-wave loop circumference: {:.2} m\n  Full-wave loop square side: {:.2} m\n  OCFD 33/67 legs: {:.2} m / {:.2} m\n  OCFD 20/80 legs: {:.2} m / {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
                 c.band_name, c.frequency_mhz,
                 c.transformer_ratio_label,
                 c.corrected_half_wave_m, c.half_wave_m,
                 c.corrected_full_wave_m, c.full_wave_m,
                 c.corrected_quarter_wave_m, c.quarter_wave_m,
                 c.end_fed_half_wave_m,
+                c.inverted_v_total_m,
+                c.inverted_v_leg_m,
+                c.inverted_v_span_90_m,
+                c.inverted_v_span_120_m,
                 c.full_wave_loop_circumference_m,
                 c.full_wave_loop_square_side_m,
                 c.ocfd_33_short_leg_m,
@@ -1487,6 +1510,19 @@ fn format_calc(
                 c.skip_distance_max_km,
                 c.skip_distance_avg_km,
             ),
+            Some(AntennaModel::InvertedVDipole) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Inverted-V total: {:.2} ft\n  Inverted-V each leg: {:.2} ft\n  Inverted-V span at 90 deg apex: {:.2} ft\n  Inverted-V span at 120 deg apex: {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.inverted_v_total_ft,
+                c.inverted_v_leg_ft,
+                c.inverted_v_span_90_ft,
+                c.inverted_v_span_120_ft,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
             Some(AntennaModel::FullWaveLoop) => format!(
                 "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Full-wave loop circumference: {:.2} ft\n  Full-wave loop square side: {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
                 c.band_name,
@@ -1512,13 +1548,17 @@ fn format_calc(
                 c.skip_distance_avg_km,
             ),
             None => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} ft (base: {:.2} ft)\n  Full-wave: {:.2} ft (base: {:.2} ft)\n  Quarter-wave: {:.2} ft (base: {:.2} ft)\n  End-fed half-wave: {:.2} ft\n  Full-wave loop circumference: {:.2} ft\n  Full-wave loop square side: {:.2} ft\n  OCFD 33/67 legs: {:.2} ft / {:.2} ft\n  OCFD 20/80 legs: {:.2} ft / {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} ft (base: {:.2} ft)\n  Full-wave: {:.2} ft (base: {:.2} ft)\n  Quarter-wave: {:.2} ft (base: {:.2} ft)\n  End-fed half-wave: {:.2} ft\n  Inverted-V total: {:.2} ft\n  Inverted-V each leg: {:.2} ft\n  Inverted-V span at 90 deg apex: {:.2} ft\n  Inverted-V span at 120 deg apex: {:.2} ft\n  Full-wave loop circumference: {:.2} ft\n  Full-wave loop square side: {:.2} ft\n  OCFD 33/67 legs: {:.2} ft / {:.2} ft\n  OCFD 20/80 legs: {:.2} ft / {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
                 c.band_name, c.frequency_mhz,
                 c.transformer_ratio_label,
                 c.corrected_half_wave_ft, c.half_wave_ft,
                 c.corrected_full_wave_ft, c.full_wave_ft,
                 c.corrected_quarter_wave_ft, c.quarter_wave_ft,
                 c.end_fed_half_wave_ft,
+                c.inverted_v_total_ft,
+                c.inverted_v_leg_ft,
+                c.inverted_v_span_90_ft,
+                c.inverted_v_span_120_ft,
                 c.full_wave_loop_circumference_ft,
                 c.full_wave_loop_square_side_ft,
                 c.ocfd_33_short_leg_ft,
@@ -1557,6 +1597,23 @@ fn format_calc(
                 c.transformer_ratio_label,
                 c.end_fed_half_wave_m,
                 c.end_fed_half_wave_ft,
+                c.skip_distance_min_km,
+                c.skip_distance_max_km,
+                c.skip_distance_avg_km,
+            ),
+            Some(AntennaModel::InvertedVDipole) => format!(
+                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Inverted-V total: {:.2} m ({:.2} ft)\n  Inverted-V each leg: {:.2} m ({:.2} ft)\n  Inverted-V span at 90 deg apex: {:.2} m ({:.2} ft)\n  Inverted-V span at 120 deg apex: {:.2} m ({:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
+                c.band_name,
+                c.frequency_mhz,
+                c.transformer_ratio_label,
+                c.inverted_v_total_m,
+                c.inverted_v_total_ft,
+                c.inverted_v_leg_m,
+                c.inverted_v_leg_ft,
+                c.inverted_v_span_90_m,
+                c.inverted_v_span_90_ft,
+                c.inverted_v_span_120_m,
+                c.inverted_v_span_120_ft,
                 c.skip_distance_min_km,
                 c.skip_distance_max_km,
                 c.skip_distance_avg_km,
