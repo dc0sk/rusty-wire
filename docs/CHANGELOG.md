@@ -4,6 +4,8 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-04-10
+
 ### Changed
 - **CLI rewritten with clap**: replaced manual argument parsing with a clap-based parser. All flags and validation behaviour are unchanged; the new parser provides built-in `--help` output and type-safe argument handling.
 - **No-argument behavior changed**: running the binary without arguments now shows clap help instead of immediately starting an interactive or default calculation flow.
