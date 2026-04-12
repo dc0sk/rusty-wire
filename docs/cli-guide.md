@@ -179,7 +179,7 @@ Use CycloneDX from the helper script:
 
 Default tracked outputs are `sbom/rusty-wire.spdx.json` and `sbom/rusty-wire.cdx.json`.
 
-Pre-push workflow in this repository regenerates `sbom/rusty-wire.spdx.json` and expects it to be committed when it changes.
+Pre-push workflow in this repository regenerates `sbom/rusty-wire.spdx.json`; if it changes, the hook emits a warning (SPDX metadata fields are time-varying).
 
 ## Examples
 
