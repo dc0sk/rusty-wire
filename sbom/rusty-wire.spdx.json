@@ -1,13 +1,13 @@
 {
   "SPDXID": "SPDXRef-DOCUMENT",
   "creationInfo": {
-    "created": "2026-04-12T11:15:10Z",
+    "created": "2026-04-12T11:16:19Z",
     "creators": [
       "Tool: cargo-sbom-v0.10.0"
     ]
   },
   "dataLicense": "CC0-1.0",
-  "documentNamespace": "https://spdx.org/spdxdocs/rusty-wire-c77895db-d388-4fdb-9432-427020fe9e8b",
+  "documentNamespace": "https://spdx.org/spdxdocs/rusty-wire-8ea21f87-7aea-4947-9600-c8c29bd89dcc",
   "files": [
     {
       "SPDXID": "SPDXRef-File-rusty-wire",
@@ -27,92 +27,20 @@
   "name": "rusty-wire",
   "packages": [
     {
-      "SPDXID": "SPDXRef-Package-once--cell--polyfill-1.70.2",
-      "description": "Polyfill for `OnceCell` stdlib feature for use with older MSRVs",
+      "SPDXID": "SPDXRef-Package-anstyle-1.0.14",
+      "description": "ANSI text styling",
       "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
       "externalRefs": [
         {
           "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/once_cell_polyfill@1.70.2",
+          "referenceLocator": "pkg:cargo/anstyle@1.0.14",
           "referenceType": "purl"
         }
       ],
       "licenseConcluded": "MIT OR Apache-2.0",
       "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "once_cell_polyfill",
-      "versionInfo": "1.70.2"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-proc-macro2-1.0.106",
-      "description": "A substitute implementation of the compiler's `proc_macro` API to decouple token-based libraries from the procedural macro use case.",
-      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/proc-macro2@1.0.106",
-          "referenceType": "purl"
-        }
-      ],
-      "licenseConcluded": "MIT OR Apache-2.0",
-      "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "proc-macro2",
-      "versionInfo": "1.0.106"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-windows-link-0.2.1",
-      "description": "Linking for Windows",
-      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/windows-link@0.2.1",
-          "referenceType": "purl"
-        }
-      ],
-      "licenseConcluded": "MIT OR Apache-2.0",
-      "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "windows-link",
-      "versionInfo": "0.2.1"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-clap--lex-1.1.0",
-      "description": "Minimal, flexible command line parser",
-      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/clap_lex@1.1.0",
-          "referenceType": "purl"
-        }
-      ],
-      "licenseConcluded": "MIT OR Apache-2.0",
-      "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "clap_lex",
-      "versionInfo": "1.1.0"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-rusty-wire-1.5.2",
-      "downloadLocation": "NONE",
-      "licenseConcluded": "GPL-2.0-or-later",
-      "licenseDeclared": "GPL-2.0-or-later",
-      "name": "rusty-wire",
-      "versionInfo": "1.5.2"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-anstyle-parse-1.0.0",
-      "description": "Parse ANSI Style Escapes",
-      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/anstyle-parse@1.0.0",
-          "referenceType": "purl"
-        }
-      ],
-      "licenseConcluded": "MIT OR Apache-2.0",
-      "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "anstyle-parse",
-      "versionInfo": "1.0.0"
+      "name": "anstyle",
+      "versionInfo": "1.0.14"
     },
     {
       "SPDXID": "SPDXRef-Package-quote-1.0.45",
@@ -131,36 +59,180 @@
       "versionInfo": "1.0.45"
     },
     {
-      "SPDXID": "SPDXRef-Package-anstyle-1.0.14",
-      "description": "ANSI text styling",
+      "SPDXID": "SPDXRef-Package-once--cell--polyfill-1.70.2",
+      "description": "Polyfill for `OnceCell` stdlib feature for use with older MSRVs",
       "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
       "externalRefs": [
         {
           "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/anstyle@1.0.14",
+          "referenceLocator": "pkg:cargo/once_cell_polyfill@1.70.2",
           "referenceType": "purl"
         }
       ],
       "licenseConcluded": "MIT OR Apache-2.0",
       "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "anstyle",
-      "versionInfo": "1.0.14"
+      "name": "once_cell_polyfill",
+      "versionInfo": "1.70.2"
     },
     {
-      "SPDXID": "SPDXRef-Package-is--terminal--polyfill-1.70.2",
-      "description": "Polyfill for `is_terminal` stdlib feature for use with older MSRVs",
+      "SPDXID": "SPDXRef-Package-clap--lex-1.1.0",
+      "description": "Minimal, flexible command line parser",
       "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
       "externalRefs": [
         {
           "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/is_terminal_polyfill@1.70.2",
+          "referenceLocator": "pkg:cargo/clap_lex@1.1.0",
           "referenceType": "purl"
         }
       ],
       "licenseConcluded": "MIT OR Apache-2.0",
       "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "is_terminal_polyfill",
-      "versionInfo": "1.70.2"
+      "name": "clap_lex",
+      "versionInfo": "1.1.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-anstyle-query-1.1.5",
+      "description": "Look up colored console capabilities",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/anstyle-query@1.1.5",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "anstyle-query",
+      "versionInfo": "1.1.5"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-colorchoice-1.0.5",
+      "description": "Global override of color control",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/colorchoice@1.0.5",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "colorchoice",
+      "versionInfo": "1.0.5"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-proc-macro2-1.0.106",
+      "description": "A substitute implementation of the compiler's `proc_macro` API to decouple token-based libraries from the procedural macro use case.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/proc-macro2@1.0.106",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "proc-macro2",
+      "versionInfo": "1.0.106"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-clap--derive-4.6.0",
+      "description": "Parse command line argument by defining a struct, derive crate.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/clap_derive@4.6.0",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "clap_derive",
+      "versionInfo": "4.6.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-anstream-1.0.0",
+      "description": "IO stream adapters for writing colored text that will gracefully degrade according to your terminal's capabilities.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/anstream@1.0.0",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "anstream",
+      "versionInfo": "1.0.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-clap--builder-4.6.0",
+      "description": "A simple to use, efficient, and full-featured Command Line Argument Parser",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/clap_builder@4.6.0",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "clap_builder",
+      "versionInfo": "4.6.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-windows-link-0.2.1",
+      "description": "Linking for Windows",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/windows-link@0.2.1",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "windows-link",
+      "versionInfo": "0.2.1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-utf8parse-0.2.2",
+      "description": "Table-driven UTF-8 parser",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/utf8parse@0.2.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "Apache-2.0 OR MIT",
+      "licenseDeclared": "Apache-2.0 OR MIT",
+      "name": "utf8parse",
+      "versionInfo": "0.2.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-heck-0.5.0",
+      "description": "heck is a case conversion library.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/heck@0.5.0",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "heck",
+      "versionInfo": "0.5.0"
     },
     {
       "SPDXID": "SPDXRef-Package-syn-2.0.117",
@@ -195,132 +267,20 @@
       "versionInfo": "4.6.0"
     },
     {
-      "SPDXID": "SPDXRef-Package-utf8parse-0.2.2",
-      "description": "Table-driven UTF-8 parser",
+      "SPDXID": "SPDXRef-Package-anstyle-parse-1.0.0",
+      "description": "Parse ANSI Style Escapes",
       "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
       "externalRefs": [
         {
           "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/utf8parse@0.2.2",
-          "referenceType": "purl"
-        }
-      ],
-      "licenseConcluded": "Apache-2.0 OR MIT",
-      "licenseDeclared": "Apache-2.0 OR MIT",
-      "name": "utf8parse",
-      "versionInfo": "0.2.2"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-anstyle-query-1.1.5",
-      "description": "Look up colored console capabilities",
-      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/anstyle-query@1.1.5",
+          "referenceLocator": "pkg:cargo/anstyle-parse@1.0.0",
           "referenceType": "purl"
         }
       ],
       "licenseConcluded": "MIT OR Apache-2.0",
       "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "anstyle-query",
-      "versionInfo": "1.1.5"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-anstream-1.0.0",
-      "description": "IO stream adapters for writing colored text that will gracefully degrade according to your terminal's capabilities.",
-      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/anstream@1.0.0",
-          "referenceType": "purl"
-        }
-      ],
-      "licenseConcluded": "MIT OR Apache-2.0",
-      "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "anstream",
+      "name": "anstyle-parse",
       "versionInfo": "1.0.0"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-windows-sys-0.61.2",
-      "description": "Rust for Windows",
-      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/windows-sys@0.61.2",
-          "referenceType": "purl"
-        }
-      ],
-      "licenseConcluded": "MIT OR Apache-2.0",
-      "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "windows-sys",
-      "versionInfo": "0.61.2"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-clap--derive-4.6.0",
-      "description": "Parse command line argument by defining a struct, derive crate.",
-      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/clap_derive@4.6.0",
-          "referenceType": "purl"
-        }
-      ],
-      "licenseConcluded": "MIT OR Apache-2.0",
-      "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "clap_derive",
-      "versionInfo": "4.6.0"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-clap--builder-4.6.0",
-      "description": "A simple to use, efficient, and full-featured Command Line Argument Parser",
-      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/clap_builder@4.6.0",
-          "referenceType": "purl"
-        }
-      ],
-      "licenseConcluded": "MIT OR Apache-2.0",
-      "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "clap_builder",
-      "versionInfo": "4.6.0"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-colorchoice-1.0.5",
-      "description": "Global override of color control",
-      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/colorchoice@1.0.5",
-          "referenceType": "purl"
-        }
-      ],
-      "licenseConcluded": "MIT OR Apache-2.0",
-      "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "colorchoice",
-      "versionInfo": "1.0.5"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-anstyle-wincon-3.0.11",
-      "description": "Styling legacy Windows terminals",
-      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/anstyle-wincon@3.0.11",
-          "referenceType": "purl"
-        }
-      ],
-      "licenseConcluded": "MIT OR Apache-2.0",
-      "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "anstyle-wincon",
-      "versionInfo": "3.0.11"
     },
     {
       "SPDXID": "SPDXRef-Package-unicode-ident-1.0.24",
@@ -339,6 +299,62 @@
       "versionInfo": "1.0.24"
     },
     {
+      "SPDXID": "SPDXRef-Package-windows-sys-0.61.2",
+      "description": "Rust for Windows",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/windows-sys@0.61.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "windows-sys",
+      "versionInfo": "0.61.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-rusty-wire-1.5.2",
+      "downloadLocation": "NONE",
+      "licenseConcluded": "GPL-2.0-or-later",
+      "licenseDeclared": "GPL-2.0-or-later",
+      "name": "rusty-wire",
+      "versionInfo": "1.5.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-anstyle-wincon-3.0.11",
+      "description": "Styling legacy Windows terminals",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/anstyle-wincon@3.0.11",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "anstyle-wincon",
+      "versionInfo": "3.0.11"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-is--terminal--polyfill-1.70.2",
+      "description": "Polyfill for `is_terminal` stdlib feature for use with older MSRVs",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/is_terminal_polyfill@1.70.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "is_terminal_polyfill",
+      "versionInfo": "1.70.2"
+    },
+    {
       "SPDXID": "SPDXRef-Package-strsim-0.11.1",
       "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein,\nOSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and Sørensen-Dice.\n",
       "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
@@ -354,37 +370,11 @@
       "licenseDeclared": "MIT",
       "name": "strsim",
       "versionInfo": "0.11.1"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-heck-0.5.0",
-      "description": "heck is a case conversion library.",
-      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceLocator": "pkg:cargo/heck@0.5.0",
-          "referenceType": "purl"
-        }
-      ],
-      "licenseConcluded": "MIT OR Apache-2.0",
-      "licenseDeclared": "MIT OR Apache-2.0",
-      "name": "heck",
-      "versionInfo": "0.5.0"
     }
   ],
   "relationships": [
     {
-      "relatedSpdxElement": "SPDXRef-Package-syn-2.0.117",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-clap--derive-4.6.0"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-anstyle-1.0.14",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-anstyle-wincon-3.0.11"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-clap--derive-4.6.0",
+      "relatedSpdxElement": "SPDXRef-Package-clap--builder-4.6.0",
       "relationshipType": "DEPENDS_ON",
       "spdxElementId": "SPDXRef-Package-clap-4.6.0"
     },
@@ -394,44 +384,19 @@
       "spdxElementId": "SPDXRef-Package-clap--builder-4.6.0"
     },
     {
-      "relatedSpdxElement": "SPDXRef-Package-clap--lex-1.1.0",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-clap--builder-4.6.0"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-clap-4.6.0",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-rusty-wire-1.5.2"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-utf8parse-0.2.2",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-is--terminal--polyfill-1.70.2",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-unicode-ident-1.0.24",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-proc-macro2-1.0.106"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-utf8parse-0.2.2",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-anstyle-parse-1.0.0"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-heck-0.5.0",
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.106",
       "relationshipType": "DEPENDS_ON",
       "spdxElementId": "SPDXRef-Package-clap--derive-4.6.0"
     },
     {
-      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-1.5.2",
-      "relationshipType": "GENERATED_FROM",
-      "spdxElementId": "SPDXRef-File-rusty-wire"
+      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.45",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-syn-2.0.117"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.106",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-syn-2.0.117"
     },
     {
       "relatedSpdxElement": "SPDXRef-Package-anstyle-parse-1.0.0",
@@ -439,29 +404,9 @@
       "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
     },
     {
-      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.106",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-quote-1.0.45"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-strsim-0.11.1",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-clap--builder-4.6.0"
-    },
-    {
       "relatedSpdxElement": "SPDXRef-Package-anstyle-1.0.14",
       "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-clap--builder-4.6.0"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-clap--builder-4.6.0",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-clap-4.6.0"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-windows-sys-0.61.2",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-anstyle-wincon-3.0.11"
+      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
     },
     {
       "relatedSpdxElement": "SPDXRef-Package-windows-link-0.2.1",
@@ -469,34 +414,9 @@
       "spdxElementId": "SPDXRef-Package-windows-sys-0.61.2"
     },
     {
-      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.45",
+      "relatedSpdxElement": "SPDXRef-Package-once--cell--polyfill-1.70.2",
       "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-syn-2.0.117"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-anstyle-wincon-3.0.11",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-windows-sys-0.61.2",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-anstyle-query-1.1.5"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-colorchoice-1.0.5",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.106",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-clap--derive-4.6.0"
-    },
-    {
-      "relatedSpdxElement": "SPDXRef-Package-anstyle-1.0.14",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
+      "spdxElementId": "SPDXRef-Package-anstyle-wincon-3.0.11"
     },
     {
       "relatedSpdxElement": "SPDXRef-Package-anstyle-query-1.1.5",
@@ -504,17 +424,47 @@
       "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
     },
     {
-      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.106",
-      "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-syn-2.0.117"
+      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-1.5.2",
+      "relationshipType": "GENERATED_FROM",
+      "spdxElementId": "SPDXRef-File-rusty-wire"
     },
     {
-      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.45",
+      "relatedSpdxElement": "SPDXRef-File-rusty-wire",
+      "relationshipType": "DESCRIBES",
+      "spdxElementId": "SPDXRef-DOCUMENT"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.106",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-quote-1.0.45"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-utf8parse-0.2.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-anstyle-1.0.14",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--builder-4.6.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-clap--derive-4.6.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap-4.6.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-strsim-0.11.1",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--builder-4.6.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-heck-0.5.0",
       "relationshipType": "DEPENDS_ON",
       "spdxElementId": "SPDXRef-Package-clap--derive-4.6.0"
     },
     {
-      "relatedSpdxElement": "SPDXRef-Package-once--cell--polyfill-1.70.2",
+      "relatedSpdxElement": "SPDXRef-Package-windows-sys-0.61.2",
       "relationshipType": "DEPENDS_ON",
       "spdxElementId": "SPDXRef-Package-anstyle-wincon-3.0.11"
     },
@@ -524,9 +474,59 @@
       "spdxElementId": "SPDXRef-Package-syn-2.0.117"
     },
     {
-      "relatedSpdxElement": "SPDXRef-File-rusty-wire",
-      "relationshipType": "DESCRIBES",
-      "spdxElementId": "SPDXRef-DOCUMENT"
+      "relatedSpdxElement": "SPDXRef-Package-colorchoice-1.0.5",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.45",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--derive-4.6.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-clap-4.6.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-rusty-wire-1.5.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-anstyle-1.0.14",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstyle-wincon-3.0.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-utf8parse-0.2.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstyle-parse-1.0.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-windows-sys-0.61.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstyle-query-1.1.5"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-is--terminal--polyfill-1.70.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-clap--lex-1.1.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--builder-4.6.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-syn-2.0.117",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-clap--derive-4.6.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-unicode-ident-1.0.24",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-proc-macro2-1.0.106"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-anstyle-wincon-3.0.11",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-anstream-1.0.0"
     }
   ],
   "spdxVersion": "SPDX-2.3"
