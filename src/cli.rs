@@ -15,7 +15,7 @@ use crate::calculations::{
 };
 use crate::export::{default_output_name, export_results, validate_export_path};
 use clap::Parser;
-use std::io::{self, Write};
+use std::io::{self, BufRead, Write};
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing with clap
@@ -354,64 +354,89 @@ pub fn run_from_args(args: &[String]) {
 // ---------------------------------------------------------------------------
 
 pub fn run_interactive() {
-    println!("============================================================");
-    println!(
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let mut input = stdin.lock();
+    let mut output = stdout.lock();
+    run_interactive_with_io(&mut input, &mut output);
+}
+
+fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
+    writeln!(
+        output,
+        "============================================================"
+    )
+    .expect("failed to write interactive banner");
+    writeln!(
+        output,
         "Rusty Wire v{} - Resonant Length and Skip Distance Calculator",
         env!("CARGO_PKG_VERSION")
-    );
-    println!("============================================================\n");
+    )
+    .expect("failed to write interactive banner");
+    writeln!(
+        output,
+        "============================================================\n"
+    )
+    .expect("failed to write interactive banner");
 
-    let mut itu_region = prompt_itu_region();
+    let mut itu_region = prompt_itu_region(input, output);
 
     loop {
-        println!("Menu:");
-        println!(
+        writeln!(output, "Menu:").expect("failed to write menu");
+        writeln!(
+            output,
             "  1) List all bands (for Region {})",
             itu_region.short_name()
-        );
-        println!("  2) Calculate selected bands");
-        println!("  3) Quick single-band calculation");
-        println!("  4) Change ITU Region");
-        println!("  5) Exit");
-        print!("\nSelect option (1-5): ");
-        io::stdout().flush().expect("failed to flush stdout");
+        )
+        .expect("failed to write menu");
+        writeln!(output, "  2) Calculate selected bands").expect("failed to write menu");
+        writeln!(output, "  3) Quick single-band calculation").expect("failed to write menu");
+        writeln!(output, "  4) Change ITU Region").expect("failed to write menu");
+        writeln!(output, "  5) Exit").expect("failed to write menu");
+        prompt(output, "\nSelect option (1-5): ");
 
-        let mut choice = String::new();
-        io::stdin()
-            .read_line(&mut choice)
-            .expect("failed to read choice");
+        let choice = read_line(input, "failed to read choice");
+        if choice.is_empty() {
+            writeln!(output, "Exiting Rusty Wire.").expect("failed to write exit message");
+            break;
+        }
 
         match choice.trim() {
-            "1" => show_all_bands_for_region(itu_region),
-            "2" => calculate_selected_bands(itu_region),
-            "3" => quick_calculation(itu_region),
+            "1" => show_all_bands_for_region_to_writer(output, itu_region),
+            "2" => calculate_selected_bands(input, output, itu_region),
+            "3" => quick_calculation(input, output, itu_region),
             "4" => {
-                itu_region = prompt_itu_region();
-                println!("Switched to ITU Region {}.\n", itu_region.short_name());
+                itu_region = prompt_itu_region(input, output);
+                writeln!(
+                    output,
+                    "Switched to ITU Region {}.\n",
+                    itu_region.short_name()
+                )
+                .expect("failed to write region update");
             }
             "5" => {
-                println!("Exiting Rusty Wire.");
+                writeln!(output, "Exiting Rusty Wire.").expect("failed to write exit message");
                 break;
             }
-            _ => println!("Invalid option. Try again.\n"),
+            _ => writeln!(output, "Invalid option. Try again.\n")
+                .expect("failed to write invalid option message"),
         }
     }
 }
 
-fn calculate_selected_bands(region: ITURegion) {
-    show_all_bands_for_region(region);
-    print!("Enter band numbers separated by commas (Enter for default 4,5,6,7,8,9,10): ");
-    io::stdout().flush().expect("failed to flush stdout");
+fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, region: ITURegion) {
+    show_all_bands_for_region_to_writer(output, region);
+    prompt(
+        output,
+        "Enter band numbers separated by commas (Enter for default 4,5,6,7,8,9,10): ",
+    );
 
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("failed to read selection");
+    let band_input = read_line(input, "failed to read selection");
 
-    let indices = if input.trim().is_empty() {
+    let indices = if band_input.trim().is_empty() {
         DEFAULT_BAND_SELECTION.to_vec()
     } else {
-        let parsed: Result<Vec<usize>, _> = input
+        let parsed: Result<Vec<usize>, _> = band_input
             .trim()
             .split(',')
             .filter(|s| !s.trim().is_empty())
@@ -421,18 +446,19 @@ fn calculate_selected_bands(region: ITURegion) {
         match parsed {
             Ok(v) if !v.is_empty() => v,
             _ => {
-                println!("Invalid input. Use comma-separated numbers.\n");
+                writeln!(output, "Invalid input. Use comma-separated numbers.\n")
+                    .expect("failed to write invalid band selection message");
                 return;
             }
         }
     };
 
-    let mode = prompt_calc_mode();
-    let antenna_model = prompt_antenna_model();
-    let velocity = prompt_velocity_factor();
-    let transformer_ratio = prompt_transformer_ratio();
+    let mode = prompt_calc_mode(input, output);
+    let antenna_model = prompt_antenna_model(input, output);
+    let velocity = prompt_velocity_factor(input, output);
+    let transformer_ratio = prompt_transformer_ratio(input, output);
     let (wire_min_m, wire_max_m, auto_units) = if mode == CalcMode::NonResonant {
-        prompt_wire_length_window()
+        prompt_wire_length_window(input, output)
     } else {
         (
             DEFAULT_NON_RESONANT_CONFIG.min_len_m,
@@ -440,7 +466,7 @@ fn calculate_selected_bands(region: ITURegion) {
             UnitSystem::Both,
         )
     };
-    let units = prompt_display_units(auto_units);
+    let units = prompt_display_units(input, output, auto_units);
 
     let config = AppConfig {
         band_indices: indices,
@@ -456,43 +482,40 @@ fn calculate_selected_bands(region: ITURegion) {
 
     let results = run_calculation(config);
     if results.calculations.is_empty() {
-        println!("No valid bands selected.\n");
+        writeln!(output, "No valid bands selected.\n")
+            .expect("failed to write empty result message");
         return;
     }
 
     print_results(&results);
     print_skipped_band_warnings(&results);
     print_equivalent_cli_call(&results.config, &[]);
-    let export_choices = interactive_export_prompt(&results);
+    let export_choices = interactive_export_prompt(input, output, &results);
     if !export_choices.is_empty() {
         print_equivalent_cli_call(&results.config, &export_choices);
     }
 }
 
-fn quick_calculation(region: ITURegion) {
-    show_all_bands_for_region(region);
-    print!("Enter one band number: ");
-    io::stdout().flush().expect("failed to flush stdout");
+fn quick_calculation(input: &mut dyn BufRead, output: &mut dyn Write, region: ITURegion) {
+    show_all_bands_for_region_to_writer(output, region);
+    prompt(output, "Enter one band number: ");
 
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("failed to read selection");
+    let band_input = read_line(input, "failed to read selection");
 
-    let idx = match input.trim().parse::<usize>() {
+    let idx = match band_input.trim().parse::<usize>() {
         Ok(v) => v,
         Err(_) => {
-            println!("Invalid number.\n");
+            writeln!(output, "Invalid number.\n").expect("failed to write invalid number message");
             return;
         }
     };
 
-    let mode = prompt_calc_mode();
-    let antenna_model = prompt_antenna_model();
-    let velocity = prompt_velocity_factor();
-    let transformer_ratio = prompt_transformer_ratio();
+    let mode = prompt_calc_mode(input, output);
+    let antenna_model = prompt_antenna_model(input, output);
+    let velocity = prompt_velocity_factor(input, output);
+    let transformer_ratio = prompt_transformer_ratio(input, output);
     let (wire_min_m, wire_max_m, auto_units) = if mode == CalcMode::NonResonant {
-        prompt_wire_length_window()
+        prompt_wire_length_window(input, output)
     } else {
         (
             DEFAULT_NON_RESONANT_CONFIG.min_len_m,
@@ -500,7 +523,7 @@ fn quick_calculation(region: ITURegion) {
             UnitSystem::Both,
         )
     };
-    let units = prompt_display_units(auto_units);
+    let units = prompt_display_units(input, output, auto_units);
 
     let config = AppConfig {
         band_indices: vec![idx],
@@ -516,87 +539,87 @@ fn quick_calculation(region: ITURegion) {
 
     let results = run_calculation(config);
     if results.calculations.is_empty() {
-        println!("Band not found.\n");
+        writeln!(output, "Band not found.\n").expect("failed to write band not found message");
         return;
     }
 
     print_results(&results);
     print_skipped_band_warnings(&results);
     print_equivalent_cli_call(&results.config, &[]);
-    let export_choices = interactive_export_prompt(&results);
+    let export_choices = interactive_export_prompt(input, output, &results);
     if !export_choices.is_empty() {
         print_equivalent_cli_call(&results.config, &export_choices);
     }
 }
 
-fn prompt_itu_region() -> ITURegion {
-    println!("\nITU Regions:");
+fn prompt_itu_region(input: &mut dyn BufRead, output: &mut dyn Write) -> ITURegion {
+    writeln!(output, "\nITU Regions:").expect("failed to write region header");
     for region in ALL_REGIONS {
         let is_default = *region == DEFAULT_ITU_REGION;
         let default_str = if is_default { " (default)" } else { "" };
-        println!(
+        writeln!(
+            output,
             "  {}) Region {}{}",
             region.short_name(),
             region.long_name(),
             default_str
-        );
+        )
+        .expect("failed to write region option");
     }
-    print!(
-        "Select region (1/2/3, Enter for {}): ",
-        DEFAULT_ITU_REGION.short_name()
+    prompt(
+        output,
+        &format!(
+            "Select region (1/2/3, Enter for {}): ",
+            DEFAULT_ITU_REGION.short_name()
+        ),
     );
-    io::stdout().flush().expect("failed to flush stdout");
 
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("failed to read region");
+    let region_input = read_line(input, "failed to read region");
 
-    match input.trim() {
+    match region_input.trim() {
         "" | "1" => ITURegion::Region1,
         "2" => ITURegion::Region2,
         "3" => ITURegion::Region3,
         _ => {
-            println!(
+            writeln!(
+                output,
                 "Invalid region. Using default Region {}.",
                 DEFAULT_ITU_REGION.short_name()
-            );
+            )
+            .expect("failed to write invalid region message");
             DEFAULT_ITU_REGION
         }
     }
 }
 
-fn prompt_calc_mode() -> CalcMode {
-    print!("Calculation mode (resonant/non-resonant, Enter for resonant): ");
-    io::stdout().flush().expect("failed to flush stdout");
+fn prompt_calc_mode(input: &mut dyn BufRead, output: &mut dyn Write) -> CalcMode {
+    prompt(
+        output,
+        "Calculation mode (resonant/non-resonant, Enter for resonant): ",
+    );
 
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("failed to read calculation mode");
+    let mode_input = read_line(input, "failed to read calculation mode");
 
-    match input.trim().to_ascii_lowercase().as_str() {
+    match mode_input.trim().to_ascii_lowercase().as_str() {
         "" | "resonant" => CalcMode::Resonant,
         "non-resonant" | "nonresonant" | "non_resonant" => CalcMode::NonResonant,
         _ => {
-            println!("Unknown mode. Using resonant.");
+            writeln!(output, "Unknown mode. Using resonant.")
+                .expect("failed to write invalid mode message");
             CalcMode::Resonant
         }
     }
 }
 
-fn prompt_antenna_model() -> Option<AntennaModel> {
-    print!(
+fn prompt_antenna_model(input: &mut dyn BufRead, output: &mut dyn Write) -> Option<AntennaModel> {
+    prompt(
+        output,
         "Antenna model: (d)ipole, (i)nverted-V, (e)nd-fed half-wave, (l)oop, (o)ff-center-fed dipole, (a)ll [a]: "
     );
-    io::stdout().flush().expect("failed to flush stdout");
 
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("failed to read antenna model");
+    let antenna_input = read_line(input, "failed to read antenna model");
 
-    match input.trim().to_ascii_lowercase().as_str() {
+    match antenna_input.trim().to_ascii_lowercase().as_str() {
         "" | "a" | "all" => None,
         "d" | "dipole" => Some(AntennaModel::Dipole),
         "i" | "inverted-v" | "inv-v" | "invertedv" | "invv" => Some(AntennaModel::InvertedVDipole),
@@ -606,25 +629,28 @@ fn prompt_antenna_model() -> Option<AntennaModel> {
             Some(AntennaModel::OffCenterFedDipole)
         }
         _ => {
-            println!("Unknown antenna model. Showing all models per band.");
+            writeln!(
+                output,
+                "Unknown antenna model. Showing all models per band."
+            )
+            .expect("failed to write invalid antenna model message");
             None
         }
     }
 }
 
-fn prompt_transformer_ratio() -> TransformerRatio {
-    print!(
-        "Unun/Balun ratio (1:1,1:2,1:4,1:5,1:6,1:9,1:16,1:49,1:56,1:64; Enter for {}): ",
-        DEFAULT_TRANSFORMER_RATIO.as_label()
+fn prompt_transformer_ratio(input: &mut dyn BufRead, output: &mut dyn Write) -> TransformerRatio {
+    prompt(
+        output,
+        &format!(
+            "Unun/Balun ratio (1:1,1:2,1:4,1:5,1:6,1:9,1:16,1:49,1:56,1:64; Enter for {}): ",
+            DEFAULT_TRANSFORMER_RATIO.as_label()
+        ),
     );
-    io::stdout().flush().expect("failed to flush stdout");
 
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("failed to read transformer ratio");
+    let ratio_input = read_line(input, "failed to read transformer ratio");
 
-    let trimmed = input.trim();
+    let trimmed = ratio_input.trim();
     if trimmed.is_empty() {
         return DEFAULT_TRANSFORMER_RATIO;
     }
@@ -632,24 +658,22 @@ fn prompt_transformer_ratio() -> TransformerRatio {
     match TransformerRatio::parse(trimmed) {
         Some(r) => r,
         None => {
-            println!(
+            writeln!(
+                output,
                 "Unknown ratio. Using default {}.",
                 DEFAULT_TRANSFORMER_RATIO.as_label()
-            );
+            )
+            .expect("failed to write invalid ratio message");
             DEFAULT_TRANSFORMER_RATIO
         }
     }
 }
 
-fn prompt_velocity_factor() -> f64 {
-    print!("Velocity factor (0.50-1.00, Enter for 0.95): ");
-    io::stdout().flush().expect("failed to flush stdout");
+fn prompt_velocity_factor(input: &mut dyn BufRead, output: &mut dyn Write) -> f64 {
+    prompt(output, "Velocity factor (0.50-1.00, Enter for 0.95): ");
 
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("failed to read velocity factor");
-    let trimmed = input.trim();
+    let velocity_input = read_line(input, "failed to read velocity factor");
+    let trimmed = velocity_input.trim();
     if trimmed.is_empty() {
         return 0.95;
     }
@@ -657,45 +681,46 @@ fn prompt_velocity_factor() -> f64 {
     match trimmed.parse::<f64>() {
         Ok(vf) if (0.5..=1.0).contains(&vf) => vf,
         _ => {
-            println!("Invalid value. Using default 0.95.");
+            writeln!(output, "Invalid value. Using default 0.95.")
+                .expect("failed to write invalid velocity message");
             0.95
         }
     }
 }
 
-fn prompt_wire_length_window() -> (f64, f64, UnitSystem) {
-    print!("Constraint units for wire length window (m/ft, Enter for m): ");
-    io::stdout().flush().expect("failed to flush stdout");
+fn prompt_wire_length_window(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+) -> (f64, f64, UnitSystem) {
+    prompt(
+        output,
+        "Constraint units for wire length window (m/ft, Enter for m): ",
+    );
 
-    let mut unit_input = String::new();
-    io::stdin()
-        .read_line(&mut unit_input)
-        .expect("failed to read wire length window units");
+    let unit_input = read_line(input, "failed to read wire length window units");
     let unit = unit_input.trim().to_ascii_lowercase();
 
     if unit == "ft" || unit == "feet" {
         let default_min_ft = DEFAULT_NON_RESONANT_CONFIG.min_len_m / FEET_TO_METERS;
         let default_max_ft = DEFAULT_NON_RESONANT_CONFIG.max_len_m / FEET_TO_METERS;
 
-        print!(
-            "Wire min length in feet (Enter for {:.1}): ",
-            default_min_ft
+        prompt(
+            output,
+            &format!(
+                "Wire min length in feet (Enter for {:.1}): ",
+                default_min_ft
+            ),
         );
-        io::stdout().flush().expect("failed to flush stdout");
-        let mut min_input = String::new();
-        io::stdin()
-            .read_line(&mut min_input)
-            .expect("failed to read wire min length");
+        let min_input = read_line(input, "failed to read wire min length");
 
-        print!(
-            "Wire max length in feet (Enter for {:.1}): ",
-            default_max_ft
+        prompt(
+            output,
+            &format!(
+                "Wire max length in feet (Enter for {:.1}): ",
+                default_max_ft
+            ),
         );
-        io::stdout().flush().expect("failed to flush stdout");
-        let mut max_input = String::new();
-        io::stdin()
-            .read_line(&mut max_input)
-            .expect("failed to read wire max length");
+        let max_input = read_line(input, "failed to read wire max length");
 
         let min_ft = min_input
             .trim()
@@ -716,10 +741,12 @@ fn prompt_wire_length_window() -> (f64, f64, UnitSystem) {
             );
         }
 
-        println!(
+        writeln!(
+            output,
             "Invalid wire length window, using defaults {:.1}-{:.1} m.",
             DEFAULT_NON_RESONANT_CONFIG.min_len_m, DEFAULT_NON_RESONANT_CONFIG.max_len_m
-        );
+        )
+        .expect("failed to write invalid wire window message");
         return (
             DEFAULT_NON_RESONANT_CONFIG.min_len_m,
             DEFAULT_NON_RESONANT_CONFIG.max_len_m,
@@ -727,25 +754,23 @@ fn prompt_wire_length_window() -> (f64, f64, UnitSystem) {
         );
     }
 
-    print!(
-        "Wire min length in meters (Enter for {:.1}): ",
-        DEFAULT_NON_RESONANT_CONFIG.min_len_m
+    prompt(
+        output,
+        &format!(
+            "Wire min length in meters (Enter for {:.1}): ",
+            DEFAULT_NON_RESONANT_CONFIG.min_len_m
+        ),
     );
-    io::stdout().flush().expect("failed to flush stdout");
-    let mut min_input = String::new();
-    io::stdin()
-        .read_line(&mut min_input)
-        .expect("failed to read wire min length");
+    let min_input = read_line(input, "failed to read wire min length");
 
-    print!(
-        "Wire max length in meters (Enter for {:.1}): ",
-        DEFAULT_NON_RESONANT_CONFIG.max_len_m
+    prompt(
+        output,
+        &format!(
+            "Wire max length in meters (Enter for {:.1}): ",
+            DEFAULT_NON_RESONANT_CONFIG.max_len_m
+        ),
     );
-    io::stdout().flush().expect("failed to flush stdout");
-    let mut max_input = String::new();
-    io::stdin()
-        .read_line(&mut max_input)
-        .expect("failed to read wire max length");
+    let max_input = read_line(input, "failed to read wire max length");
 
     let min_len = min_input
         .trim()
@@ -761,10 +786,12 @@ fn prompt_wire_length_window() -> (f64, f64, UnitSystem) {
     if min_len > 0.0 && max_len > min_len {
         (min_len, max_len, UnitSystem::Metric)
     } else {
-        println!(
+        writeln!(
+            output,
             "Invalid wire length window, using defaults {:.1}-{:.1} m.",
             DEFAULT_NON_RESONANT_CONFIG.min_len_m, DEFAULT_NON_RESONANT_CONFIG.max_len_m
-        );
+        )
+        .expect("failed to write invalid wire window message");
         (
             DEFAULT_NON_RESONANT_CONFIG.min_len_m,
             DEFAULT_NON_RESONANT_CONFIG.max_len_m,
@@ -773,19 +800,22 @@ fn prompt_wire_length_window() -> (f64, f64, UnitSystem) {
     }
 }
 
-fn prompt_display_units(auto_units: UnitSystem) -> UnitSystem {
+fn prompt_display_units(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    auto_units: UnitSystem,
+) -> UnitSystem {
     let label = match auto_units {
         UnitSystem::Metric => "m",
         UnitSystem::Imperial => "ft",
         UnitSystem::Both => "both",
     };
-    print!("Display units (m/ft/both, Enter for {}): ", label);
-    io::stdout().flush().expect("failed to flush stdout");
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("failed to read display units");
-    let trimmed = input.trim();
+    prompt(
+        output,
+        &format!("Display units (m/ft/both, Enter for {}): ", label),
+    );
+    let unit_input = read_line(input, "failed to read display units");
+    let trimmed = unit_input.trim();
     if trimmed.is_empty() {
         return auto_units;
     }
@@ -794,21 +824,26 @@ fn prompt_display_units(auto_units: UnitSystem) -> UnitSystem {
         "ft" | "imperial" => UnitSystem::Imperial,
         "both" => UnitSystem::Both,
         _ => {
-            println!("Unknown unit system. Using {}.", label);
+            writeln!(output, "Unknown unit system. Using {}.", label)
+                .expect("failed to write invalid display unit message");
             auto_units
         }
     }
 }
 
-fn interactive_export_prompt(results: &AppResults) -> Vec<(ExportFormat, String)> {
-    print!("Export results? (none, or comma-separated formats e.g. csv,json,markdown,txt): ");
-    io::stdout().flush().expect("failed to flush stdout");
+fn interactive_export_prompt(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    results: &AppResults,
+) -> Vec<(ExportFormat, String)> {
+    prompt(
+        output,
+        "Export results? (none, or comma-separated formats e.g. csv,json,markdown,txt): ",
+    );
 
-    let mut fmt_raw = String::new();
-    io::stdin()
-        .read_line(&mut fmt_raw)
-        .expect("failed to read export format");
-    let fmt_raw = fmt_raw.trim().to_ascii_lowercase();
+    let fmt_raw = read_line(input, "failed to read export format")
+        .trim()
+        .to_ascii_lowercase();
 
     if fmt_raw.is_empty() || fmt_raw == "none" {
         return Vec::new();
@@ -850,11 +885,15 @@ fn interactive_export_prompt(results: &AppResults) -> Vec<(ExportFormat, String)
             }
         }
         if let Some(msg) = err_msg {
-            println!("{}", msg);
+            writeln!(output, "{}", msg).expect("failed to write export error message");
             return Vec::new();
         }
         if out.is_empty() {
-            println!("--export requires at least one format; skipping export.");
+            writeln!(
+                output,
+                "--export requires at least one format; skipping export."
+            )
+            .expect("failed to write export error message");
             return Vec::new();
         }
         out
@@ -868,13 +907,12 @@ fn interactive_export_prompt(results: &AppResults) -> Vec<(ExportFormat, String)
 
     let mut chosen = Vec::new();
     for &fmt in &formats {
-        let output = if formats.len() == 1 {
-            print!("Output file (Enter for {}): ", default_output_name(fmt));
-            io::stdout().flush().expect("failed to flush stdout");
-            let mut output_raw = String::new();
-            io::stdin()
-                .read_line(&mut output_raw)
-                .expect("failed to read output file");
+        let output_path = if formats.len() == 1 {
+            prompt(
+                output,
+                &format!("Output file (Enter for {}): ", default_output_name(fmt)),
+            );
+            let output_raw = read_line(input, "failed to read output file");
             if output_raw.trim().is_empty() {
                 default_output_name(fmt).to_string()
             } else {
@@ -886,20 +924,33 @@ fn interactive_export_prompt(results: &AppResults) -> Vec<(ExportFormat, String)
 
         match export_results(
             fmt,
-            &output,
+            &output_path,
             &results.calculations,
             export_recommendation,
             results.config.units,
             results.config.wire_min_m,
             results.config.wire_max_m,
         ) {
-            Ok(()) => println!("Exported results to {}", output),
-            Err(err) => println!("Failed to export {}: {}", output, err),
+            Ok(()) => writeln!(output, "Exported results to {}", output_path)
+                .expect("failed to write export success message"),
+            Err(err) => writeln!(output, "Failed to export {}: {}", output_path, err)
+                .expect("failed to write export failure message"),
         }
-        chosen.push((fmt, output));
+        chosen.push((fmt, output_path));
     }
 
     chosen
+}
+
+fn prompt(output: &mut dyn Write, text: &str) {
+    write!(output, "{}", text).expect("failed to write interactive prompt");
+    output.flush().expect("failed to flush interactive prompt");
+}
+
+fn read_line(input: &mut dyn BufRead, error_message: &str) -> String {
+    let mut line = String::new();
+    input.read_line(&mut line).expect(error_message);
+    line
 }
 
 fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat, String)]) {
@@ -985,18 +1036,30 @@ fn shell_quote(value: &str) -> String {
 // ---------------------------------------------------------------------------
 
 fn show_all_bands_for_region(region: ITURegion) {
+    let stdout = io::stdout();
+    let mut output = stdout.lock();
+    show_all_bands_for_region_to_writer(&mut output, region);
+}
+
+fn show_all_bands_for_region_to_writer(output: &mut dyn Write, region: ITURegion) {
     let bands = get_bands_for_region(region);
-    println!(
+    writeln!(
+        output,
         "\nAvailable bands in Region {} ({} total):",
         region.short_name(),
         bands.len()
-    );
-    println!("  ({})", region.long_name());
-    println!("------------------------------------------------------------");
+    )
+    .expect("failed to write band listing header");
+    writeln!(output, "  ({})", region.long_name()).expect("failed to write band listing");
+    writeln!(
+        output,
+        "------------------------------------------------------------"
+    )
+    .expect("failed to write band listing separator");
     for (idx, band) in bands {
-        println!("{:2}. {}", idx + 1, band);
+        writeln!(output, "{:2}. {}", idx + 1, band).expect("failed to write band line");
     }
-    println!();
+    writeln!(output).expect("failed to write band listing trailing newline");
 }
 // ---------------------------------------------------------------------------
 // Terminal display
@@ -1695,5 +1758,112 @@ fn format_calc(
             ),
             None => format!("{}", c),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn run_interactive_with_io_exits_cleanly() {
+        let mut input = Cursor::new(b"\n5\n".to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Select option (1-5): "));
+        assert!(rendered.contains("Exiting Rusty Wire."));
+    }
+
+    #[test]
+    fn prompt_antenna_model_accepts_inverted_v_alias() {
+        let mut input = Cursor::new(b"invv\n".to_vec());
+        let mut output = Vec::new();
+
+        let model = prompt_antenna_model(&mut input, &mut output);
+
+        assert_eq!(model, Some(AntennaModel::InvertedVDipole));
+    }
+
+    #[test]
+    fn prompt_wire_length_window_supports_feet_input() {
+        let mut input = Cursor::new(b"ft\n40\n80\n".to_vec());
+        let mut output = Vec::new();
+
+        let (min_m, max_m, units) = prompt_wire_length_window(&mut input, &mut output);
+
+        assert_eq!(units, UnitSystem::Imperial);
+        assert!((min_m - 12.192).abs() < 1e-6);
+        assert!((max_m - 24.384).abs() < 1e-6);
+    }
+
+    #[test]
+    fn calculate_selected_bands_rejects_invalid_csv_input() {
+        let mut input = Cursor::new(b"abc,4\n".to_vec());
+        let mut output = Vec::new();
+
+        calculate_selected_bands(&mut input, &mut output, ITURegion::Region1);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Invalid input. Use comma-separated numbers."));
+    }
+
+    #[test]
+    fn interactive_export_prompt_rejects_unknown_format() {
+        let mut input = Cursor::new(b"yaml\n".to_vec());
+        let mut output = Vec::new();
+        let results = AppResults {
+            calculations: Vec::new(),
+            recommendation: None,
+            optima: Vec::new(),
+            window_optima: Vec::new(),
+            resonant_compromises: Vec::new(),
+            config: AppConfig::default(),
+            skipped_band_indices: Vec::new(),
+        };
+
+        let exports = interactive_export_prompt(&mut input, &mut output, &results);
+
+        assert!(exports.is_empty());
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("unknown format 'yaml'; skipping export."));
+    }
+
+    #[test]
+    fn run_interactive_with_io_can_switch_region() {
+        let mut input = Cursor::new(b"\n4\n2\n5\n".to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Switched to ITU Region 2."));
+        assert!(rendered.contains("List all bands (for Region 2)"));
+    }
+
+    #[test]
+    fn run_interactive_with_io_quick_calculation_invalid_number() {
+        let mut input = Cursor::new(b"\n3\nabc\n5\n".to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Enter one band number: "));
+        assert!(rendered.contains("Invalid number."));
+    }
+
+    #[test]
+    fn run_interactive_with_io_lists_bands_to_writer_output() {
+        let mut input = Cursor::new(b"\n1\n5\n".to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Available bands in Region 1"));
     }
 }
