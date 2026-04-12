@@ -5,7 +5,8 @@ All notable changes to Rusty Wire are documented here.
 ## [Unreleased]
 
 ### Added
-- **SBOM generation via Cargo**: added a Cargo alias `cargo sbom` (backed by `cargo-cyclonedx`) and helper script `scripts/generate-sbom.sh` for CycloneDX JSON SBOM output.
+- **SBOM generation via Cargo**: added Cargo aliases for SPDX and CycloneDX generation using `cargo-sbom`, with `cargo sbom` defaulting to SPDX and `cargo sbom-cdx` for CycloneDX JSON.
+- **Pre-push SPDX SBOM step**: added a repository pre-push hook that regenerates `sbom/rusty-wire.spdx.json` and blocks push when the tracked SBOM is outdated.
 
 ## [1.5.2] - 2026-04-11
 

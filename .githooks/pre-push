@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$repo_root"
+
+cargo fmt --check
+cargo check
+cargo test
+./scripts/generate-sbom.sh spdx
+
+if ! git diff --quiet -- sbom/rusty-wire.spdx.json; then
+  echo "error: sbom/rusty-wire.spdx.json was updated. Commit the new SBOM before pushing." >&2
+  git --no-pager diff -- sbom/rusty-wire.spdx.json >&2 || true
+  exit 1
+fi

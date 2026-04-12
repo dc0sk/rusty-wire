@@ -107,16 +107,22 @@ cargo run -- --interactive
 
 Rusty Wire supports Software Bill of Materials generation through Cargo.
 
-Install the CycloneDX cargo subcommand once:
+Install the SBOM cargo subcommand (recommended/default):
 
 ```bash
-cargo install cargo-cyclonedx
+cargo install cargo-sbom
 ```
 
-Generate a JSON SBOM via Cargo alias:
+Generate an SPDX SBOM (JSON 2.3) via Cargo:
 
 ```bash
 cargo sbom
+```
+
+Generate CycloneDX JSON via Cargo alias:
+
+```bash
+cargo sbom-cdx
 ```
 
 Or run the helper script:
@@ -125,7 +131,34 @@ Or run the helper script:
 ./scripts/generate-sbom.sh
 ```
 
-By default, output files are written under `target/cyclonedx/`.
+The helper script defaults to SPDX and also supports CycloneDX:
+
+```bash
+./scripts/generate-sbom.sh cyclonedx
+```
+
+Default tracked outputs are:
+
+- `sbom/rusty-wire.spdx.json` (SPDX)
+- `sbom/rusty-wire.cdx.json` (CycloneDX, when generated)
+
+### Pre-push enforcement
+
+This repository includes a pre-push hook at `.githooks/pre-push`.
+Enable repository hooks with:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+It runs:
+
+- `cargo fmt --check`
+- `cargo check`
+- `cargo test`
+- SPDX SBOM regeneration via `./scripts/generate-sbom.sh spdx`
+
+The hook blocks a push if `sbom/rusty-wire.spdx.json` changes and is not committed.
 
 ## Architecture
 
