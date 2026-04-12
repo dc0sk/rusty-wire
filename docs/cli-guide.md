@@ -19,7 +19,7 @@ It supports:
 ## Features
 
 - Band database with ham + shortwave bands
-- Default band selection for quick use: 40m to 10m (band numbers: 4,5,6,7,8,9,10)
+- Default band selection for quick use: a built-in multi-band preset (shown in `--help` and used when `--bands` is omitted)
 - Calculation mode selection:
   - Resonant (default)
   - Non-resonant
@@ -74,7 +74,7 @@ cargo run -- [OPTIONS]
 - `--interactive` — Launch interactive menu mode
 - `--list-bands` — List all available bands
 - `--region <1|2|3>` — ITU region selection (default: `1`)
-- `--bands <csv>` — Comma-separated band numbers (e.g., `6,10,40`)
+- `--bands <csv>` — Comma-separated band names and optional ranges (e.g., `40m,20m,10m-15m,60m-80m`)
 - `--mode <resonant|non-resonant>` — Calculation mode (default: resonant)
 - `--antenna <dipole|inverted-v|efhw|loop|ocfd>` — Filter output to a single antenna model (default: all models)
 - `--velocity <value>` — Velocity factor (0.0–1.0, default: 0.95)
@@ -93,7 +93,7 @@ Feet (optional alternative):
 
 Notes:
 - Do not mix meter and feet constraints in the same command.
-- If no `--bands` are provided, Rusty Wire defaults to 40m-10m (`4,5,6,7,8,9,10`).
+- If no `--bands` are provided, Rusty Wire uses the built-in default band set.
 - Region-specific amateur band ranges are applied before calculation.
 
 ### ITU region behavior
@@ -192,38 +192,38 @@ rusty-wire --velocity 0.95
 ### 2) Resonant calculation for selected bands
 
 ```bash
-rusty-wire --mode resonant --bands 6,10 --velocity 0.90
+rusty-wire --mode resonant --bands 20m,10m --velocity 0.90
 ```
 
 ### 2a) Region-specific listing and calculation
 
 ```bash
 rusty-wire --list-bands --region 1
-rusty-wire --region 2 --mode resonant --bands 4 --velocity 0.95
+rusty-wire --region 2 --mode resonant --bands 40m --velocity 0.95
 ```
 
 ### 3) Non-resonant optimization with metric constraints
 
 ```bash
-rusty-wire --mode non-resonant --bands 6,10 --velocity 0.90 --wire-min 10 --wire-max 20
+rusty-wire --mode non-resonant --bands 20m,10m --velocity 0.90 --wire-min 10 --wire-max 20
 ```
 
 ### 4) Non-resonant optimization with feet constraints
 
 ```bash
-rusty-wire --mode non-resonant --bands 6,10 --velocity 0.90 --wire-min-ft 30 --wire-max-ft 90
+rusty-wire --mode non-resonant --bands 20m,10m --velocity 0.90 --wire-min-ft 30 --wire-max-ft 90
 ```
 
 ### 5) Export to single format (CSV)
 
 ```bash
-rusty-wire --mode resonant --bands 4,5,6,7,8,9,10 --export csv --output results.csv
+rusty-wire --mode resonant --bands 40m-10m --export csv --output results.csv
 ```
 
 ### 6) Export to multiple formats simultaneously
 
 ```bash
-rusty-wire --mode non-resonant --bands 6,10 --export csv,json,markdown --output results
+rusty-wire --mode non-resonant --bands 20m,10m-15m --export csv,json,markdown --output results
 ```
 
 This generates: `results.csv`, `results.json`, `results.md`
@@ -231,19 +231,19 @@ This generates: `results.csv`, `results.json`, `results.md`
 ### 7) Metric-only output and export
 
 ```bash
-rusty-wire --mode non-resonant --bands 6,10 --wire-min 10 --wire-max 20 --units m --export csv,json
+rusty-wire --mode non-resonant --bands 20m,10m --wire-min 10 --wire-max 20 --units m --export csv,json
 ```
 
 ### 8) Imperial-only output and export
 
 ```bash
-rusty-wire --mode non-resonant --bands 6,10 --wire-min-ft 30 --wire-max-ft 60 --units ft --export markdown,txt
+rusty-wire --mode non-resonant --bands 20m,10m --wire-min-ft 30 --wire-max-ft 60 --units ft --export markdown,txt
 ```
 
 ### 9) View multiple optima in non-resonant mode
 
 ```bash
-rusty-wire --mode non-resonant --bands 2 --velocity 0.50 --wire-min 6 --wire-max 30
+rusty-wire --mode non-resonant --bands 80m --velocity 0.50 --wire-min 6 --wire-max 30
 ```
 
 Non-resonant mode displays local optima for the active search window and, when present, equal-tie optima:

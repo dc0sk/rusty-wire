@@ -15,6 +15,7 @@ use crate::calculations::{
 };
 use crate::export::{default_output_name, export_results, validate_export_path};
 use clap::Parser;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, Write};
 
 // ---------------------------------------------------------------------------
@@ -38,9 +39,9 @@ struct Cli {
     #[arg(short, long, value_enum, default_value_t = CalcMode::Resonant)]
     mode: CalcMode,
 
-    /// Band numbers (comma-separated, e.g., "4,5,6,7,8,9,10")
-    #[arg(short, long, value_delimiter = ',')]
-    bands: Option<Vec<usize>>,
+    /// Band names/ranges (comma-separated, e.g., "40m,20m,10m-15m,60m-80m")
+    #[arg(short, long)]
+    bands: Option<String>,
 
     /// Velocity factor (0.50-1.00)
     #[arg(short, long, default_value_t = 0.95)]
@@ -221,7 +222,16 @@ pub fn run_from_args(args: &[String]) {
         return;
     }
 
-    let bands = cli.bands.unwrap_or_else(|| DEFAULT_BAND_SELECTION.to_vec());
+    let bands = match &cli.bands {
+        Some(selection) => match parse_band_selection(selection, cli.region) {
+            Ok(parsed) => parsed,
+            Err(err) => {
+                eprintln!("Error: invalid --bands value: {}", err);
+                return;
+            }
+        },
+        None => DEFAULT_BAND_SELECTION.to_vec(),
+    };
 
     // Validate velocity factor
     if !(0.5..=1.0).contains(&cli.velocity) {
@@ -428,26 +438,23 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
     show_all_bands_for_region_to_writer(output, region);
     prompt(
         output,
-        "Enter band numbers separated by commas (Enter for default 4,5,6,7,8,9,10): ",
+        "Enter bands (e.g. 40m,20m,10m-15m; Enter for default set): ",
     );
 
     let band_input = read_line(input, "failed to read selection");
 
-    let indices = if band_input.trim().is_empty() {
+    let trimmed = band_input.trim();
+    let indices = if trimmed.is_empty() {
         DEFAULT_BAND_SELECTION.to_vec()
     } else {
-        let parsed: Result<Vec<usize>, _> = band_input
-            .trim()
-            .split(',')
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| s.trim().parse::<usize>())
-            .collect();
-
-        match parsed {
+        match parse_band_selection(trimmed, region) {
             Ok(v) if !v.is_empty() => v,
-            _ => {
-                writeln!(output, "Invalid input. Use comma-separated numbers.\n")
-                    .expect("failed to write invalid band selection message");
+            Ok(_) | Err(_) => {
+                writeln!(
+                    output,
+                    "Invalid input. Use band names/ranges like 40m,20m,10m-15m.\n"
+                )
+                .expect("failed to write invalid band selection message");
                 return;
             }
         }
@@ -498,14 +505,15 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
 
 fn quick_calculation(input: &mut dyn BufRead, output: &mut dyn Write, region: ITURegion) {
     show_all_bands_for_region_to_writer(output, region);
-    prompt(output, "Enter one band number: ");
+    prompt(output, "Enter one band (e.g. 20m): ");
 
     let band_input = read_line(input, "failed to read selection");
 
-    let idx = match band_input.trim().parse::<usize>() {
+    let idx = match parse_single_band_token(band_input.trim(), region) {
         Ok(v) => v,
         Err(_) => {
-            writeln!(output, "Invalid number.\n").expect("failed to write invalid number message");
+            writeln!(output, "Invalid band. Use a single band name like 20m.\n")
+                .expect("failed to write invalid number message");
             return;
         }
     };
@@ -953,11 +961,121 @@ fn read_line(input: &mut dyn BufRead, error_message: &str) -> String {
     line
 }
 
+fn parse_band_selection(selection: &str, region: ITURegion) -> Result<Vec<usize>, String> {
+    let mut parsed = Vec::new();
+    let mut seen = HashSet::new();
+
+    for token in selection.split(',') {
+        let token = token.trim();
+        if token.is_empty() {
+            continue;
+        }
+
+        if let Some((start, end)) = token.split_once('-') {
+            let start_idx = parse_single_band_token(start.trim(), region)?;
+            let end_idx = parse_single_band_token(end.trim(), region)?;
+
+            let ordered = ordered_band_indices_for_region(region);
+            let start_pos = ordered
+                .iter()
+                .position(|idx| *idx == start_idx)
+                .ok_or_else(|| format!("unknown range start '{}'.", start.trim()))?;
+            let end_pos = ordered
+                .iter()
+                .position(|idx| *idx == end_idx)
+                .ok_or_else(|| format!("unknown range end '{}'.", end.trim()))?;
+
+            if start_pos <= end_pos {
+                for idx in &ordered[start_pos..=end_pos] {
+                    if seen.insert(*idx) {
+                        parsed.push(*idx);
+                    }
+                }
+            } else {
+                for idx in ordered[end_pos..=start_pos].iter().rev() {
+                    if seen.insert(*idx) {
+                        parsed.push(*idx);
+                    }
+                }
+            }
+            continue;
+        }
+
+        let idx = parse_single_band_token(token, region)?;
+        if seen.insert(idx) {
+            parsed.push(idx);
+        }
+    }
+
+    if parsed.is_empty() {
+        return Err("empty selection; provide at least one band name.".to_string());
+    }
+
+    Ok(parsed)
+}
+
+fn parse_single_band_token(token: &str, region: ITURegion) -> Result<usize, String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err("empty band token".to_string());
+    }
+
+    let aliases = band_alias_to_index(region);
+    let key = token.to_ascii_lowercase();
+    aliases
+        .get(&key)
+        .copied()
+        .ok_or_else(|| format!("unknown band '{}'.", token))
+}
+
+fn ordered_band_indices_for_region(region: ITURegion) -> Vec<usize> {
+    get_bands_for_region(region)
+        .into_iter()
+        .map(|(idx, _)| idx + 1)
+        .collect()
+}
+
+fn band_alias_to_index(region: ITURegion) -> HashMap<String, usize> {
+    let mut aliases = HashMap::new();
+
+    for (idx, band) in get_bands_for_region(region) {
+        let one_based = idx + 1;
+        let full_name = band.name.to_ascii_lowercase();
+        aliases.insert(full_name.clone(), one_based);
+
+        if let Some(short_name) = full_name.split_whitespace().next() {
+            aliases.insert(short_name.to_string(), one_based);
+        }
+    }
+
+    aliases
+}
+
+fn band_label_for_index(index: usize, region: ITURegion) -> String {
+    let zero_based = match index.checked_sub(1) {
+        Some(v) => v,
+        None => return index.to_string(),
+    };
+
+    for (idx, band) in get_bands_for_region(region) {
+        if idx == zero_based {
+            return band
+                .name
+                .split_whitespace()
+                .next()
+                .unwrap_or(band.name)
+                .to_string();
+        }
+    }
+
+    index.to_string()
+}
+
 fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat, String)]) {
     let bands_csv = config
         .band_indices
         .iter()
-        .map(|v| v.to_string())
+        .map(|v| band_label_for_index(*v, config.itu_region))
         .collect::<Vec<String>>()
         .join(",");
 
@@ -1808,7 +1926,51 @@ mod tests {
         calculate_selected_bands(&mut input, &mut output, ITURegion::Region1);
 
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
-        assert!(rendered.contains("Invalid input. Use comma-separated numbers."));
+        assert!(rendered.contains("Invalid input. Use band names/ranges"));
+    }
+
+    #[test]
+    fn parse_band_selection_supports_band_names_and_ranges() {
+        let parsed = parse_band_selection("10m-15m,30m,60m-80m", ITURegion::Region1)
+            .expect("expected valid named/range selection");
+
+        assert_eq!(parsed, vec![10, 9, 8, 5, 3, 2]);
+    }
+
+    #[test]
+    fn parse_band_selection_rejects_numeric_indices() {
+        let err = parse_band_selection("4,6,10", ITURegion::Region1).unwrap_err();
+        assert!(err.contains("unknown band"));
+    }
+
+    #[test]
+    fn parse_band_selection_rejects_unknown_band_name() {
+        let err = parse_band_selection("banana", ITURegion::Region1).unwrap_err();
+        assert!(err.contains("unknown band"));
+    }
+
+    #[test]
+    fn print_equivalent_cli_call_uses_band_labels() {
+        let config = AppConfig {
+            band_indices: vec![4, 6, 10],
+            velocity_factor: 0.95,
+            mode: CalcMode::Resonant,
+            wire_min_m: DEFAULT_NON_RESONANT_CONFIG.min_len_m,
+            wire_max_m: DEFAULT_NON_RESONANT_CONFIG.max_len_m,
+            units: UnitSystem::Metric,
+            itu_region: ITURegion::Region1,
+            transformer_ratio: DEFAULT_TRANSFORMER_RATIO,
+            antenna_model: None,
+        };
+
+        // Assert the formatter input mapping separately since this function prints to stdout.
+        let bands_csv = config
+            .band_indices
+            .iter()
+            .map(|v| band_label_for_index(*v, config.itu_region))
+            .collect::<Vec<String>>()
+            .join(",");
+        assert_eq!(bands_csv, "40m,20m,10m");
     }
 
     #[test]
@@ -1852,8 +2014,8 @@ mod tests {
         run_interactive_with_io(&mut input, &mut output);
 
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
-        assert!(rendered.contains("Enter one band number: "));
-        assert!(rendered.contains("Invalid number."));
+        assert!(rendered.contains("Enter one band (e.g. 20m): "));
+        assert!(rendered.contains("Invalid band. Use a single band name like 20m."));
     }
 
     #[test]
