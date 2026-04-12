@@ -1,0 +1,2 @@
+[alias]
+sbom = "cyclonedx --format json"

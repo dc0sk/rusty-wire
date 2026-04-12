@@ -8,6 +8,15 @@ See [docs/CHANGELOG.md](docs/CHANGELOG.md) for the full release history.
 
 ## Quick Start
 
+> [!TIP]
+> New to Rusty Wire? Start with interactive mode first:
+>
+> ```bash
+> ./target/release/rusty-wire --interactive
+> ```
+>
+> It walks you through region, bands, mode, antenna model, units, and export options step by step.
+
 ### Build from source
 
 ```bash
@@ -93,6 +102,30 @@ Interactive mode is available explicitly via:
 ```bash
 cargo run -- --interactive
 ```
+
+## SBOM
+
+Rusty Wire supports Software Bill of Materials generation through Cargo.
+
+Install the CycloneDX cargo subcommand once:
+
+```bash
+cargo install cargo-cyclonedx
+```
+
+Generate a JSON SBOM via Cargo alias:
+
+```bash
+cargo sbom
+```
+
+Or run the helper script:
+
+```bash
+./scripts/generate-sbom.sh
+```
+
+By default, output files are written under `target/cyclonedx/`.
 
 ## Architecture
 

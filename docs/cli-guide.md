@@ -141,6 +141,30 @@ Example regional differences currently modeled:
 Exports also include resonant points within the active search window for each selected band.
 In resonant mode, non-resonant recommendation payloads are omitted from exports.
 
+### SBOM generation
+
+Rusty Wire supports SBOM generation using Cargo with CycloneDX output.
+
+Install the required cargo subcommand once:
+
+```bash
+cargo install cargo-cyclonedx
+```
+
+Generate a JSON SBOM using the repository alias:
+
+```bash
+cargo sbom
+```
+
+Or use the helper script:
+
+```bash
+./scripts/generate-sbom.sh
+```
+
+Default output location is `target/cyclonedx/`.
+
 ## Examples
 
 ### 1) Default run with defaults (resonant + default bands)
