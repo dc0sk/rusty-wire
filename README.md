@@ -158,7 +158,8 @@ It runs:
 - `cargo test`
 - SPDX SBOM regeneration via `./scripts/generate-sbom.sh spdx`
 
-If `sbom/rusty-wire.spdx.json` changes during pre-push regeneration, the hook warns but does not block push (SPDX metadata fields are time-varying).
+SPDX generation is normalized for deterministic output (requires `jq` or `jaq`).
+If `sbom/rusty-wire.spdx.json` changes during pre-push, the hook blocks push until the updated SBOM is committed.
 
 ## Architecture
 

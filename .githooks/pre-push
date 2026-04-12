@@ -9,10 +9,8 @@ cargo check
 cargo test
 ./scripts/generate-sbom.sh spdx
 
-# Note: SPDX JSON contains creation-time metadata and may change on each run.
-# We regenerate on pre-push for supply-chain hygiene, but do not hard-fail on
-# resulting diff churn from non-deterministic fields.
 if ! git diff --quiet -- sbom/rusty-wire.spdx.json; then
-  echo "warning: sbom/rusty-wire.spdx.json changed during pre-push regeneration." >&2
-  echo "warning: commit the refreshed SBOM when preparing release-oriented updates." >&2
+  echo "error: sbom/rusty-wire.spdx.json was updated. Commit the refreshed SPDX SBOM before pushing." >&2
+  git --no-pager diff -- sbom/rusty-wire.spdx.json >&2 || true
+  exit 1
 fi
