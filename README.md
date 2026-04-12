@@ -169,37 +169,37 @@ For a full architectural overview, see [docs/architecture.md](docs/architecture.
 
 Resonant mode (default):
 ```bash
-rusty-wire --bands 6,10,40 --velocity 0.95
+rusty-wire --bands 20m,10m,40m --velocity 0.95
 ```
 
 Non-resonant optimization:
 ```bash
-rusty-wire --mode non-resonant --bands 6,10,40 --wire-min 10 --wire-max 35
+rusty-wire --mode non-resonant --bands 40m,20m,10m-15m --wire-min 10 --wire-max 35
 ```
 
 Export to multiple formats:
 ```bash
-rusty-wire --mode non-resonant --bands 6,10 --export csv,json,markdown --output results
+rusty-wire --mode non-resonant --bands 20m,10m-15m --export csv,json,markdown --output results
 ```
 
 Metric-only output:
 ```bash
-rusty-wire --mode non-resonant --bands 2 --units m --wire-min 6 --wire-max 30
+rusty-wire --mode non-resonant --bands 80m --units m --wire-min 6 --wire-max 30
 ```
 
 Filter to EFHW output only:
 ```bash
-rusty-wire --mode resonant --bands 4,6 --antenna efhw
+rusty-wire --mode resonant --bands 40m,20m --antenna efhw
 ```
 
 Filter to inverted-V output only:
 ```bash
-rusty-wire --mode resonant --bands 4,6 --antenna inverted-v
+rusty-wire --mode resonant --bands 40m,20m --antenna inverted-v
 ```
 
 Filter to OCFD output only:
 ```bash
-rusty-wire --mode resonant --bands 4,6 --antenna ocfd
+rusty-wire --mode resonant --bands 40m,20m --antenna ocfd
 ```
 
 For more examples, see [docs/cli-guide.md](docs/cli-guide.md).

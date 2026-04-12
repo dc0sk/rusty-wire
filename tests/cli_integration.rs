@@ -44,7 +44,7 @@ fn mixed_meter_and_feet_constraints_show_error() {
 #[test]
 fn invalid_velocity_shows_error() {
     let output = binary()
-        .args(["--bands", "4", "--velocity", "1.5"])
+        .args(["--bands", "40m", "--velocity", "1.5"])
         .output()
         .expect("failed to run rusty-wire");
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -72,7 +72,7 @@ fn multiple_exports_ignore_custom_output_name() {
         .current_dir(&dir)
         .args([
             "--bands",
-            "4",
+            "40m",
             "--export",
             "csv,json",
             "--output",
@@ -96,7 +96,14 @@ fn single_export_uses_requested_output_name() {
     let dir = temp_test_dir("single-export");
     let output = binary()
         .current_dir(&dir)
-        .args(["--bands", "4", "--export", "csv", "--output", "custom.csv"])
+        .args([
+            "--bands",
+            "40m",
+            "--export",
+            "csv",
+            "--output",
+            "custom.csv",
+        ])
         .output()
         .expect("failed to run rusty-wire");
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -113,7 +120,7 @@ fn exports_include_inverted_v_fields() {
     let dir = temp_test_dir("inverted-v-export");
     let output = binary()
         .current_dir(&dir)
-        .args(["--bands", "4", "--units", "both", "--export", "csv,json"])
+        .args(["--bands", "40m", "--units", "both", "--export", "csv,json"])
         .output()
         .expect("failed to run rusty-wire");
 
@@ -135,7 +142,7 @@ fn exports_include_inverted_v_fields() {
 #[test]
 fn default_antenna_mode_shows_all_models_per_band() {
     let output = binary()
-        .args(["--bands", "4"])
+        .args(["--bands", "40m"])
         .output()
         .expect("failed to run rusty-wire");
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -152,7 +159,7 @@ fn default_antenna_mode_shows_all_models_per_band() {
 #[test]
 fn selected_antenna_model_filters_output_and_resonant_summary() {
     let output = binary()
-        .args(["--bands", "4", "--antenna", "efhw"])
+        .args(["--bands", "40m", "--antenna", "efhw"])
         .output()
         .expect("failed to run rusty-wire");
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -172,7 +179,7 @@ fn selected_antenna_model_filters_output_and_resonant_summary() {
 #[test]
 fn loop_antenna_mode_shows_loop_guidance_compromises() {
     let output = binary()
-        .args(["--bands", "4", "--antenna", "loop"])
+        .args(["--bands", "40m", "--antenna", "loop"])
         .output()
         .expect("failed to run rusty-wire");
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -193,7 +200,7 @@ fn loop_antenna_mode_shows_loop_guidance_compromises() {
 #[test]
 fn inverted_v_antenna_mode_shows_inverted_v_guidance_compromises() {
     let output = binary()
-        .args(["--bands", "4", "--antenna", "inverted-v"])
+        .args(["--bands", "40m", "--antenna", "inverted-v"])
         .output()
         .expect("failed to run rusty-wire");
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -217,7 +224,7 @@ fn inverted_v_antenna_mode_shows_inverted_v_guidance_compromises() {
 #[test]
 fn ocfd_antenna_mode_shows_ocfd_guidance_compromises() {
     let output = binary()
-        .args(["--bands", "4", "--antenna", "ocfd"])
+        .args(["--bands", "40m", "--antenna", "ocfd"])
         .output()
         .expect("failed to run rusty-wire");
     let stdout = String::from_utf8_lossy(&output.stdout);

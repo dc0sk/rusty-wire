@@ -7,7 +7,7 @@ This document explains how Rusty Wire computes the OCFD "optimized split" shown 
 It is based on the current implementation used for commands such as:
 
 ```bash
-rusty-wire --region 1 --mode resonant --bands 4,6,8,10 --velocity 0.95 --transformer 1:4 --units both --antenna ocfd
+rusty-wire --region 1 --mode resonant --bands 40m,20m,15m,10m --velocity 0.95 --transformer 1:4 --units both --antenna ocfd
 ```
 
 ## 1. What You See in the Output
