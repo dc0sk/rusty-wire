@@ -14,7 +14,7 @@
       "checksums": [
         {
           "algorithm": "SHA1",
-          "checksumValue": "93cee63cf5b8e6f7c5ad634442d8e7873339f765"
+          "checksumValue": "7347490beaffd2559fadbdc1c0e3380e10f720dc"
         }
       ],
       "fileName": "./Cargo.lock",
@@ -267,12 +267,12 @@
       "versionInfo": "1.0.45"
     },
     {
-      "SPDXID": "SPDXRef-Package-rusty-wire-2.0.0",
+      "SPDXID": "SPDXRef-Package-rusty-wire-2.1.0",
       "downloadLocation": "NONE",
       "licenseConcluded": "GPL-2.0-or-later",
       "licenseDeclared": "GPL-2.0-or-later",
       "name": "rusty-wire",
-      "versionInfo": "2.0.0"
+      "versionInfo": "2.1.0"
     },
     {
       "SPDXID": "SPDXRef-Package-strsim-0.11.1",
@@ -379,7 +379,7 @@
       "spdxElementId": "SPDXRef-DOCUMENT"
     },
     {
-      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.0.0",
+      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.1.0",
       "relationshipType": "GENERATED_FROM",
       "spdxElementId": "SPDXRef-File-rusty-wire"
     },
@@ -506,7 +506,7 @@
     {
       "relatedSpdxElement": "SPDXRef-Package-clap-4.6.0",
       "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-rusty-wire-2.0.0"
+      "spdxElementId": "SPDXRef-Package-rusty-wire-2.1.0"
     },
     {
       "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.106",

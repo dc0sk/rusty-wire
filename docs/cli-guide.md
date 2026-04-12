@@ -1,6 +1,6 @@
 # Rusty Wire
 
-**Version 2.0.0**
+**Version 2.1.0**
 
 Rusty Wire is a Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.
 
@@ -77,6 +77,7 @@ cargo run -- [OPTIONS]
 - `--bands <csv>` — Comma-separated band names and optional ranges (e.g., `40m,20m,10m-15m,60m-80m`)
 - `--mode <resonant|non-resonant>` — Calculation mode (default: resonant)
 - `--antenna <dipole|inverted-v|efhw|loop|ocfd>` — Filter output to a single antenna model (default: all models)
+- `--transformer <recommended|1:1|1:2|1:4|1:5|1:6|1:9|1:16|1:49|1:56|1:64>` — Feed transformer selection (default: `recommended`)
 - `--velocity <value>` — Velocity factor (0.0–1.0, default: 0.95)
 
 ### Non-resonant search window constraints
@@ -128,6 +129,18 @@ Example regional differences currently modeled:
   - explicit 33/67 leg lengths
   - explicit 20/80 leg lengths
   - an optimized split ratio recommendation with worst-leg resonance-clearance percentage
+
+### Transformer recommendations
+
+- `--transformer recommended` is the default and resolves to a concrete ratio from the selected mode and antenna model.
+- Current built-in recommendations are:
+  - generic resonant mode: `1:1`
+  - generic non-resonant mode: `1:9`
+  - dipole, inverted-V, and loop: `1:1`
+  - EFHW: `1:56`
+  - OCFD: `1:4`
+- You can always override the recommendation with an explicit ratio.
+- The current recommendation logic is a fixed policy, not a transformer optimization pass.
 
 ### Export options
 

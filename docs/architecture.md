@@ -69,6 +69,7 @@ Responsibilities:
 - defines shared enums such as `CalcMode`, `ExportFormat`, and `UnitSystem`
 - defines `AppConfig` and `AppResults`
 - maps selected band indices to region-specific band definitions
+- resolves mode- and antenna-aware default transformer recommendations
 - runs one calculation pass for the full request
 - assembles optimization and recommendation outputs
 
@@ -157,4 +158,4 @@ The current design deliberately favors:
 - unit-testable core logic with a thin CLI shell
 - a small number of explicit export formats and calculation modes
 
-The main area that remains tightly coupled is interactive mode, because it performs direct stdin/stdout operations inside `cli.rs`. If interactive-mode automation grows in importance, the next structural improvement would be extracting prompt I/O behind a small interface to make those flows easier to test.
+The main remaining structural opportunity is cleaner error propagation from `app.rs` into `cli.rs`. Interactive mode is now exercised with stdin/stdout-driven tests, so that area is in better shape than earlier releases.

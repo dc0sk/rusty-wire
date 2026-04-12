@@ -5,8 +5,8 @@
 /// The computation itself is delegated to `app::run_calculation`; the only
 /// imports from the core modules that this file needs are for display helpers.
 use crate::app::{
-    run_calculation, AntennaModel, AppConfig, AppResults, CalcMode, ExportFormat, UnitSystem,
-    DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION, DEFAULT_TRANSFORMER_RATIO, FEET_TO_METERS,
+    recommended_transformer_ratio, run_calculation, AntennaModel, AppConfig, AppResults, CalcMode,
+    ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
 use crate::bands::{get_bands_for_region, ITURegion, ALL_REGIONS};
 use crate::calculations::{
@@ -47,9 +47,9 @@ struct Cli {
     #[arg(short, long, default_value_t = 0.95)]
     velocity: f64,
 
-    /// Transformer ratio (1:1, 1:2, 1:4, 1:5, 1:6, 1:9, 1:16, 1:49, 1:56, 1:64)
-    #[arg(short, long, value_enum, default_value_t = DEFAULT_TRANSFORMER_RATIO)]
-    transformer: TransformerRatio,
+    /// Transformer ratio (default: recommended for the selected mode/antenna)
+    #[arg(short, long, value_enum, default_value = "recommended")]
+    transformer: CliTransformerSelection,
 
     /// Antenna model (omit to show all models per band)
     #[arg(long, value_enum)]
@@ -184,6 +184,51 @@ impl From<CliTransformerRatio> for TransformerRatio {
     }
 }
 
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum CliTransformerSelection {
+    Recommended,
+    #[clap(name = "1:1")]
+    R1To1,
+    #[clap(name = "1:2")]
+    R1To2,
+    #[clap(name = "1:4")]
+    R1To4,
+    #[clap(name = "1:5")]
+    R1To5,
+    #[clap(name = "1:6")]
+    R1To6,
+    #[clap(name = "1:9")]
+    R1To9,
+    #[clap(name = "1:16")]
+    R1To16,
+    #[clap(name = "1:49")]
+    R1To49,
+    #[clap(name = "1:56")]
+    R1To56,
+    #[clap(name = "1:64")]
+    R1To64,
+}
+
+impl CliTransformerSelection {
+    fn resolve(self, mode: CalcMode, antenna_model: Option<AntennaModel>) -> TransformerRatio {
+        match self {
+            CliTransformerSelection::Recommended => {
+                recommended_transformer_ratio(mode, antenna_model)
+            }
+            CliTransformerSelection::R1To1 => TransformerRatio::R1To1,
+            CliTransformerSelection::R1To2 => TransformerRatio::R1To2,
+            CliTransformerSelection::R1To4 => TransformerRatio::R1To4,
+            CliTransformerSelection::R1To5 => TransformerRatio::R1To5,
+            CliTransformerSelection::R1To6 => TransformerRatio::R1To6,
+            CliTransformerSelection::R1To9 => TransformerRatio::R1To9,
+            CliTransformerSelection::R1To16 => TransformerRatio::R1To16,
+            CliTransformerSelection::R1To49 => TransformerRatio::R1To49,
+            CliTransformerSelection::R1To56 => TransformerRatio::R1To56,
+            CliTransformerSelection::R1To64 => TransformerRatio::R1To64,
+        }
+    }
+}
+
 #[derive(clap::ValueEnum, Clone, Debug)]
 enum CliITURegion {
     #[clap(name = "1")]
@@ -301,6 +346,8 @@ pub fn run_from_args(args: &[String]) {
         .map(ExportFormat::from)
         .collect::<Vec<_>>();
 
+    let transformer_ratio = cli.transformer.resolve(cli.mode, cli.antenna);
+
     let config = AppConfig {
         band_indices: bands,
         velocity_factor: cli.velocity,
@@ -309,7 +356,7 @@ pub fn run_from_args(args: &[String]) {
         wire_max_m,
         units,
         itu_region: cli.region,
-        transformer_ratio: TransformerRatio::from(cli.transformer),
+        transformer_ratio,
         antenna_model: cli.antenna,
     };
 
@@ -463,7 +510,7 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
     let mode = prompt_calc_mode(input, output);
     let antenna_model = prompt_antenna_model(input, output);
     let velocity = prompt_velocity_factor(input, output);
-    let transformer_ratio = prompt_transformer_ratio(input, output);
+    let transformer_ratio = prompt_transformer_ratio(input, output, mode, antenna_model);
     let (wire_min_m, wire_max_m, auto_units) = if mode == CalcMode::NonResonant {
         prompt_wire_length_window(input, output)
     } else {
@@ -521,7 +568,7 @@ fn quick_calculation(input: &mut dyn BufRead, output: &mut dyn Write, region: IT
     let mode = prompt_calc_mode(input, output);
     let antenna_model = prompt_antenna_model(input, output);
     let velocity = prompt_velocity_factor(input, output);
-    let transformer_ratio = prompt_transformer_ratio(input, output);
+    let transformer_ratio = prompt_transformer_ratio(input, output, mode, antenna_model);
     let (wire_min_m, wire_max_m, auto_units) = if mode == CalcMode::NonResonant {
         prompt_wire_length_window(input, output)
     } else {
@@ -647,32 +694,39 @@ fn prompt_antenna_model(input: &mut dyn BufRead, output: &mut dyn Write) -> Opti
     }
 }
 
-fn prompt_transformer_ratio(input: &mut dyn BufRead, output: &mut dyn Write) -> TransformerRatio {
+fn prompt_transformer_ratio(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    mode: CalcMode,
+    antenna_model: Option<AntennaModel>,
+) -> TransformerRatio {
     prompt(
         output,
-        &format!(
-            "Unun/Balun ratio (1:1,1:2,1:4,1:5,1:6,1:9,1:16,1:49,1:56,1:64; Enter for {}): ",
-            DEFAULT_TRANSFORMER_RATIO.as_label()
-        ),
+        "Unun/Balun ratio (recommended,1:1,1:2,1:4,1:5,1:6,1:9,1:16,1:49,1:56,1:64; Enter for recommended): ",
     );
 
     let ratio_input = read_line(input, "failed to read transformer ratio");
 
     let trimmed = ratio_input.trim();
     if trimmed.is_empty() {
-        return DEFAULT_TRANSFORMER_RATIO;
+        return recommended_transformer_ratio(mode, antenna_model);
+    }
+
+    if trimmed.eq_ignore_ascii_case("recommended") {
+        return recommended_transformer_ratio(mode, antenna_model);
     }
 
     match TransformerRatio::parse(trimmed) {
         Some(r) => r,
         None => {
+            let recommended = recommended_transformer_ratio(mode, antenna_model);
             writeln!(
                 output,
-                "Unknown ratio. Using default {}.",
-                DEFAULT_TRANSFORMER_RATIO.as_label()
+                "Unknown ratio. Using recommended {}.",
+                recommended.as_label()
             )
             .expect("failed to write invalid ratio message");
-            DEFAULT_TRANSFORMER_RATIO
+            recommended
         }
     }
 }
@@ -1919,6 +1973,38 @@ mod tests {
     }
 
     #[test]
+    fn cli_transformer_selection_recommended_resolves_by_mode_and_antenna() {
+        assert_eq!(
+            CliTransformerSelection::Recommended.resolve(CalcMode::Resonant, None),
+            TransformerRatio::R1To1
+        );
+        assert_eq!(
+            CliTransformerSelection::Recommended.resolve(CalcMode::NonResonant, None),
+            TransformerRatio::R1To9
+        );
+        assert_eq!(
+            CliTransformerSelection::Recommended
+                .resolve(CalcMode::Resonant, Some(AntennaModel::EndFedHalfWave)),
+            TransformerRatio::R1To56
+        );
+    }
+
+    #[test]
+    fn prompt_transformer_ratio_accepts_recommended_keyword() {
+        let mut input = Cursor::new(b"recommended\n".to_vec());
+        let mut output = Vec::new();
+
+        let ratio = prompt_transformer_ratio(
+            &mut input,
+            &mut output,
+            CalcMode::Resonant,
+            Some(AntennaModel::EndFedHalfWave),
+        );
+
+        assert_eq!(ratio, TransformerRatio::R1To56);
+    }
+
+    #[test]
     fn calculate_selected_bands_rejects_invalid_csv_input() {
         let mut input = Cursor::new(b"abc,4\n".to_vec());
         let mut output = Vec::new();
@@ -1959,7 +2045,7 @@ mod tests {
             wire_max_m: DEFAULT_NON_RESONANT_CONFIG.max_len_m,
             units: UnitSystem::Metric,
             itu_region: ITURegion::Region1,
-            transformer_ratio: DEFAULT_TRANSFORMER_RATIO,
+            transformer_ratio: TransformerRatio::R1To1,
             antenna_model: None,
         };
 

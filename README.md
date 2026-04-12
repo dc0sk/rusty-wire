@@ -1,6 +1,6 @@
 # Rusty Wire
 
-**Version 2.0.0**
+**Version 2.1.0**
 
 A Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.
 
@@ -52,6 +52,7 @@ cargo run -- [OPTIONS]
 - **Non-resonant window optima**: Displays multiple local optimum candidates within the active search window
 - **Equal-tie optima support**: Displays all equally-optimal wire lengths when ties occur
 - **Velocity factor control**: Adjust for different wire types and insulation
+- **Transformer recommendation mode**: `--transformer recommended` is the default and resolves from calculation mode plus antenna model
 - **Multiple export formats**: CSV, JSON, Markdown, plain text
 - **Unit system flexibility**: Metric-only, imperial-only, or both
 - **ITU region support**: Region-aware amateur band ranges (default: Region 1)
@@ -67,6 +68,7 @@ For planned future enhancements, see [docs/roadmap.md](docs/roadmap.md).
 Key topics:
 - CLI usage and all options
 - Interactive mode via `--interactive`
+- Transformer recommendation defaults and explicit override behavior
 - ITU region selection (`--region 1|2|3`)
 - Resonant vs. non-resonant mode differences
 - Wire search window (non-resonant only)

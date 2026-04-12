@@ -12,7 +12,7 @@ Rusty Wire currently uses three layers of testing:
 
 The codebase currently includes:
 
-- Unit tests in `src/app.rs`, `src/bands.rs`, `src/calculations.rs`, and `src/export.rs`
+- Unit tests in `src/app.rs`, `src/bands.rs`, `src/calculations.rs`, `src/cli.rs`, and `src/export.rs`
 - Integration tests in `tests/cli_integration.rs`
 
 ## Cargo Test
@@ -51,6 +51,7 @@ Current CLI integration coverage includes:
 - mixed meter/feet constraints return a validation error
 - invalid velocity values return a validation error
 - `--list-bands --region 2` shows region-specific output
+- recommended transformer defaults resolve correctly for non-resonant runs and EFHW mode
 - multiple export formats ignore a custom `--output` path and use default names
 - single-format export respects the requested `--output` path
 
@@ -127,4 +128,4 @@ cargo test
 
 - `cargo test` is the authoritative fast feedback loop and should be run for all code changes.
 - The shell scripts are slower and more scenario-oriented; they complement the Rust tests rather than replace them.
-- The interactive mode is currently exercised manually rather than through automated stdin-driven tests.
+- Interactive mode now has stdin/stdout-driven unit coverage for menu navigation, band entry validation, region switching, transformer prompt handling, and export-format rejection.

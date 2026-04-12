@@ -6,6 +6,16 @@ All notable changes to Rusty Wire are documented here.
 
 - No changes yet.
 
+## [2.1.0] - 2026-04-12
+
+### Added
+- **Recommended transformer selection**: `--transformer recommended` is now supported and is the default CLI behavior.
+- **Transformer recommendation coverage**: added unit and integration tests for recommended-ratio resolution and EFHW/non-resonant defaults.
+
+### Changed
+- **Mode/model-aware transformer defaults**: generic resonant runs now default to `1:1`, generic non-resonant runs to `1:9`, EFHW to `1:56`, and OCFD to `1:4` unless explicitly overridden.
+- **Documentation refresh**: README, CLI guide, testing guide, architecture notes, and roadmap now reflect the 2.1.0 transformer recommendation behavior and current project state.
+
 ## [2.0.0] - 2026-04-12
 
 ### Added

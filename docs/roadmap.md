@@ -1,36 +1,33 @@
 # Roadmap
 
-This document captures the most relevant future improvements that remain after the 1.4.0 CLI refactor, testing expansion, and documentation work.
+This document captures the most relevant work that remains after the 2.1.0 release.
 
-It is intentionally scoped to what is still useful, not a dump of already completed work.
+It is intentionally trimmed to the items that are still useful. Completed milestones are kept short so the roadmap stays actionable.
 
-## Already Landed
+## Recently Landed
 
-These items were part of earlier planning and are now complete:
+These areas are no longer roadmap items:
 
-- clap-based CLI parsing
-- restored interactive mode behind `--interactive`
-- no-argument help behavior
+- clap-based CLI parsing and no-argument help behavior
+- interactive mode restoration behind `--interactive`
+- interactive-mode I/O refactor and automated prompt/menu coverage
+- region-aware band selection and named band/range input
+- antenna model expansion through EFHW, loop, inverted-V, and OCFD
+- recommended transformer selection with mode/model-aware defaults
 - export path validation hardening
-- unit and integration test coverage for current CLI behavior
-- testing and architecture documentation
+- SBOM generation and pre-push SBOM enforcement
+- unit, integration, and regression-script coverage for current CLI behavior
+- testing, architecture, and CLI documentation refresh
 
 ## Remaining High-Value Improvements
 
 ## Error Handling Cleanup
 
-- return structured errors from `app::run_calculation` and related helpers instead of relying on `eprintln!` for invalid-band reporting
-- centralize CLI/display error formatting in `src/cli.rs`
-- reduce duplicated validation and conversion logic between interactive prompts and non-interactive CLI handling
+- return structured errors from `app::run_calculation` and related helpers instead of relying on terminal-oriented reporting
+- centralize end-user error formatting in `src/cli.rs`
+- reduce duplicated validation and conversion logic shared between interactive prompts and non-interactive CLI execution
 
-This would make the application easier to test, easier to reuse from future front ends, and less coupled to terminal output.
-
-## Interactive-Mode Testability
-
-- extract interactive stdin/stdout handling behind a small I/O interface
-- add automated tests for menu navigation, prompt validation, and export selection
-
-The current interactive flow is functional, but it still depends on direct terminal I/O and is therefore mostly manually tested.
+This would make the code easier to reuse from future front ends and easier to test at the app layer.
 
 ## Advanced Input Support
 
@@ -38,15 +35,16 @@ The current interactive flow is functional, but it still depends on direct termi
 - support multiple explicit frequencies such as `--freq-list 7.0,10.1`
 - support user-defined band presets through a config file such as `bands.toml` or `bands.json`
 
-These would make the tool more useful outside fixed ham-band workflows.
+These would make the tool more useful outside fixed amateur-band workflows.
 
-## Antenna Model Expansion
+## Transformer Recommendation and Selection
 
-- add additional antenna models beyond the current dipole-centered calculations
-- evaluate full-wave, loop, center-fed, off-center-fed, and end-fed modelling options
-- explore trap and hybrid antenna support
+- keep `--transformer recommended` as the default entry point, but make the recommendation model more transparent in CLI help and output
+- evaluate whether EFHW should remain fixed at `1:56` or be promoted to a ranked recommendation across `1:49`, `1:56`, and `1:64`
+- consider an optional recommendation/optimization pass that compares plausible transformer ratios for the selected mode, antenna model, and band set
+- present recommendations as guidance while still allowing explicit user override
 
-This is the most substantial feature area and likely requires changes in both `src/calculations.rs` and the user-facing configuration model.
+The current implementation uses fixed recommended defaults by mode and antenna model. Future work here is about ranking or optimizing those choices rather than hard-coding more one-off rules.
 
 ## Search and Analysis Controls
 
@@ -55,6 +53,14 @@ This is the most substantial feature area and likely requires changes in both `s
 - add a compact `--report` or `--summary` mode for automation-friendly output
 
 These changes would improve power-user workflows without requiring a large architectural shift.
+
+## Antenna Model Expansion
+
+- add additional models beyond the current dipole, inverted-V, EFHW, loop, and OCFD support
+- explore trap, hybrid, and other multi-section antenna models
+- evaluate whether more antenna-specific feed recommendations should be modeled in the application layer
+
+This remains one of the most substantial feature areas and likely requires changes in both `src/calculations.rs` and the user-facing configuration model.
 
 ## Export Improvements
 
@@ -73,17 +79,18 @@ These would make the CLI easier to integrate into larger workflows.
 
 If work continues incrementally, a good order is:
 
-1. interactive-mode testability
-2. error-handling cleanup
-3. configurable non-resonant search resolution
-4. custom frequency and user-defined band input
-5. advanced antenna models such as end-fed and trap support
+1. error-handling cleanup
+2. configurable non-resonant search resolution
+3. direct/custom frequency input
+4. transformer recommendation optimization
+5. logging and automation modes
+6. next-generation antenna models
 
 ## Affected Areas
 
-- `src/cli.rs`: interactive I/O, CLI options, validation, automation modes
-- `src/app.rs`: request orchestration and error propagation
-- `src/calculations.rs`: new antenna models, search controls, output batching
-- `src/bands.rs`: custom/user-defined bands
+- `src/cli.rs`: CLI options, interactive prompts, validation, automation modes, recommendation messaging
+- `src/app.rs`: request orchestration, recommendation policy, and error propagation
+- `src/calculations.rs`: new antenna models, search controls, and transformer-comparison logic
+- `src/bands.rs`: custom/user-defined bands and frequency presets
 - `src/export.rs`: richer export formats and schemas
 - `tests/` and `scripts/`: expanded regression coverage as features grow

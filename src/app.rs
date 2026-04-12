@@ -19,6 +19,23 @@ pub const DEFAULT_BAND_SELECTION: [usize; 7] = [4, 5, 6, 7, 8, 9, 10];
 pub const DEFAULT_ITU_REGION: ITURegion = ITURegion::Region1;
 pub const DEFAULT_TRANSFORMER_RATIO: TransformerRatio = TransformerRatio::R1To1;
 
+pub fn recommended_transformer_ratio(
+    mode: CalcMode,
+    antenna_model: Option<AntennaModel>,
+) -> TransformerRatio {
+    match antenna_model {
+        Some(AntennaModel::Dipole)
+        | Some(AntennaModel::InvertedVDipole)
+        | Some(AntennaModel::FullWaveLoop) => TransformerRatio::R1To1,
+        Some(AntennaModel::EndFedHalfWave) => TransformerRatio::R1To56,
+        Some(AntennaModel::OffCenterFedDipole) => TransformerRatio::R1To4,
+        None => match mode {
+            CalcMode::Resonant => TransformerRatio::R1To1,
+            CalcMode::NonResonant => TransformerRatio::R1To9,
+        },
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Shared enums
 // ---------------------------------------------------------------------------
@@ -501,6 +518,45 @@ mod tests {
                 ratio.as_label()
             );
         }
+    }
+
+    #[test]
+    fn recommended_transformer_ratio_defaults_by_mode() {
+        assert_eq!(
+            recommended_transformer_ratio(CalcMode::Resonant, None),
+            TransformerRatio::R1To1
+        );
+        assert_eq!(
+            recommended_transformer_ratio(CalcMode::NonResonant, None),
+            TransformerRatio::R1To9
+        );
+    }
+
+    #[test]
+    fn recommended_transformer_ratio_matches_antenna_model() {
+        assert_eq!(
+            recommended_transformer_ratio(CalcMode::Resonant, Some(AntennaModel::Dipole)),
+            TransformerRatio::R1To1
+        );
+        assert_eq!(
+            recommended_transformer_ratio(CalcMode::Resonant, Some(AntennaModel::InvertedVDipole)),
+            TransformerRatio::R1To1
+        );
+        assert_eq!(
+            recommended_transformer_ratio(CalcMode::Resonant, Some(AntennaModel::FullWaveLoop)),
+            TransformerRatio::R1To1
+        );
+        assert_eq!(
+            recommended_transformer_ratio(CalcMode::Resonant, Some(AntennaModel::EndFedHalfWave)),
+            TransformerRatio::R1To56
+        );
+        assert_eq!(
+            recommended_transformer_ratio(
+                CalcMode::Resonant,
+                Some(AntennaModel::OffCenterFedDipole)
+            ),
+            TransformerRatio::R1To4
+        );
     }
 
     #[test]

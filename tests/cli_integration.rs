@@ -246,3 +246,34 @@ fn ocfd_antenna_mode_shows_ocfd_guidance_compromises() {
     assert!(stdout.contains("20/80 legs:"));
     assert!(stdout.contains("Optimized split:"));
 }
+
+#[test]
+fn non_resonant_mode_defaults_to_recommended_transformer() {
+    let output = binary()
+        .args(["--bands", "40m", "--mode", "non-resonant"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Using transformer ratio: 1:9"));
+}
+
+#[test]
+fn efhw_recommended_transformer_resolves_to_1_56() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m",
+            "--antenna",
+            "efhw",
+            "--transformer",
+            "recommended",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Using transformer ratio: 1:56"));
+}
