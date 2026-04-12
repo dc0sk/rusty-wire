@@ -1,6 +1,6 @@
 [package]
 name = "rusty-wire"
-version = "1.5.2"
+version = "2.0.0"
 authors = ["Simon Keimer (DC0SK)"]
 license = "GPL-2.0-or-later"
 edition = "2021"
