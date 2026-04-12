@@ -8,6 +8,15 @@ See [docs/CHANGELOG.md](docs/CHANGELOG.md) for the full release history.
 
 ## Quick Start
 
+> [!TIP]
+> New to Rusty Wire? Start with interactive mode first:
+>
+> ```bash
+> ./target/release/rusty-wire --interactive
+> ```
+>
+> It walks you through region, bands, mode, antenna model, units, and export options step by step.
+
 ### Build from source
 
 ```bash
@@ -93,6 +102,64 @@ Interactive mode is available explicitly via:
 ```bash
 cargo run -- --interactive
 ```
+
+## SBOM
+
+Rusty Wire supports Software Bill of Materials generation through Cargo.
+
+Install the SBOM cargo subcommand (recommended/default):
+
+```bash
+cargo install cargo-sbom
+```
+
+Generate an SPDX SBOM (JSON 2.3) via Cargo:
+
+```bash
+cargo sbom
+```
+
+Generate CycloneDX JSON via Cargo alias:
+
+```bash
+cargo sbom-cdx
+```
+
+Or run the helper script:
+
+```bash
+./scripts/generate-sbom.sh
+```
+
+The helper script defaults to SPDX and also supports CycloneDX:
+
+```bash
+./scripts/generate-sbom.sh cyclonedx
+```
+
+Default tracked outputs are:
+
+- `sbom/rusty-wire.spdx.json` (SPDX)
+- `sbom/rusty-wire.cdx.json` (CycloneDX, when generated)
+
+### Pre-push enforcement
+
+This repository includes a pre-push hook at `.githooks/pre-push`.
+Enable repository hooks with:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+It runs:
+
+- `cargo fmt --check`
+- `cargo check`
+- `cargo test`
+- SPDX SBOM regeneration via `./scripts/generate-sbom.sh spdx`
+
+SPDX generation is normalized for deterministic output (requires `jq` or `jaq`).
+If `sbom/rusty-wire.spdx.json` changes during pre-push, the hook blocks push until the updated SBOM is committed.
 
 ## Architecture
 

@@ -1,0 +1,3 @@
+[alias]
+sbom-spdx = "sbom --output-format spdx_json_2_3"
+sbom-cdx = "sbom --output-format cyclone_dx_json_1_6"

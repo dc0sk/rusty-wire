@@ -141,6 +141,46 @@ Example regional differences currently modeled:
 Exports also include resonant points within the active search window for each selected band.
 In resonant mode, non-resonant recommendation payloads are omitted from exports.
 
+### SBOM generation
+
+Rusty Wire supports SBOM generation using Cargo with both SPDX and CycloneDX output.
+
+SPDX is the default/recommended format.
+
+Install SBOM support:
+
+```bash
+cargo install cargo-sbom
+```
+
+Generate SPDX via the repository alias:
+
+```bash
+cargo sbom
+```
+
+Generate CycloneDX JSON:
+
+```bash
+cargo sbom-cdx
+```
+
+Or use the helper script:
+
+```bash
+./scripts/generate-sbom.sh
+```
+
+Use CycloneDX from the helper script:
+
+```bash
+./scripts/generate-sbom.sh cyclonedx
+```
+
+Default tracked outputs are `sbom/rusty-wire.spdx.json` and `sbom/rusty-wire.cdx.json`.
+
+Pre-push workflow in this repository regenerates `sbom/rusty-wire.spdx.json` with deterministic normalization (requires `jq` or `jaq`) and blocks push until SBOM updates are committed.
+
 ## Examples
 
 ### 1) Default run with defaults (resonant + default bands)
