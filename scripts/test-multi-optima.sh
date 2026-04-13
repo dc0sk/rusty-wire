@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Verifies that rusty-wire can surface multiple equal non-resonant optima.
+# Verifies that rusty-wire can surface multiple non-resonant optima
+# (equal-tie optima and/or local search-window optima).
 #
 # Exit codes:
 #   0 -> at least one multi-optima case found
@@ -25,8 +26,8 @@ found=0
 : > "$SWEEP_OUT"
 
 for bands in \
-  "1" "2" "3" "4" "5" "6" "7" "8" "9" "10" \
-  "1,2" "2,3" "3,4" "4,5" "5,6" "6,7" "4,5,6,7,8,9,10"
+  "160m" "80m" "60m" "40m" "30m" "20m" "17m" "15m" "12m" "10m" \
+  "160m,80m" "80m,60m" "60m,40m" "40m,30m" "30m,20m" "20m,17m" "40m-10m"
 do
   for vf in 0.50 0.55 0.60 0.65 0.70 0.75 0.80 0.85 0.90 0.95 1.00
   do
@@ -44,11 +45,11 @@ do
           --wire-max "$max" \
           --units both)"
 
-        if printf "%s" "$out" | grep -q "Additional equal optima in range"; then
+        if printf "%s" "$out" | grep -q -E "Additional equal optima in range|Local optima in search window"; then
           {
             echo "FOUND_MULTIPLE"
             echo "bands=$bands vf=$vf min=$min max=$max"
-            printf "%s\n" "$out" | grep -E "Best non-resonant|Additional equal optima|^[[:space:]]+[0-9]+\\."
+            printf "%s\n" "$out" | grep -E "Best non-resonant|Additional equal optima|Local optima in search window|^[[:space:]]+[0-9]+\\."
           } > "$SWEEP_OUT"
 
           cat "$SWEEP_OUT"

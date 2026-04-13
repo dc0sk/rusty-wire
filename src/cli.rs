@@ -5,15 +5,16 @@
 /// The computation itself is delegated to `app::run_calculation`; the only
 /// imports from the core modules that this file needs are for display helpers.
 use crate::app::{
-    execute_request_checked, recommended_transformer_ratio, results_display_document, AntennaModel,
-    AppConfig, AppRequest, AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION,
-    DEFAULT_ITU_REGION, FEET_TO_METERS,
+    band_label_for_index, execute_request_checked, parse_band_selection, parse_single_band_token,
+    recommended_transformer_ratio, recommended_transformer_ratio_fallback_message,
+    resolve_wire_window_inputs, results_display_document, AntennaModel, AppConfig, AppRequest,
+    AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION,
+    FEET_TO_METERS,
 };
 use crate::bands::{get_bands_for_region, ITURegion, ALL_REGIONS};
 use crate::calculations::{TransformerRatio, DEFAULT_NON_RESONANT_CONFIG};
 use crate::export::{default_output_name, export_results, validate_export_path};
 use clap::Parser;
-use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, Write};
 
 // ---------------------------------------------------------------------------
@@ -276,32 +277,17 @@ pub fn run_from_args(args: &[String]) {
         None => DEFAULT_BAND_SELECTION.to_vec(),
     };
 
-    // Validate wire length constraints
-    let using_ft = cli.wire_min_ft.is_some() || cli.wire_max_ft.is_some();
-    let using_m = cli.wire_min.is_some() || cli.wire_max.is_some();
-
-    if using_ft && using_m {
-        eprintln!("Error: cannot mix meter and feet constraints; choose one unit system");
-        return;
-    }
-
-    let (wire_min_m, wire_max_m) = if using_ft {
-        let min_ft = cli
-            .wire_min_ft
-            .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m / FEET_TO_METERS);
-        let max_ft = cli
-            .wire_max_ft
-            .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m / FEET_TO_METERS);
-
-        (min_ft * FEET_TO_METERS, max_ft * FEET_TO_METERS)
-    } else {
-        let min_m = cli
-            .wire_min
-            .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m);
-        let max_m = cli
-            .wire_max
-            .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m);
-        (min_m, max_m)
+    let resolved_window = match resolve_wire_window_inputs(
+        cli.wire_min,
+        cli.wire_max,
+        cli.wire_min_ft,
+        cli.wire_max_ft,
+    ) {
+        Ok(window) => window,
+        Err(err) => {
+            eprintln!("Error: {}", err);
+            return;
+        }
     };
 
     // Validate output path if provided
@@ -312,13 +298,10 @@ pub fn run_from_args(args: &[String]) {
         }
     }
 
-    let units = cli.units.map(UnitSystem::from).unwrap_or_else(|| {
-        if using_ft {
-            UnitSystem::Imperial
-        } else {
-            UnitSystem::Metric
-        }
-    });
+    let units = cli
+        .units
+        .map(UnitSystem::from)
+        .unwrap_or_else(|| resolved_window.inferred_display_units);
 
     let export_formats = cli
         .export
@@ -333,8 +316,8 @@ pub fn run_from_args(args: &[String]) {
         band_indices: bands,
         velocity_factor: cli.velocity,
         mode: CalcMode::from(cli.mode),
-        wire_min_m,
-        wire_max_m,
+        wire_min_m: resolved_window.min_m,
+        wire_max_m: resolved_window.max_m,
         units,
         itu_region: cli.region,
         transformer_ratio,
@@ -718,8 +701,8 @@ fn prompt_transformer_ratio(
             let recommended = recommended_transformer_ratio(mode, antenna_model);
             writeln!(
                 output,
-                "Unknown ratio. Using recommended {}.",
-                recommended.as_label()
+                "{}",
+                recommended_transformer_ratio_fallback_message(mode, antenna_model)
             )
             .expect("failed to write invalid ratio message");
             recommended
@@ -1009,116 +992,6 @@ fn read_line(input: &mut dyn BufRead, error_message: &str) -> String {
     let mut line = String::new();
     input.read_line(&mut line).expect(error_message);
     line
-}
-
-fn parse_band_selection(selection: &str, region: ITURegion) -> Result<Vec<usize>, String> {
-    let mut parsed = Vec::new();
-    let mut seen = HashSet::new();
-
-    for token in selection.split(',') {
-        let token = token.trim();
-        if token.is_empty() {
-            continue;
-        }
-
-        if let Some((start, end)) = token.split_once('-') {
-            let start_idx = parse_single_band_token(start.trim(), region)?;
-            let end_idx = parse_single_band_token(end.trim(), region)?;
-
-            let ordered = ordered_band_indices_for_region(region);
-            let start_pos = ordered
-                .iter()
-                .position(|idx| *idx == start_idx)
-                .ok_or_else(|| format!("unknown range start '{}'.", start.trim()))?;
-            let end_pos = ordered
-                .iter()
-                .position(|idx| *idx == end_idx)
-                .ok_or_else(|| format!("unknown range end '{}'.", end.trim()))?;
-
-            if start_pos <= end_pos {
-                for idx in &ordered[start_pos..=end_pos] {
-                    if seen.insert(*idx) {
-                        parsed.push(*idx);
-                    }
-                }
-            } else {
-                for idx in ordered[end_pos..=start_pos].iter().rev() {
-                    if seen.insert(*idx) {
-                        parsed.push(*idx);
-                    }
-                }
-            }
-            continue;
-        }
-
-        let idx = parse_single_band_token(token, region)?;
-        if seen.insert(idx) {
-            parsed.push(idx);
-        }
-    }
-
-    if parsed.is_empty() {
-        return Err("empty selection; provide at least one band name.".to_string());
-    }
-
-    Ok(parsed)
-}
-
-fn parse_single_band_token(token: &str, region: ITURegion) -> Result<usize, String> {
-    let token = token.trim();
-    if token.is_empty() {
-        return Err("empty band token".to_string());
-    }
-
-    let aliases = band_alias_to_index(region);
-    let key = token.to_ascii_lowercase();
-    aliases
-        .get(&key)
-        .copied()
-        .ok_or_else(|| format!("unknown band '{}'.", token))
-}
-
-fn ordered_band_indices_for_region(region: ITURegion) -> Vec<usize> {
-    get_bands_for_region(region)
-        .into_iter()
-        .map(|(idx, _)| idx + 1)
-        .collect()
-}
-
-fn band_alias_to_index(region: ITURegion) -> HashMap<String, usize> {
-    let mut aliases = HashMap::new();
-
-    for (idx, band) in get_bands_for_region(region) {
-        let one_based = idx + 1;
-        let full_name = band.name.to_ascii_lowercase();
-        aliases.insert(full_name.clone(), one_based);
-
-        if let Some(short_name) = full_name.split_whitespace().next() {
-            aliases.insert(short_name.to_string(), one_based);
-        }
-    }
-
-    aliases
-}
-
-fn band_label_for_index(index: usize, region: ITURegion) -> String {
-    let zero_based = match index.checked_sub(1) {
-        Some(v) => v,
-        None => return index.to_string(),
-    };
-
-    for (idx, band) in get_bands_for_region(region) {
-        if idx == zero_based {
-            return band
-                .name
-                .split_whitespace()
-                .next()
-                .unwrap_or(band.name)
-                .to_string();
-        }
-    }
-
-    index.to_string()
 }
 
 fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat, String)]) {

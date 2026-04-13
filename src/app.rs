@@ -12,6 +12,7 @@ use crate::calculations::{
     DEFAULT_NON_RESONANT_CONFIG,
 };
 use clap::ValueEnum;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::str::FromStr;
 
@@ -35,6 +36,17 @@ pub fn recommended_transformer_ratio(
             CalcMode::NonResonant => TransformerRatio::R1To9,
         },
     }
+}
+
+pub fn recommended_transformer_ratio_fallback_message(
+    mode: CalcMode,
+    antenna_model: Option<AntennaModel>,
+) -> String {
+    let recommended = recommended_transformer_ratio(mode, antenna_model);
+    format!(
+        "Unknown ratio. Using recommended {}.",
+        recommended.as_label()
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -489,10 +501,25 @@ pub struct BandDisplayView {
     pub lines: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WireWindowInputUnit {
+    Metric,
+    Imperial,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ResolvedWireWindow {
+    pub min_m: f64,
+    pub max_m: f64,
+    pub input_unit: WireWindowInputUnit,
+    pub inferred_display_units: UnitSystem,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppError {
     InvalidVelocityFactor(f64),
     InvalidWireLengthWindow { min_m: f64, max_m: f64 },
+    MixedWireWindowUnits,
 }
 
 impl fmt::Display for AppError {
@@ -508,6 +535,12 @@ impl fmt::Display for AppError {
                 write!(
                     f,
                     "invalid wire length window in meters ({min_m:.3}..{max_m:.3})"
+                )
+            }
+            AppError::MixedWireWindowUnits => {
+                write!(
+                    f,
+                    "cannot mix meter and feet constraints; choose one unit system"
                 )
             }
         }
@@ -583,6 +616,159 @@ pub fn validate_config(config: &AppConfig) -> Result<(), AppError> {
     }
 
     Ok(())
+}
+
+pub fn resolve_wire_window_inputs(
+    wire_min_m: Option<f64>,
+    wire_max_m: Option<f64>,
+    wire_min_ft: Option<f64>,
+    wire_max_ft: Option<f64>,
+) -> Result<ResolvedWireWindow, AppError> {
+    let using_ft = wire_min_ft.is_some() || wire_max_ft.is_some();
+    let using_m = wire_min_m.is_some() || wire_max_m.is_some();
+
+    if using_ft && using_m {
+        return Err(AppError::MixedWireWindowUnits);
+    }
+
+    let resolved = if using_ft {
+        let min_ft = wire_min_ft.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m / FEET_TO_METERS);
+        let max_ft = wire_max_ft.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m / FEET_TO_METERS);
+
+        ResolvedWireWindow {
+            min_m: min_ft * FEET_TO_METERS,
+            max_m: max_ft * FEET_TO_METERS,
+            input_unit: WireWindowInputUnit::Imperial,
+            inferred_display_units: UnitSystem::Imperial,
+        }
+    } else {
+        ResolvedWireWindow {
+            min_m: wire_min_m.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m),
+            max_m: wire_max_m.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m),
+            input_unit: WireWindowInputUnit::Metric,
+            inferred_display_units: UnitSystem::Metric,
+        }
+    };
+
+    if resolved.min_m <= 0.0 || resolved.max_m <= resolved.min_m {
+        return Err(AppError::InvalidWireLengthWindow {
+            min_m: resolved.min_m,
+            max_m: resolved.max_m,
+        });
+    }
+
+    Ok(resolved)
+}
+
+pub fn parse_band_selection(selection: &str, region: ITURegion) -> Result<Vec<usize>, String> {
+    let mut parsed = Vec::new();
+    let mut seen = HashSet::new();
+
+    for token in selection.split(',') {
+        let token = token.trim();
+        if token.is_empty() {
+            continue;
+        }
+
+        if let Some((start, end)) = token.split_once('-') {
+            let start_idx = parse_single_band_token(start.trim(), region)?;
+            let end_idx = parse_single_band_token(end.trim(), region)?;
+
+            let ordered = ordered_band_indices_for_region(region);
+            let start_pos = ordered
+                .iter()
+                .position(|idx| *idx == start_idx)
+                .ok_or_else(|| format!("unknown range start '{}'.", start.trim()))?;
+            let end_pos = ordered
+                .iter()
+                .position(|idx| *idx == end_idx)
+                .ok_or_else(|| format!("unknown range end '{}'.", end.trim()))?;
+
+            if start_pos <= end_pos {
+                for idx in &ordered[start_pos..=end_pos] {
+                    if seen.insert(*idx) {
+                        parsed.push(*idx);
+                    }
+                }
+            } else {
+                for idx in ordered[end_pos..=start_pos].iter().rev() {
+                    if seen.insert(*idx) {
+                        parsed.push(*idx);
+                    }
+                }
+            }
+
+            continue;
+        }
+
+        let idx = parse_single_band_token(token, region)?;
+        if seen.insert(idx) {
+            parsed.push(idx);
+        }
+    }
+
+    if parsed.is_empty() {
+        return Err("empty selection; provide at least one band name.".to_string());
+    }
+
+    Ok(parsed)
+}
+
+pub fn parse_single_band_token(token: &str, region: ITURegion) -> Result<usize, String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err("empty band token".to_string());
+    }
+
+    let aliases = band_alias_to_index(region);
+    let key = token.to_ascii_lowercase();
+    aliases
+        .get(&key)
+        .copied()
+        .ok_or_else(|| format!("unknown band '{}'.", token))
+}
+
+pub fn band_label_for_index(index: usize, region: ITURegion) -> String {
+    let zero_based = match index.checked_sub(1) {
+        Some(v) => v,
+        None => return index.to_string(),
+    };
+
+    for (idx, band) in crate::bands::get_bands_for_region(region) {
+        if idx == zero_based {
+            return band
+                .name
+                .split_whitespace()
+                .next()
+                .unwrap_or(band.name)
+                .to_string();
+        }
+    }
+
+    index.to_string()
+}
+
+fn ordered_band_indices_for_region(region: ITURegion) -> Vec<usize> {
+    crate::bands::get_bands_for_region(region)
+        .into_iter()
+        .map(|(idx, _)| idx + 1)
+        .collect()
+}
+
+fn band_alias_to_index(region: ITURegion) -> HashMap<String, usize> {
+    let mut aliases = HashMap::new();
+
+    for (idx, band) in crate::bands::get_bands_for_region(region) {
+        let one_based = idx + 1;
+        let full_name = band.name.to_ascii_lowercase();
+        aliases.insert(full_name.clone(), one_based);
+
+        if let Some(short_name) = full_name.split_whitespace().next() {
+            aliases.insert(short_name.to_string(), one_based);
+        }
+    }
+
+    aliases
 }
 
 /// Validate and execute a calculation run.
@@ -1909,6 +2095,15 @@ mod tests {
     }
 
     #[test]
+    fn recommended_transformer_ratio_fallback_message_is_stable() {
+        let msg = recommended_transformer_ratio_fallback_message(
+            CalcMode::Resonant,
+            Some(AntennaModel::EndFedHalfWave),
+        );
+        assert_eq!(msg, "Unknown ratio. Using recommended 1:56.");
+    }
+
+    #[test]
     fn run_calculation_velocity_factor_range() {
         for vf in &[0.5, 0.75, 0.95, 1.0] {
             let mut config = AppConfig::default();
@@ -1942,6 +2137,80 @@ mod tests {
                 max_m: 12.0,
             }
         );
+    }
+
+    #[test]
+    fn resolve_wire_window_inputs_uses_metric_defaults() {
+        let resolved = resolve_wire_window_inputs(None, None, None, None)
+            .expect("expected default wire window to resolve");
+
+        assert_eq!(resolved.min_m, DEFAULT_NON_RESONANT_CONFIG.min_len_m);
+        assert_eq!(resolved.max_m, DEFAULT_NON_RESONANT_CONFIG.max_len_m);
+        assert_eq!(resolved.input_unit, WireWindowInputUnit::Metric);
+        assert_eq!(resolved.inferred_display_units, UnitSystem::Metric);
+    }
+
+    #[test]
+    fn resolve_wire_window_inputs_converts_feet_to_meters() {
+        let resolved = resolve_wire_window_inputs(None, None, Some(30.0), Some(90.0))
+            .expect("expected imperial wire window to resolve");
+
+        assert!((resolved.min_m - (30.0 * FEET_TO_METERS)).abs() < 1e-9);
+        assert!((resolved.max_m - (90.0 * FEET_TO_METERS)).abs() < 1e-9);
+        assert_eq!(resolved.input_unit, WireWindowInputUnit::Imperial);
+        assert_eq!(resolved.inferred_display_units, UnitSystem::Imperial);
+    }
+
+    #[test]
+    fn resolve_wire_window_inputs_rejects_mixed_units() {
+        let err = resolve_wire_window_inputs(Some(8.0), None, Some(30.0), None)
+            .expect_err("expected mixed-unit wire window to fail");
+
+        assert_eq!(err, AppError::MixedWireWindowUnits);
+    }
+
+    #[test]
+    fn resolve_wire_window_inputs_rejects_invalid_range() {
+        let err = resolve_wire_window_inputs(Some(12.0), Some(12.0), None, None)
+            .expect_err("expected invalid wire window to fail");
+
+        assert_eq!(
+            err,
+            AppError::InvalidWireLengthWindow {
+                min_m: 12.0,
+                max_m: 12.0,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_band_selection_supports_names_and_ranges() {
+        let parsed = parse_band_selection("40m,20m,17m-12m", ITURegion::Region1)
+            .expect("expected band selection to parse");
+
+        assert_eq!(parsed, vec![4, 6, 7, 8, 9]);
+    }
+
+    #[test]
+    fn parse_band_selection_rejects_unknown_names() {
+        let err = parse_band_selection("40m,foobar", ITURegion::Region1)
+            .expect_err("expected unknown band selection to fail");
+
+        assert!(err.contains("unknown band 'foobar'"));
+    }
+
+    #[test]
+    fn parse_single_band_token_rejects_empty_input() {
+        let err = parse_single_band_token("", ITURegion::Region1)
+            .expect_err("expected empty token to fail");
+
+        assert_eq!(err, "empty band token");
+    }
+
+    #[test]
+    fn band_label_for_index_returns_short_name() {
+        assert_eq!(band_label_for_index(4, ITURegion::Region1), "40m");
+        assert_eq!(band_label_for_index(11, ITURegion::Region1), "120m");
     }
 
     #[test]

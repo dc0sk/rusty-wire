@@ -18,6 +18,9 @@ These areas are no longer roadmap items:
 - SBOM generation and pre-push SBOM enforcement
 - unit, integration, and regression-script coverage for current CLI behavior
 - testing, architecture, and CLI documentation refresh
+- shared app-layer wire-window normalization for CLI and future UI input paths
+- shared app-layer band-selection parsing and label resolution for CLI and future UI input paths
+- shared app-layer transformer recommendation fallback messaging for CLI and future UI input paths
 
 ## Remaining High-Value Improvements
 
@@ -39,6 +42,7 @@ The project is structurally close to being usable from an `iced` desktop UI, but
 - define a stable request/response boundary around `AppConfig` and `AppResults` so both CLI and UI use the same application service interface
 - separate pure result formatting from terminal printing so a GUI can reuse summaries, labels, warnings, and recommendation text without scraping CLI output
 - extract reusable validation helpers for wire-window constraints, band selection, transformer recommendation messaging, and export configuration
+- continue extracting reusable validation helpers for export configuration
 - introduce explicit view-friendly metadata where useful, such as recommended transformer explanations, skipped-band reasons, and per-band annotations
 - review long-running or repeated operations such as export generation and future sweeps/batch runs so they can be surfaced as asynchronous UI tasks instead of blocking the event loop
 - decide whether the project should remain a single binary with multiple entry paths or be split into a reusable library crate plus separate CLI/UI binaries
