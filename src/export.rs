@@ -760,9 +760,9 @@ fn format_band_resonant_points(
     points
         .into_iter()
         .map(|(harmonic, len_m)| match units {
-            UnitSystem::Metric => format!("{}x={:.2}m", harmonic, len_m),
-            UnitSystem::Imperial => format!("{}x={:.2}ft", harmonic, len_m / 0.3048),
-            UnitSystem::Both => format!("{}x={:.2}m/{:.2}ft", harmonic, len_m, len_m / 0.3048),
+            UnitSystem::Metric => format!("{harmonic}x={len_m:.2}m"),
+            UnitSystem::Imperial => format!("{harmonic}x={:.2}ft", len_m / 0.3048),
+            UnitSystem::Both => format!("{harmonic}x={len_m:.2}m/{:.2}ft", len_m / 0.3048),
         })
         .collect::<Vec<String>>()
         .join("; ")
@@ -782,25 +782,20 @@ fn format_band_resonant_points_json(
     let items = points
         .into_iter()
         .map(|(harmonic, len_m)| match units {
-            UnitSystem::Metric => {
-                format!("{{\"harmonic\": {}, \"length_m\": {:.2}}}", harmonic, len_m)
-            }
+            UnitSystem::Metric => format!("{{\"harmonic\": {harmonic}, \"length_m\": {len_m:.2}}}"),
             UnitSystem::Imperial => format!(
-                "{{\"harmonic\": {}, \"length_ft\": {:.2}}}",
-                harmonic,
+                "{{\"harmonic\": {harmonic}, \"length_ft\": {:.2}}}",
                 len_m / 0.3048
             ),
             UnitSystem::Both => format!(
-                "{{\"harmonic\": {}, \"length_m\": {:.2}, \"length_ft\": {:.2}}}",
-                harmonic,
-                len_m,
+                "{{\"harmonic\": {harmonic}, \"length_m\": {len_m:.2}, \"length_ft\": {:.2}}}",
                 len_m / 0.3048
             ),
         })
         .collect::<Vec<String>>()
         .join(", ");
 
-    format!("[{}]", items)
+    format!("[{items}]")
 }
 
 fn append_markdown_points_rows(

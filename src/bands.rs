@@ -15,7 +15,7 @@ impl fmt::Display for BandType {
             BandType::HF => "HF",
             BandType::MF => "MF",
         };
-        write!(f, "{}", label)
+        write!(f, "{label}")
     }
 }
 
@@ -33,7 +33,7 @@ impl fmt::Display for ITURegion {
             ITURegion::Region2 => "2 (Americas)",
             ITURegion::Region3 => "3 (Asia-Pacific)",
         };
-        write!(f, "Region {}", label)
+        write!(f, "Region {label}")
     }
 }
 
@@ -63,7 +63,7 @@ impl FromStr for ITURegion {
             "1" => Ok(ITURegion::Region1),
             "2" => Ok(ITURegion::Region2),
             "3" => Ok(ITURegion::Region3),
-            _ => Err(format!("Invalid ITU region '{}'. Must be 1, 2, or 3.", s)),
+            _ => Err(format!("Invalid ITU region '{s}'. Must be 1, 2, or 3.")),
         }
     }
 }

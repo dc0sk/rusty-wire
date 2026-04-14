@@ -1,3 +1,50 @@
+#[derive(Debug, Clone, PartialEq)]
+pub enum AppError {
+    InvalidVelocityFactor(f64),
+    InvalidWireLengthWindow { min_m: f64, max_m: f64 },
+    MixedWireWindowUnits,
+    InvalidCalcMode(String),
+    InvalidExportFormat(String),
+    InvalidUnitSystem(String),
+    InvalidAntennaModel(String),
+    InvalidBandSelection(String),
+    EmptyBandSelection,
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AppError::InvalidVelocityFactor(value) => {
+                write!(
+                    f,
+                    "velocity factor must be between 0.50 and 1.00 (got {value:.3})"
+                )
+            }
+            AppError::InvalidWireLengthWindow { min_m, max_m } => {
+                write!(
+                    f,
+                    "invalid wire length window in meters ({min_m:.3}..{max_m:.3})"
+                )
+            }
+            AppError::MixedWireWindowUnits => {
+                write!(
+                    f,
+                    "cannot mix meter and feet constraints; choose one unit system"
+                )
+            }
+            AppError::InvalidCalcMode(s) => write!(f, "Invalid calculation mode: {s}"),
+            AppError::InvalidExportFormat(s) => write!(f, "Invalid export format: {s}"),
+            AppError::InvalidUnitSystem(s) => write!(f, "Invalid unit system: {s}"),
+            AppError::InvalidAntennaModel(s) => write!(f, "Invalid antenna model: {s}"),
+            AppError::InvalidBandSelection(s) => write!(f, "Invalid band selection: {s}"),
+            AppError::EmptyBandSelection => {
+                write!(f, "empty selection; provide at least one band name.")
+            }
+        }
+    }
+}
+
+impl std::error::Error for AppError {}
 /// Core application types, configuration, and computation entry point.
 ///
 /// This module is the primary API surface for both the CLI front-end and any
@@ -60,16 +107,15 @@ pub enum CalcMode {
 }
 
 impl FromStr for CalcMode {
-    type Err = String;
+    type Err = AppError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "resonant" => Ok(CalcMode::Resonant),
             "non-resonant" | "nonresonant" | "non_resonant" => Ok(CalcMode::NonResonant),
-            _ => Err(format!(
-                "Invalid calculation mode '{}'. Must be 'resonant' or 'non-resonant'.",
-                s
-            )),
+            _ => Err(AppError::InvalidCalcMode(format!(
+                "'{s}' (must be 'resonant' or 'non-resonant')"
+            ))),
         }
     }
 }
@@ -114,7 +160,7 @@ impl ExportFormat {
 }
 
 impl FromStr for ExportFormat {
-    type Err = String;
+    type Err = AppError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
@@ -122,10 +168,9 @@ impl FromStr for ExportFormat {
             "json" => Ok(ExportFormat::Json),
             "markdown" | "md" => Ok(ExportFormat::Markdown),
             "txt" | "text" => Ok(ExportFormat::Txt),
-            _ => Err(format!(
-                "Invalid export format '{}'. Must be 'csv', 'json', 'markdown', or 'txt'.",
-                s
-            )),
+            _ => Err(AppError::InvalidExportFormat(format!(
+                "'{s}' (must be 'csv', 'json', 'markdown', or 'txt')"
+            ))),
         }
     }
 }
@@ -164,17 +209,16 @@ pub enum UnitSystem {
 }
 
 impl FromStr for UnitSystem {
-    type Err = String;
+    type Err = AppError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "m" | "metric" => Ok(UnitSystem::Metric),
             "ft" | "imperial" => Ok(UnitSystem::Imperial),
             "both" => Ok(UnitSystem::Both),
-            _ => Err(format!(
-                "Invalid unit system '{}'. Must be 'm', 'ft', or 'both'.",
-                s
-            )),
+            _ => Err(AppError::InvalidUnitSystem(format!(
+                "'{s}' (must be 'm', 'ft', or 'both')"
+            ))),
         }
     }
 }
@@ -205,7 +249,7 @@ pub enum AntennaModel {
 }
 
 impl FromStr for AntennaModel {
-    type Err = String;
+    type Err = AppError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
@@ -216,10 +260,9 @@ impl FromStr for AntennaModel {
             "ocfd" | "off-center-fed" | "off-center-fed-dipole" => {
                 Ok(AntennaModel::OffCenterFedDipole)
             }
-            _ => Err(format!(
-                "Invalid antenna model '{}'. Must be 'dipole', 'inverted-v', 'efhw', 'loop', or 'ocfd'.",
-                s
-            )),
+            _ => Err(AppError::InvalidAntennaModel(format!(
+                "'{s}' (must be 'dipole', 'inverted-v', 'efhw', 'loop', or 'ocfd')"
+            ))),
         }
     }
 }
@@ -515,40 +558,6 @@ pub struct ResolvedWireWindow {
     pub inferred_display_units: UnitSystem,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum AppError {
-    InvalidVelocityFactor(f64),
-    InvalidWireLengthWindow { min_m: f64, max_m: f64 },
-    MixedWireWindowUnits,
-}
-
-impl fmt::Display for AppError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AppError::InvalidVelocityFactor(value) => {
-                write!(
-                    f,
-                    "velocity factor must be between 0.50 and 1.00 (got {value:.3})"
-                )
-            }
-            AppError::InvalidWireLengthWindow { min_m, max_m } => {
-                write!(
-                    f,
-                    "invalid wire length window in meters ({min_m:.3}..{max_m:.3})"
-                )
-            }
-            AppError::MixedWireWindowUnits => {
-                write!(
-                    f,
-                    "cannot mix meter and feet constraints; choose one unit system"
-                )
-            }
-        }
-    }
-}
-
-impl std::error::Error for AppError {}
-
 // ---------------------------------------------------------------------------
 // Public computation API
 // ---------------------------------------------------------------------------
@@ -660,7 +669,7 @@ pub fn resolve_wire_window_inputs(
     Ok(resolved)
 }
 
-pub fn parse_band_selection(selection: &str, region: ITURegion) -> Result<Vec<usize>, String> {
+pub fn parse_band_selection(selection: &str, region: ITURegion) -> Result<Vec<usize>, AppError> {
     let mut parsed = Vec::new();
     let mut seen = HashSet::new();
 
@@ -678,11 +687,18 @@ pub fn parse_band_selection(selection: &str, region: ITURegion) -> Result<Vec<us
             let start_pos = ordered
                 .iter()
                 .position(|idx| *idx == start_idx)
-                .ok_or_else(|| format!("unknown range start '{}'.", start.trim()))?;
+                .ok_or_else(|| {
+                    AppError::InvalidBandSelection(format!(
+                        "unknown range start '{}'.",
+                        start.trim()
+                    ))
+                })?;
             let end_pos = ordered
                 .iter()
                 .position(|idx| *idx == end_idx)
-                .ok_or_else(|| format!("unknown range end '{}'.", end.trim()))?;
+                .ok_or_else(|| {
+                    AppError::InvalidBandSelection(format!("unknown range end '{}'.", end.trim()))
+                })?;
 
             if start_pos <= end_pos {
                 for idx in &ordered[start_pos..=end_pos] {
@@ -708,16 +724,18 @@ pub fn parse_band_selection(selection: &str, region: ITURegion) -> Result<Vec<us
     }
 
     if parsed.is_empty() {
-        return Err("empty selection; provide at least one band name.".to_string());
+        return Err(AppError::EmptyBandSelection);
     }
 
     Ok(parsed)
 }
 
-pub fn parse_single_band_token(token: &str, region: ITURegion) -> Result<usize, String> {
+pub fn parse_single_band_token(token: &str, region: ITURegion) -> Result<usize, AppError> {
     let token = token.trim();
     if token.is_empty() {
-        return Err("empty band token".to_string());
+        return Err(AppError::InvalidBandSelection(
+            "empty band token".to_string(),
+        ));
     }
 
     let aliases = band_alias_to_index(region);
@@ -725,7 +743,7 @@ pub fn parse_single_band_token(token: &str, region: ITURegion) -> Result<usize, 
     aliases
         .get(&key)
         .copied()
-        .ok_or_else(|| format!("unknown band '{}'.", token))
+        .ok_or_else(|| AppError::InvalidBandSelection(format!("unknown band '{token}'.")))
 }
 
 pub fn band_label_for_index(index: usize, region: ITURegion) -> String {
@@ -869,12 +887,7 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
         let compromise_view = resonant_compromise_display_view(results);
         let mut lines = Vec::new();
         lines.push(compromise_view.heading.to_string());
-        lines.extend(
-            compromise_view
-                .notes
-                .iter()
-                .map(|note| format!("  {}", note)),
-        );
+        lines.extend(compromise_view.notes.iter().map(|note| format!("  {note}")));
         lines.extend(compromise_view.lines);
         sections.push(ResultsTextSectionView { lines });
     }
@@ -907,8 +920,7 @@ pub fn skipped_band_warning(results: &AppResults) -> Option<String> {
         .join(", ");
 
     Some(format!(
-        "Warning: the following band selections were invalid and skipped: {}",
-        skipped
+        "Warning: the following band selections were invalid and skipped: {skipped}"
     ))
 }
 
@@ -1039,16 +1051,11 @@ pub fn non_resonant_recommendation_view(results: &AppResults) -> NonResonantReco
                     }
                 ),
                 UnitSystem::Both => format!(
-                    "    {:2}. {:.2} m ({:.2} ft, clearance: {:.2}%{})",
+                    "    {:2}. {:.2} m ({:.2} ft, clearance: {:.2}%)",
                     idx + 1,
                     o.length_m,
                     o.length_ft,
-                    o.min_resonance_clearance_pct,
-                    if o.is_recommended {
-                        ", recommended"
-                    } else {
-                        ""
-                    }
+                    o.min_resonance_clearance_pct
                 ),
             })
             .collect()
@@ -1448,12 +1455,11 @@ pub fn resonant_points_view(results: &AppResults) -> ResonantPointsView {
     let max_ft = max_m / FEET_TO_METERS;
 
     let window_line = match results.config.units {
-        UnitSystem::Metric => format!("  Search window: {:.2}-{:.2} m", min_m, max_m),
-        UnitSystem::Imperial => format!("  Search window: {:.2}-{:.2} ft", min_ft, max_ft),
-        UnitSystem::Both => format!(
-            "  Search window: {:.2}-{:.2} m ({:.2}-{:.2} ft)",
-            min_m, max_m, min_ft, max_ft
-        ),
+        UnitSystem::Metric => format!("  Search window: {min_m:.2}-{max_m:.2} m"),
+        UnitSystem::Imperial => format!("  Search window: {min_ft:.2}-{max_ft:.2} ft"),
+        UnitSystem::Both => {
+            format!("  Search window: {min_m:.2}-{max_m:.2} m ({min_ft:.2}-{max_ft:.2} ft)")
+        }
     };
 
     let point_lines = points
@@ -1928,9 +1934,11 @@ mod tests {
 
     #[test]
     fn run_calculation_skips_invalid_band_indices() {
-        let mut config = AppConfig::default();
-        config.band_indices = vec![0, 1, 100];
-        config.mode = CalcMode::Resonant;
+        let config = AppConfig {
+            band_indices: vec![0, 1, 100],
+            mode: CalcMode::Resonant,
+            ..AppConfig::default()
+        };
 
         let results = run_calculation(config);
 
@@ -1941,9 +1949,11 @@ mod tests {
 
     #[test]
     fn run_calculation_resonant_mode() {
-        let mut config = AppConfig::default();
-        config.mode = CalcMode::Resonant;
-        config.band_indices = vec![1, 2];
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            band_indices: vec![1, 2],
+            ..AppConfig::default()
+        };
 
         let results = run_calculation(config);
 
@@ -1955,11 +1965,13 @@ mod tests {
 
     #[test]
     fn run_calculation_non_resonant_mode() {
-        let mut config = AppConfig::default();
-        config.mode = CalcMode::NonResonant;
-        config.band_indices = vec![1, 2];
-        config.wire_min_m = 8.0;
-        config.wire_max_m = 35.0;
+        let config = AppConfig {
+            mode: CalcMode::NonResonant,
+            band_indices: vec![1, 2],
+            wire_min_m: 8.0,
+            wire_max_m: 35.0,
+            ..AppConfig::default()
+        };
 
         let results = run_calculation(config);
 
@@ -1971,9 +1983,11 @@ mod tests {
 
     #[test]
     fn run_calculation_stores_config() {
-        let mut config = AppConfig::default();
-        config.velocity_factor = 0.85;
-        config.mode = CalcMode::Resonant;
+        let config = AppConfig {
+            velocity_factor: 0.85,
+            mode: CalcMode::Resonant,
+            ..AppConfig::default()
+        };
 
         let results = run_calculation(config);
 
@@ -2025,9 +2039,11 @@ mod tests {
     #[test]
     fn run_calculation_multiple_regions() {
         for region in &[ITURegion::Region1, ITURegion::Region2, ITURegion::Region3] {
-            let mut config = AppConfig::default();
-            config.itu_region = *region;
-            config.band_indices = vec![1, 2, 3];
+            let config = AppConfig {
+                itu_region: *region,
+                band_indices: vec![1, 2, 3],
+                ..AppConfig::default()
+            };
 
             let results = run_calculation(config);
             assert!(!results.calculations.is_empty());
@@ -2043,9 +2059,11 @@ mod tests {
             TransformerRatio::R1To9,
             TransformerRatio::R1To64,
         ] {
-            let mut config = AppConfig::default();
-            config.transformer_ratio = *ratio;
-            config.band_indices = vec![1];
+            let config = AppConfig {
+                transformer_ratio: *ratio,
+                band_indices: vec![1],
+                ..AppConfig::default()
+            };
 
             let results = run_calculation(config);
             assert_eq!(
@@ -2106,8 +2124,10 @@ mod tests {
     #[test]
     fn run_calculation_velocity_factor_range() {
         for vf in &[0.5, 0.75, 0.95, 1.0] {
-            let mut config = AppConfig::default();
-            config.velocity_factor = *vf;
+            let config = AppConfig {
+                velocity_factor: *vf,
+                ..AppConfig::default()
+            };
 
             let results = run_calculation(config);
             assert_eq!(results.config.velocity_factor, *vf);
@@ -2116,8 +2136,10 @@ mod tests {
 
     #[test]
     fn validate_config_rejects_invalid_velocity() {
-        let mut config = AppConfig::default();
-        config.velocity_factor = 1.1;
+        let config = AppConfig {
+            velocity_factor: 1.1,
+            ..AppConfig::default()
+        };
 
         let err = validate_config(&config).expect_err("expected invalid velocity error");
         assert_eq!(err, AppError::InvalidVelocityFactor(1.1));
@@ -2125,9 +2147,11 @@ mod tests {
 
     #[test]
     fn validate_config_rejects_invalid_window() {
-        let mut config = AppConfig::default();
-        config.wire_min_m = 12.0;
-        config.wire_max_m = 12.0;
+        let config = AppConfig {
+            wire_min_m: 12.0,
+            wire_max_m: 12.0,
+            ..AppConfig::default()
+        };
 
         let err = validate_config(&config).expect_err("expected invalid window error");
         assert_eq!(
@@ -2196,7 +2220,7 @@ mod tests {
         let err = parse_band_selection("40m,foobar", ITURegion::Region1)
             .expect_err("expected unknown band selection to fail");
 
-        assert!(err.contains("unknown band 'foobar'"));
+        assert!(err.to_string().contains("unknown band 'foobar'"));
     }
 
     #[test]
@@ -2204,7 +2228,7 @@ mod tests {
         let err = parse_single_band_token("", ITURegion::Region1)
             .expect_err("expected empty token to fail");
 
-        assert_eq!(err, "empty band token");
+        assert!(matches!(err, AppError::InvalidBandSelection(s) if s == "empty band token"));
     }
 
     #[test]
@@ -2215,8 +2239,10 @@ mod tests {
 
     #[test]
     fn run_calculation_checked_validates_before_execution() {
-        let mut config = AppConfig::default();
-        config.velocity_factor = 0.4;
+        let config = AppConfig {
+            velocity_factor: 0.4,
+            ..AppConfig::default()
+        };
 
         let err = run_calculation_checked(config).expect_err("expected validation failure");
         assert_eq!(err, AppError::InvalidVelocityFactor(0.4));
@@ -2275,8 +2301,10 @@ mod tests {
 
     #[test]
     fn results_section_layout_reflects_non_resonant_mode() {
-        let mut config = AppConfig::default();
-        config.mode = CalcMode::NonResonant;
+        let config = AppConfig {
+            mode: CalcMode::NonResonant,
+            ..AppConfig::default()
+        };
         let results = run_calculation(config);
 
         let layout = results_section_layout(&results);
@@ -2305,8 +2333,10 @@ mod tests {
 
     #[test]
     fn results_display_document_includes_non_resonant_section() {
-        let mut config = AppConfig::default();
-        config.mode = CalcMode::NonResonant;
+        let config = AppConfig {
+            mode: CalcMode::NonResonant,
+            ..AppConfig::default()
+        };
         let results = run_calculation(config);
 
         let doc = results_display_document(&results);
@@ -2350,8 +2380,10 @@ mod tests {
 
     #[test]
     fn resonant_compromise_narrative_reflects_antenna_model() {
-        let mut config = AppConfig::default();
-        config.antenna_model = Some(AntennaModel::OffCenterFedDipole);
+        let config = AppConfig {
+            antenna_model: Some(AntennaModel::OffCenterFedDipole),
+            ..AppConfig::default()
+        };
         let results = run_calculation(config);
 
         let narrative = resonant_compromise_narrative(&results);
@@ -2376,9 +2408,11 @@ mod tests {
 
     #[test]
     fn non_resonant_recommendation_view_marks_recommended_rows() {
-        let mut config = AppConfig::default();
-        config.mode = CalcMode::NonResonant;
-        config.band_indices = vec![4, 5, 6];
+        let config = AppConfig {
+            mode: CalcMode::NonResonant,
+            band_indices: vec![4, 5, 6],
+            ..AppConfig::default()
+        };
         let results = run_calculation(config);
 
         let view = non_resonant_recommendation_view(&results);
@@ -2417,9 +2451,11 @@ mod tests {
 
     #[test]
     fn resonant_compromise_view_contains_ocfd_details() {
-        let mut config = AppConfig::default();
-        config.mode = CalcMode::Resonant;
-        config.antenna_model = Some(AntennaModel::OffCenterFedDipole);
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            antenna_model: Some(AntennaModel::OffCenterFedDipole),
+            ..AppConfig::default()
+        };
         let results = run_calculation(config);
 
         let view = resonant_compromise_view(&results);
@@ -2432,9 +2468,11 @@ mod tests {
 
     #[test]
     fn resonant_compromise_view_contains_inverted_v_details() {
-        let mut config = AppConfig::default();
-        config.mode = CalcMode::Resonant;
-        config.antenna_model = Some(AntennaModel::InvertedVDipole);
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            antenna_model: Some(AntennaModel::InvertedVDipole),
+            ..AppConfig::default()
+        };
         let results = run_calculation(config);
 
         let view = resonant_compromise_view(&results);
@@ -2446,9 +2484,11 @@ mod tests {
 
     #[test]
     fn resonant_compromise_display_view_formats_lines() {
-        let mut config = AppConfig::default();
-        config.mode = CalcMode::Resonant;
-        config.antenna_model = Some(AntennaModel::OffCenterFedDipole);
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            antenna_model: Some(AntennaModel::OffCenterFedDipole),
+            ..AppConfig::default()
+        };
         let results = run_calculation(config);
 
         let view = resonant_compromise_display_view(&results);
@@ -2482,9 +2522,11 @@ mod tests {
 
     #[test]
     fn resonant_points_in_window_returns_sorted_points() {
-        let mut config = AppConfig::default();
-        config.mode = CalcMode::Resonant;
-        config.band_indices = vec![4, 5, 6];
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            band_indices: vec![4, 5, 6],
+            ..AppConfig::default()
+        };
         let results = run_calculation(config);
 
         let points = resonant_points_in_window(&results);
@@ -2496,10 +2538,12 @@ mod tests {
 
     #[test]
     fn resonant_points_in_window_can_be_empty() {
-        let mut config = AppConfig::default();
-        config.mode = CalcMode::Resonant;
-        config.wire_min_m = 0.1;
-        config.wire_max_m = 0.2;
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            wire_min_m: 0.1,
+            wire_max_m: 0.2,
+            ..AppConfig::default()
+        };
         let results = run_calculation(config);
 
         let points = resonant_points_in_window(&results);
@@ -2508,8 +2552,10 @@ mod tests {
 
     #[test]
     fn resonant_points_view_formats_search_window() {
-        let mut config = AppConfig::default();
-        config.units = UnitSystem::Both;
+        let config = AppConfig {
+            units: UnitSystem::Both,
+            ..AppConfig::default()
+        };
         let results = run_calculation(config);
 
         let view = resonant_points_view(&results);
@@ -2519,10 +2565,12 @@ mod tests {
 
     #[test]
     fn resonant_points_view_can_render_empty_message() {
-        let mut config = AppConfig::default();
-        config.mode = CalcMode::Resonant;
-        config.wire_min_m = 0.1;
-        config.wire_max_m = 0.2;
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            wire_min_m: 0.1,
+            wire_max_m: 0.2,
+            ..AppConfig::default()
+        };
         let results = run_calculation(config);
 
         let view = resonant_points_view(&results);
@@ -2532,10 +2580,12 @@ mod tests {
 
     #[test]
     fn resonant_points_display_lines_include_empty_message() {
-        let mut config = AppConfig::default();
-        config.mode = CalcMode::Resonant;
-        config.wire_min_m = 0.1;
-        config.wire_max_m = 0.2;
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            wire_min_m: 0.1,
+            wire_max_m: 0.2,
+            ..AppConfig::default()
+        };
         let results = run_calculation(config);
 
         let lines = resonant_points_display_lines(&results);
@@ -2545,5 +2595,82 @@ mod tests {
         assert!(lines
             .iter()
             .any(|line| line.contains("no resonant points fall within this window")));
+    }
+}
+
+#[cfg(test)]
+mod app_error_tests {
+    use super::*;
+
+    #[test]
+    fn test_invalid_velocity_factor() {
+        let config = AppConfig {
+            velocity_factor: 1.5,
+            ..Default::default()
+        };
+        let err = validate_config(&config).unwrap_err();
+        assert!(matches!(err, AppError::InvalidVelocityFactor(_)));
+        assert!(err.to_string().contains("velocity factor must be between"));
+    }
+
+    #[test]
+    fn test_invalid_wire_length_window() {
+        let config = AppConfig {
+            wire_min_m: 10.0,
+            wire_max_m: 5.0,
+            ..Default::default()
+        };
+        let err = validate_config(&config).unwrap_err();
+        assert!(matches!(err, AppError::InvalidWireLengthWindow { .. }));
+        assert!(err.to_string().contains("invalid wire length window"));
+    }
+
+    #[test]
+    fn test_mixed_wire_window_units() {
+        let err = resolve_wire_window_inputs(Some(10.0), None, Some(20.0), None).unwrap_err();
+        assert!(matches!(err, AppError::MixedWireWindowUnits));
+        assert!(err.to_string().contains("cannot mix meter and feet"));
+    }
+
+    #[test]
+    fn test_invalid_calc_mode() {
+        let err = <CalcMode as std::str::FromStr>::from_str("foo").unwrap_err();
+        assert!(matches!(err, AppError::InvalidCalcMode(_)));
+        assert!(err.to_string().contains("Invalid calculation mode"));
+    }
+
+    #[test]
+    fn test_invalid_export_format() {
+        let err = <ExportFormat as std::str::FromStr>::from_str("foo").unwrap_err();
+        assert!(matches!(err, AppError::InvalidExportFormat(_)));
+        assert!(err.to_string().contains("Invalid export format"));
+    }
+
+    #[test]
+    fn test_invalid_unit_system() {
+        let err = <UnitSystem as std::str::FromStr>::from_str("foo").unwrap_err();
+        assert!(matches!(err, AppError::InvalidUnitSystem(_)));
+        assert!(err.to_string().contains("Invalid unit system"));
+    }
+
+    #[test]
+    fn test_invalid_antenna_model() {
+        let err = <AntennaModel as std::str::FromStr>::from_str("foo").unwrap_err();
+        assert!(matches!(err, AppError::InvalidAntennaModel(_)));
+        assert!(err.to_string().contains("Invalid antenna model"));
+    }
+
+    #[test]
+    fn test_invalid_band_selection() {
+        let err = parse_band_selection("foo", ITURegion::Region1).unwrap_err();
+        assert!(matches!(err, AppError::InvalidBandSelection(_)));
+        assert!(err.to_string().contains("Invalid band selection"));
+    }
+
+    #[test]
+    fn test_empty_band_selection() {
+        let err = parse_band_selection("", ITURegion::Region1).unwrap_err();
+        assert!(matches!(err, AppError::EmptyBandSelection));
+        assert!(err.to_string().contains("empty selection"));
     }
 }
