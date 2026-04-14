@@ -56,6 +56,16 @@ It lets you:
 - Configure non-resonant wire windows interactively
 - Export results and print an equivalent CLI command
 
+### Interactive Mode: Per-Session Defaults
+
+Starting with the next release, interactive mode remembers your last-used values for each prompt (bands, calculation mode, antenna model, velocity factor, transformer ratio, wire window, and units) during your session. When you repeat a calculation, prompts will pre-fill with your previous choices, making iterative planning much faster.
+
+- To accept the previous value, just press Enter at the prompt.
+- To change a value, type a new one as usual.
+- Defaults reset when you exit and restart the program.
+
+This feature applies to both multi-band and quick single-band calculations in interactive mode.
+
 ## CLI Usage
 
 ```bash
@@ -337,3 +347,12 @@ This script:
 - Runs `--list-bands` for Regions 1, 2, and 3
 - Verifies all listed bands and ranges against expected values
 - Returns exit code 0 on success, non-zero on mismatch
+
+## Error Handling and Validation
+
+All user input and configuration validation is performed in the app layer and returns structured errors via the `AppError` enum. This ensures:
+- Consistent error messages for CLI and future UIs
+- Centralized validation logic for all user-facing input
+- Comprehensive test coverage for all error cases
+
+See the source and tests in `src/app.rs` for details.

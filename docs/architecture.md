@@ -68,6 +68,9 @@ Responsibilities:
 
 - defines shared enums such as `CalcMode`, `ExportFormat`, and `UnitSystem`
 - defines `AppConfig` and `AppResults`
+- normalizes reusable wire-window input through shared app-layer helpers used by CLI and future UI code
+- parses reusable band-selection input and band-label resolution through shared app-layer helpers used by CLI and future UI code
+- formats reusable transformer-recommendation fallback messaging for CLI and future UI code
 - maps selected band indices to region-specific band definitions
 - resolves mode- and antenna-aware default transformer recommendations
 - runs one calculation pass for the full request

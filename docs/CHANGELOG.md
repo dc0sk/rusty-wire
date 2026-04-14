@@ -4,7 +4,13 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+### Changed
+- **App-layer display views extracted**: moved reusable results-display view construction into `src/app.rs` so CLI output rendering and future UI surfaces can consume the same normalized presentation data.
+- **Shared helper centralization for UI prep**: consolidated band-selection parsing/label resolution and transformer-fallback messaging in app-layer helpers used by both CLI and upcoming UI integration work.
+- **Regression/docs refresh for refactor coverage**: updated architecture and testing docs plus regression paths to reflect the shared helper and display-view extraction changes.
+
+### Fixed
+- **OCFD/Windom labeling clarity**: corrected mislabeling in OCFD compromise/output paths so terminology is consistent with off-center-fed dipole behavior and guidance text.
 
 ## [2.1.0] - 2026-04-12
 

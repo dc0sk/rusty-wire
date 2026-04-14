@@ -18,6 +18,9 @@ These areas are no longer roadmap items:
 - SBOM generation and pre-push SBOM enforcement
 - unit, integration, and regression-script coverage for current CLI behavior
 - testing, architecture, and CLI documentation refresh
+- shared app-layer wire-window normalization for CLI and future UI input paths
+- shared app-layer band-selection parsing and label resolution for CLI and future UI input paths
+- shared app-layer transformer recommendation fallback messaging for CLI and future UI input paths
 
 ## Remaining High-Value Improvements
 
@@ -27,7 +30,32 @@ These areas are no longer roadmap items:
 - centralize end-user error formatting in `src/cli.rs`
 - reduce duplicated validation and conversion logic shared between interactive prompts and non-interactive CLI execution
 
-This would make the code easier to reuse from future front ends and easier to test at the app layer.
+### Implementation Plan
+
+1. **Inventory All Error Handling**
+	- Review all uses of `Result`, `Err`, `unwrap`, `expect`, and `panic!` in core logic, CLI, and calculations modules.
+
+2. **Define Structured Error Types**
+	- Create or extend an `AppError` enum in `src/app.rs` for all error cases (validation, calculation, export, etc).
+	- Ensure all app-layer functions return `Result<T, AppError>`.
+
+3. **Refactor Core Logic**
+	- Update `app.rs` and `calculations.rs` to return structured errors instead of strings or panics.
+	- Remove direct user messaging from these layers—errors should be data, not formatted text.
+
+4. **Centralize Error Formatting**
+	- In `src/cli.rs`, add a function to convert `AppError` to user-facing messages.
+	- All CLI and interactive error reporting should use this function.
+
+5. **Remove Duplicated Validation**
+	- Move all validation logic (input checks, config validation, etc.) to reusable helpers in the app layer.
+	- Ensure both CLI and future UIs call these helpers.
+
+6. **Test and Document**
+	- Add or expand tests for error propagation and formatting.
+	- Document the error-handling flow for future UI integration.
+
+This will make the code easier to reuse from future front ends and easier to test at the app layer.
 
 ## UI Integration
 
@@ -39,6 +67,7 @@ The project is structurally close to being usable from an `iced` desktop UI, but
 - define a stable request/response boundary around `AppConfig` and `AppResults` so both CLI and UI use the same application service interface
 - separate pure result formatting from terminal printing so a GUI can reuse summaries, labels, warnings, and recommendation text without scraping CLI output
 - extract reusable validation helpers for wire-window constraints, band selection, transformer recommendation messaging, and export configuration
+- continue extracting reusable validation helpers for export configuration
 - introduce explicit view-friendly metadata where useful, such as recommended transformer explanations, skipped-band reasons, and per-band annotations
 - review long-running or repeated operations such as export generation and future sweeps/batch runs so they can be surfaced as asynchronous UI tasks instead of blocking the event loop
 - decide whether the project should remain a single binary with multiple entry paths or be split into a reusable library crate plus separate CLI/UI binaries
@@ -89,6 +118,61 @@ The first UI should cover all major CLI/interactive capabilities, but it can als
 - theme support and accessibility-focused layout options
 - persistent user preferences for units, region, default mode, and export behavior
 - background task history for exports and heavier analysis runs
+
+
+## TUI Integration with `ratatui` (and GUI Coexistence)
+
+To provide a modern terminal user interface (TUI) using [`ratatui`](https://github.com/ratatui-org/ratatui) while preserving the ability to add an `iced` GUI later, the following plan will be followed:
+
+### Goals
+
+- Add a TUI frontend using `ratatui` for interactive, keyboard-driven operation
+- Ensure all core logic, state, and validation remain UI-agnostic and reusable
+- Architect the TUI and GUI to coexist, sharing application state and actions
+
+### Plan
+
+1. **Define AppState and AppAction**
+	- Create a central `AppState` struct representing all user-editable fields, results, and UI status.
+	- Define an `AppAction` enum for all user-driven events (input changes, menu selections, calculation triggers, etc).
+	- Move all calculation, validation, and recommendation logic to pure functions operating on `AppState` and `AppAction`.
+
+2. **Refactor CLI/Interactive Mode**
+	- Refactor CLI and interactive mode to use `AppState` and `AppAction` for all state transitions and calculations.
+	- Ensure prompt helpers and session memory use the same state/actions as the future TUI/GUI.
+
+3. **Scaffold TUI with `ratatui`**
+	- Add a new binary (e.g., `src/bin/tui.rs`) or feature flag for TUI mode.
+	- Implement a basic event loop: render `AppState` to the terminal, dispatch `AppAction` on user input, update state, and re-render.
+	- Start with core flows: band selection, antenna model, calculation mode, and results display.
+
+4. **Iterate on TUI Features**
+	- Add menus, popups, and navigation for all major CLI features.
+	- Integrate export actions, error display, and session memory.
+	- Add visual polish: layout, color, and accessibility improvements.
+
+5. **Prepare for GUI Coexistence**
+	- Ensure all TUI logic is isolated from core state/actions (no direct calculation or validation in TUI code).
+	- Document and test the `AppState`/`AppAction` contract for future GUI use.
+	- Plan for a future `iced` binary or feature flag using the same state/actions.
+
+6. **Documentation and Testing**
+	- Document the TUI architecture and how it shares logic with CLI and GUI.
+	- Add regression tests for state transitions and calculation flows.
+
+### Benefits
+
+- Enables rapid TUI development without blocking GUI work
+- Ensures all business logic is UI-agnostic and testable
+- Allows users to choose terminal or desktop UI as preferred
+
+### Affected Areas
+
+- `src/app.rs`: AppState, AppAction, core logic
+- `src/cli.rs`: refactor to use shared state/actions
+- `src/bin/tui.rs` or `src/ui/tui.rs`: new TUI frontend
+- `src/ui/` or future `src/bin/gui.rs`: future GUI frontend
+- `tests/`: state/action regression coverage
 
 ## Advanced Input Support
 
@@ -142,12 +226,13 @@ If work continues incrementally, a good order is:
 
 1. error-handling cleanup
 2. UI-integration prerequisite refactors
-3. first-pass `iced` UI with feature parity
-4. configurable non-resonant search resolution
-5. direct/custom frequency input
-6. transformer recommendation optimization
-7. logging and automation modes
-8. next-generation antenna models
+3. TUI integration with `ratatui` (see plan above)
+4. first-pass `iced` UI with feature parity
+5. configurable non-resonant search resolution
+6. direct/custom frequency input
+7. transformer recommendation optimization
+8. logging and automation modes
+9. next-generation antenna models
 
 ## Affected Areas
 

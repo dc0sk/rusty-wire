@@ -5,17 +5,16 @@
 /// The computation itself is delegated to `app::run_calculation`; the only
 /// imports from the core modules that this file needs are for display helpers.
 use crate::app::{
-    recommended_transformer_ratio, run_calculation, AntennaModel, AppConfig, AppResults, CalcMode,
-    ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION, FEET_TO_METERS,
+    band_label_for_index, execute_request_checked, parse_band_selection, parse_single_band_token,
+    recommended_transformer_ratio, recommended_transformer_ratio_fallback_message,
+    resolve_wire_window_inputs, results_display_document, AntennaModel, AppConfig, AppRequest,
+    AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION,
+    FEET_TO_METERS,
 };
 use crate::bands::{get_bands_for_region, ITURegion, ALL_REGIONS};
-use crate::calculations::{
-    calculate_average_max_distance, calculate_average_min_distance, optimize_ocfd_split_for_length,
-    TransformerRatio, WireCalculation, DEFAULT_NON_RESONANT_CONFIG,
-};
+use crate::calculations::{TransformerRatio, DEFAULT_NON_RESONANT_CONFIG};
 use crate::export::{default_output_name, export_results, validate_export_path};
 use clap::Parser;
-use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, Write};
 
 // ---------------------------------------------------------------------------
@@ -271,103 +270,65 @@ pub fn run_from_args(args: &[String]) {
         Some(selection) => match parse_band_selection(selection, cli.region) {
             Ok(parsed) => parsed,
             Err(err) => {
-                eprintln!("Error: invalid --bands value: {}", err);
+                eprintln!("Error: invalid --bands value: {err}");
                 return;
             }
         },
         None => DEFAULT_BAND_SELECTION.to_vec(),
     };
 
-    // Validate velocity factor
-    if !(0.5..=1.0).contains(&cli.velocity) {
-        eprintln!("Error: velocity factor must be between 0.50 and 1.00");
-        return;
-    }
-
-    // Validate wire length constraints
-    let using_ft = cli.wire_min_ft.is_some() || cli.wire_max_ft.is_some();
-    let using_m = cli.wire_min.is_some() || cli.wire_max.is_some();
-
-    if using_ft && using_m {
-        eprintln!("Error: cannot mix meter and feet constraints; choose one unit system");
-        return;
-    }
-
-    let (wire_min_m, wire_max_m) = if using_ft {
-        let min_ft = cli
-            .wire_min_ft
-            .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m / FEET_TO_METERS);
-        let max_ft = cli
-            .wire_max_ft
-            .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m / FEET_TO_METERS);
-
-        if min_ft <= 0.0 || max_ft <= min_ft {
-            eprintln!("Error: invalid wire length window in feet");
+    let resolved_window = match resolve_wire_window_inputs(
+        cli.wire_min,
+        cli.wire_max,
+        cli.wire_min_ft,
+        cli.wire_max_ft,
+    ) {
+        Ok(window) => window,
+        Err(err) => {
+            eprintln!("Error: {err}");
             return;
         }
-
-        (min_ft * FEET_TO_METERS, max_ft * FEET_TO_METERS)
-    } else {
-        let min_m = cli
-            .wire_min
-            .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m);
-        let max_m = cli
-            .wire_max
-            .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m);
-
-        if min_m <= 0.0 || max_m <= min_m {
-            eprintln!("Error: invalid wire length window in meters");
-            return;
-        }
-
-        (min_m, max_m)
     };
 
     // Validate output path if provided
     if let Some(ref output) = cli.output {
         if let Err(err) = validate_export_path(output) {
-            eprintln!("Error: invalid output path: {}", err);
+            eprintln!("Error: invalid output path: {err}");
             return;
         }
     }
 
-    let units = cli.units.map(UnitSystem::from).unwrap_or_else(|| {
-        if using_ft {
-            UnitSystem::Imperial
-        } else {
-            UnitSystem::Metric
-        }
-    });
+    let units = cli.units.unwrap_or(resolved_window.inferred_display_units);
 
-    let export_formats = cli
-        .export
-        .unwrap_or_default()
-        .into_iter()
-        .map(ExportFormat::from)
-        .collect::<Vec<_>>();
+    let export_formats = cli.export.unwrap_or_default();
 
     let transformer_ratio = cli.transformer.resolve(cli.mode, cli.antenna);
 
     let config = AppConfig {
         band_indices: bands,
         velocity_factor: cli.velocity,
-        mode: CalcMode::from(cli.mode),
-        wire_min_m,
-        wire_max_m,
+        mode: cli.mode,
+        wire_min_m: resolved_window.min_m,
+        wire_max_m: resolved_window.max_m,
         units,
         itu_region: cli.region,
         transformer_ratio,
         antenna_model: cli.antenna,
     };
 
-    let results = run_calculation(config);
+    let results = match execute_request_checked(AppRequest::new(config)) {
+        Ok(response) => response.results,
+        Err(err) => {
+            eprintln!("Error: {err}");
+            return;
+        }
+    };
     if results.calculations.is_empty() {
         println!("No valid bands selected.");
         return;
     }
 
     print_results(&results);
-    print_skipped_band_warnings(&results);
 
     let single_output = cli.output;
     let export_count = export_formats.len();
@@ -399,10 +360,10 @@ pub fn run_from_args(args: &[String]) {
             results.config.wire_min_m,
             results.config.wire_max_m,
         ) {
-            eprintln!("Failed to export {}: {}", output, err);
+            eprintln!("Failed to export {output}: {err}");
             std::process::exit(1);
         }
-        println!("Exported results to {}", output);
+        println!("Exported results to {output}");
     }
 }
 
@@ -416,6 +377,277 @@ pub fn run_interactive() {
     let mut input = stdin.lock();
     let mut output = stdout.lock();
     run_interactive_with_io(&mut input, &mut output);
+}
+
+#[derive(Clone)]
+struct InteractiveDefaults {
+    bands: Option<String>,
+    mode: Option<CalcMode>,
+    antenna_model: Option<AntennaModel>,
+    velocity: Option<f64>,
+    transformer_ratio: Option<String>,
+    wire_min_m: Option<f64>,
+    wire_max_m: Option<f64>,
+    units: Option<UnitSystem>,
+}
+
+impl InteractiveDefaults {
+    fn new() -> Self {
+        Self {
+            bands: None,
+            mode: None,
+            antenna_model: None,
+            velocity: None,
+            transformer_ratio: None,
+            wire_min_m: None,
+            wire_max_m: None,
+            units: None,
+        }
+    }
+}
+
+fn prompt_calc_mode_with_default(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    default: Option<CalcMode>,
+) -> CalcMode {
+    writeln!(output, "\nCalculation mode:").ok();
+    writeln!(output, "  1) Resonant (default)").ok();
+    writeln!(output, "  2) Non-resonant").ok();
+    let prompt_str = match default {
+        Some(CalcMode::NonResonant) => "Select calculation mode (1-2) [2]: ",
+        _ => "Select calculation mode (1-2) [1]: ",
+    };
+    prompt(output, prompt_str);
+    let line = read_line(input, "failed to read mode");
+    match line.trim() {
+        "2" => CalcMode::NonResonant,
+        "1" => CalcMode::Resonant,
+        "" => default.unwrap_or(CalcMode::Resonant),
+        _ => CalcMode::Resonant,
+    }
+}
+
+fn prompt_antenna_model_with_default(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    default: Option<AntennaModel>,
+) -> Option<AntennaModel> {
+    writeln!(output, "\nAntenna model:").ok();
+    writeln!(output, "  d) Dipole (default)").ok();
+    writeln!(output, "  e) End-fed half-wave").ok();
+    writeln!(output, "  l) Full-wave loop").ok();
+    writeln!(output, "  v) Inverted-V").ok();
+    writeln!(output, "  o) Off-center-fed dipole (OCFD)").ok();
+    let prompt_str = match default {
+        Some(AntennaModel::EndFedHalfWave) => "Select antenna model (d/e/l/v/o) [e]: ",
+        Some(AntennaModel::FullWaveLoop) => "Select antenna model (d/e/l/v/o) [l]: ",
+        Some(AntennaModel::InvertedVDipole) => "Select antenna model (d/e/l/v/o) [v]: ",
+        Some(AntennaModel::OffCenterFedDipole) => "Select antenna model (d/e/l/v/o) [o]: ",
+        _ => "Select antenna model (d/e/l/v/o) [d]: ",
+    };
+    prompt(output, prompt_str);
+    let line = read_line(input, "failed to read antenna model");
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return default;
+    }
+    match trimmed {
+        "d" | "dipole" => Some(AntennaModel::Dipole),
+        "e" | "efhw" | "end-fed" | "end-fed-half-wave" => Some(AntennaModel::EndFedHalfWave),
+        "l" | "loop" | "full-wave-loop" => Some(AntennaModel::FullWaveLoop),
+        "v" | "inverted-v" | "inverted-v-dipole" | "inv-v" | "invertedv" | "invv" => {
+            Some(AntennaModel::InvertedVDipole)
+        }
+        "o" | "ocfd" | "off-center-fed" | "off-center-fed-dipole" => {
+            Some(AntennaModel::OffCenterFedDipole)
+        }
+        _ => default,
+    }
+}
+
+fn prompt_velocity_factor_with_default(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    default: Option<f64>,
+) -> f64 {
+    let prompt_str = match default {
+        Some(v) => format!("Enter velocity factor (0.5-1.0) [{v:.2}]: "),
+        None => "Enter velocity factor (0.5-1.0) [0.95]: ".to_string(),
+    };
+    prompt(output, &prompt_str);
+    let line = read_line(input, "failed to read velocity factor");
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return default.unwrap_or(0.95);
+    }
+    match trimmed.parse::<f64>() {
+        Ok(v) if (0.5..=1.0).contains(&v) => v,
+        _ => default.unwrap_or(0.95),
+    }
+}
+
+fn prompt_transformer_ratio_with_default(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    mode: CalcMode,
+    antenna_model: Option<AntennaModel>,
+    default: Option<&str>,
+) -> TransformerRatio {
+    let prompt_str = match default {
+        Some(val) => format!("Enter transformer ratio (e.g. 1:9, recommended) [{val}]: "),
+        None => "Enter transformer ratio (e.g. 1:9, recommended) [recommended]: ".to_string(),
+    };
+    prompt(output, &prompt_str);
+    let line = read_line(input, "failed to read transformer ratio");
+    let trimmed = line.trim();
+    let raw = if trimmed.is_empty() {
+        default.unwrap_or("recommended")
+    } else {
+        trimmed
+    };
+    if raw.eq_ignore_ascii_case("recommended") {
+        return recommended_transformer_ratio(mode, antenna_model);
+    }
+
+    match TransformerRatio::parse(raw) {
+        Some(ratio) => ratio,
+        None => {
+            writeln!(
+                output,
+                "{}",
+                recommended_transformer_ratio_fallback_message(mode, antenna_model)
+            )
+            .expect("failed to write invalid ratio message");
+            recommended_transformer_ratio(mode, antenna_model)
+        }
+    }
+}
+
+fn prompt_wire_length_window_with_default(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    default_min: Option<f64>,
+    default_max: Option<f64>,
+) -> (f64, f64, UnitSystem) {
+    prompt(
+        output,
+        "Constraint units for wire length window (m/ft, Enter for m): ",
+    );
+    let unit_input = read_line(input, "failed to read wire length window units");
+    let use_feet = matches!(
+        unit_input.trim().to_ascii_lowercase().as_str(),
+        "ft" | "feet"
+    );
+
+    let default_min_m = default_min.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m);
+    let default_max_m = default_max.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m);
+
+    if use_feet {
+        let default_min_ft = default_min_m / FEET_TO_METERS;
+        let default_max_ft = default_max_m / FEET_TO_METERS;
+
+        prompt(
+            output,
+            &format!("Wire min length in feet (Enter for {default_min_ft:.1}): "),
+        );
+        let min_input = read_line(input, "failed to read wire min length");
+        prompt(
+            output,
+            &format!("Wire max length in feet (Enter for {default_max_ft:.1}): "),
+        );
+        let max_input = read_line(input, "failed to read wire max length");
+
+        let min_ft = min_input
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .unwrap_or(default_min_ft);
+        let max_ft = max_input
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .unwrap_or(default_max_ft);
+
+        if min_ft > 0.0 && max_ft > min_ft {
+            return (
+                min_ft * FEET_TO_METERS,
+                max_ft * FEET_TO_METERS,
+                UnitSystem::Imperial,
+            );
+        }
+
+        writeln!(
+            output,
+            "Invalid wire length window, using defaults {default_min_m:.1}-{default_max_m:.1} m."
+        )
+        .expect("failed to write invalid wire window message");
+        return (default_min_m, default_max_m, UnitSystem::Imperial);
+    }
+
+    prompt(
+        output,
+        &format!("Wire min length in meters (Enter for {default_min_m:.1}): "),
+    );
+    let min_input = read_line(input, "failed to read wire min length");
+    prompt(
+        output,
+        &format!("Wire max length in meters (Enter for {default_max_m:.1}): "),
+    );
+    let max_input = read_line(input, "failed to read wire max length");
+
+    let min_len = min_input
+        .trim()
+        .parse::<f64>()
+        .ok()
+        .unwrap_or(default_min_m);
+    let max_len = max_input
+        .trim()
+        .parse::<f64>()
+        .ok()
+        .unwrap_or(default_max_m);
+
+    if min_len > 0.0 && max_len > min_len {
+        (min_len, max_len, UnitSystem::Metric)
+    } else {
+        writeln!(
+            output,
+            "Invalid wire length window, using defaults {default_min_m:.1}-{default_max_m:.1} m."
+        )
+        .expect("failed to write invalid wire window message");
+        (default_min_m, default_max_m, UnitSystem::Metric)
+    }
+}
+
+fn prompt_display_units_with_default(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    auto_units: UnitSystem,
+    default: Option<UnitSystem>,
+) -> UnitSystem {
+    let prompt_str = match default {
+        Some(u) => format!(
+            "Select display units (m/ft/both) [{}]: ",
+            match u {
+                UnitSystem::Metric => "m",
+                UnitSystem::Imperial => "ft",
+                UnitSystem::Both => "both",
+            }
+        ),
+        None => "Select display units (m/ft/both) [both]: ".to_string(),
+    };
+    prompt(output, &prompt_str);
+    let line = read_line(input, "failed to read units");
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return default.unwrap_or(auto_units);
+    }
+    match trimmed {
+        "m" | "meters" => UnitSystem::Metric,
+        "ft" | "feet" => UnitSystem::Imperial,
+        "both" => UnitSystem::Both,
+        _ => default.unwrap_or(auto_units),
+    }
 }
 
 fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
@@ -437,6 +669,7 @@ fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
     .expect("failed to write interactive banner");
 
     let mut itu_region = prompt_itu_region(input, output);
+    let mut defaults = InteractiveDefaults::new();
 
     loop {
         writeln!(output, "Menu:").expect("failed to write menu");
@@ -460,8 +693,8 @@ fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
 
         match choice.trim() {
             "1" => show_all_bands_for_region_to_writer(output, itu_region),
-            "2" => calculate_selected_bands(input, output, itu_region),
-            "3" => quick_calculation(input, output, itu_region),
+            "2" => calculate_selected_bands_with_defaults(input, output, itu_region, &mut defaults),
+            "3" => quick_calculation_with_defaults(input, output, itu_region, &mut defaults),
             "4" => {
                 itu_region = prompt_itu_region(input, output);
                 writeln!(
@@ -481,16 +714,26 @@ fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
     }
 }
 
-fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, region: ITURegion) {
+fn calculate_selected_bands_with_defaults(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    region: ITURegion,
+    defaults: &mut InteractiveDefaults,
+) {
     show_all_bands_for_region_to_writer(output, region);
-    prompt(
-        output,
-        "Enter bands (e.g. 40m,20m,10m-15m; Enter for default set): ",
-    );
 
+    let bands_prompt = if let Some(ref last) = defaults.bands {
+        format!("Enter bands (e.g. 40m,20m,10m-15m; Enter for default set) [{last}]: ")
+    } else {
+        "Enter bands (e.g. 40m,20m,10m-15m; Enter for default set): ".to_string()
+    };
+    prompt(output, &bands_prompt);
     let band_input = read_line(input, "failed to read selection");
-
-    let trimmed = band_input.trim();
+    let trimmed = if band_input.trim().is_empty() {
+        defaults.bands.as_deref().unwrap_or("")
+    } else {
+        band_input.trim()
+    };
     let indices = if trimmed.is_empty() {
         DEFAULT_BAND_SELECTION.to_vec()
     } else {
@@ -506,13 +749,31 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
             }
         }
     };
+    if !band_input.trim().is_empty() {
+        defaults.bands = Some(band_input.trim().to_string());
+    }
 
-    let mode = prompt_calc_mode(input, output);
-    let antenna_model = prompt_antenna_model(input, output);
-    let velocity = prompt_velocity_factor(input, output);
-    let transformer_ratio = prompt_transformer_ratio(input, output, mode, antenna_model);
+    let mode = prompt_calc_mode_with_default(input, output, defaults.mode);
+    defaults.mode = Some(mode);
+    let antenna_model = prompt_antenna_model_with_default(input, output, defaults.antenna_model);
+    defaults.antenna_model = antenna_model;
+    let velocity = prompt_velocity_factor_with_default(input, output, defaults.velocity);
+    defaults.velocity = Some(velocity);
+    let transformer_ratio = prompt_transformer_ratio_with_default(
+        input,
+        output,
+        mode,
+        antenna_model,
+        defaults.transformer_ratio.as_deref(),
+    );
+    defaults.transformer_ratio = Some(transformer_ratio.as_label().to_string());
     let (wire_min_m, wire_max_m, auto_units) = if mode == CalcMode::NonResonant {
-        prompt_wire_length_window(input, output)
+        prompt_wire_length_window_with_default(
+            input,
+            output,
+            defaults.wire_min_m,
+            defaults.wire_max_m,
+        )
     } else {
         (
             DEFAULT_NON_RESONANT_CONFIG.min_len_m,
@@ -520,7 +781,10 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
             UnitSystem::Both,
         )
     };
-    let units = prompt_display_units(input, output, auto_units);
+    defaults.wire_min_m = Some(wire_min_m);
+    defaults.wire_max_m = Some(wire_max_m);
+    let units = prompt_display_units_with_default(input, output, auto_units, defaults.units);
+    defaults.units = Some(units);
 
     let config = AppConfig {
         band_indices: indices,
@@ -534,7 +798,13 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
         antenna_model,
     };
 
-    let results = run_calculation(config);
+    let results = match execute_request_checked(AppRequest::new(config)) {
+        Ok(response) => response.results,
+        Err(err) => {
+            writeln!(output, "Error: {err}\n").expect("failed to write validation error");
+            return;
+        }
+    };
     if results.calculations.is_empty() {
         writeln!(output, "No valid bands selected.\n")
             .expect("failed to write empty result message");
@@ -542,7 +812,6 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
     }
 
     print_results(&results);
-    print_skipped_band_warnings(&results);
     print_equivalent_cli_call(&results.config, &[]);
     let export_choices = interactive_export_prompt(input, output, &results);
     if !export_choices.is_empty() {
@@ -550,13 +819,27 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
     }
 }
 
-fn quick_calculation(input: &mut dyn BufRead, output: &mut dyn Write, region: ITURegion) {
+fn quick_calculation_with_defaults(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    region: ITURegion,
+    defaults: &mut InteractiveDefaults,
+) {
     show_all_bands_for_region_to_writer(output, region);
-    prompt(output, "Enter one band (e.g. 20m): ");
 
+    let band_prompt = if let Some(ref last) = defaults.bands {
+        format!("Enter one band (e.g. 20m) [{last}]: ")
+    } else {
+        "Enter one band (e.g. 20m): ".to_string()
+    };
+    prompt(output, &band_prompt);
     let band_input = read_line(input, "failed to read selection");
-
-    let idx = match parse_single_band_token(band_input.trim(), region) {
+    let trimmed = if band_input.trim().is_empty() {
+        defaults.bands.as_deref().unwrap_or("")
+    } else {
+        band_input.trim()
+    };
+    let idx = match parse_single_band_token(trimmed, region) {
         Ok(v) => v,
         Err(_) => {
             writeln!(output, "Invalid band. Use a single band name like 20m.\n")
@@ -564,13 +847,31 @@ fn quick_calculation(input: &mut dyn BufRead, output: &mut dyn Write, region: IT
             return;
         }
     };
+    if !band_input.trim().is_empty() {
+        defaults.bands = Some(band_input.trim().to_string());
+    }
 
-    let mode = prompt_calc_mode(input, output);
-    let antenna_model = prompt_antenna_model(input, output);
-    let velocity = prompt_velocity_factor(input, output);
-    let transformer_ratio = prompt_transformer_ratio(input, output, mode, antenna_model);
+    let mode = prompt_calc_mode_with_default(input, output, defaults.mode);
+    defaults.mode = Some(mode);
+    let antenna_model = prompt_antenna_model_with_default(input, output, defaults.antenna_model);
+    defaults.antenna_model = antenna_model;
+    let velocity = prompt_velocity_factor_with_default(input, output, defaults.velocity);
+    defaults.velocity = Some(velocity);
+    let transformer_ratio = prompt_transformer_ratio_with_default(
+        input,
+        output,
+        mode,
+        antenna_model,
+        defaults.transformer_ratio.as_deref(),
+    );
+    defaults.transformer_ratio = Some(transformer_ratio.as_label().to_string());
     let (wire_min_m, wire_max_m, auto_units) = if mode == CalcMode::NonResonant {
-        prompt_wire_length_window(input, output)
+        prompt_wire_length_window_with_default(
+            input,
+            output,
+            defaults.wire_min_m,
+            defaults.wire_max_m,
+        )
     } else {
         (
             DEFAULT_NON_RESONANT_CONFIG.min_len_m,
@@ -578,7 +879,10 @@ fn quick_calculation(input: &mut dyn BufRead, output: &mut dyn Write, region: IT
             UnitSystem::Both,
         )
     };
-    let units = prompt_display_units(input, output, auto_units);
+    defaults.wire_min_m = Some(wire_min_m);
+    defaults.wire_max_m = Some(wire_max_m);
+    let units = prompt_display_units_with_default(input, output, auto_units, defaults.units);
+    defaults.units = Some(units);
 
     let config = AppConfig {
         band_indices: vec![idx],
@@ -592,14 +896,19 @@ fn quick_calculation(input: &mut dyn BufRead, output: &mut dyn Write, region: IT
         antenna_model,
     };
 
-    let results = run_calculation(config);
+    let results = match execute_request_checked(AppRequest::new(config)) {
+        Ok(response) => response.results,
+        Err(err) => {
+            writeln!(output, "Error: {err}\n").expect("failed to write validation error");
+            return;
+        }
+    };
     if results.calculations.is_empty() {
         writeln!(output, "Band not found.\n").expect("failed to write band not found message");
         return;
     }
 
     print_results(&results);
-    print_skipped_band_warnings(&results);
     print_equivalent_cli_call(&results.config, &[]);
     let export_choices = interactive_export_prompt(input, output, &results);
     if !export_choices.is_empty() {
@@ -643,252 +952,6 @@ fn prompt_itu_region(input: &mut dyn BufRead, output: &mut dyn Write) -> ITURegi
             )
             .expect("failed to write invalid region message");
             DEFAULT_ITU_REGION
-        }
-    }
-}
-
-fn prompt_calc_mode(input: &mut dyn BufRead, output: &mut dyn Write) -> CalcMode {
-    prompt(
-        output,
-        "Calculation mode (resonant/non-resonant, Enter for resonant): ",
-    );
-
-    let mode_input = read_line(input, "failed to read calculation mode");
-
-    match mode_input.trim().to_ascii_lowercase().as_str() {
-        "" | "resonant" => CalcMode::Resonant,
-        "non-resonant" | "nonresonant" | "non_resonant" => CalcMode::NonResonant,
-        _ => {
-            writeln!(output, "Unknown mode. Using resonant.")
-                .expect("failed to write invalid mode message");
-            CalcMode::Resonant
-        }
-    }
-}
-
-fn prompt_antenna_model(input: &mut dyn BufRead, output: &mut dyn Write) -> Option<AntennaModel> {
-    prompt(
-        output,
-        "Antenna model: (d)ipole, (i)nverted-V, (e)nd-fed half-wave, (l)oop, (o)ff-center-fed dipole, (a)ll [a]: "
-    );
-
-    let antenna_input = read_line(input, "failed to read antenna model");
-
-    match antenna_input.trim().to_ascii_lowercase().as_str() {
-        "" | "a" | "all" => None,
-        "d" | "dipole" => Some(AntennaModel::Dipole),
-        "i" | "inverted-v" | "inv-v" | "invertedv" | "invv" => Some(AntennaModel::InvertedVDipole),
-        "e" | "efhw" | "end-fed" | "end-fed-half-wave" => Some(AntennaModel::EndFedHalfWave),
-        "l" | "loop" | "full-wave-loop" => Some(AntennaModel::FullWaveLoop),
-        "o" | "ocfd" | "off-center-fed" | "off-center-fed-dipole" | "windom" => {
-            Some(AntennaModel::OffCenterFedDipole)
-        }
-        _ => {
-            writeln!(
-                output,
-                "Unknown antenna model. Showing all models per band."
-            )
-            .expect("failed to write invalid antenna model message");
-            None
-        }
-    }
-}
-
-fn prompt_transformer_ratio(
-    input: &mut dyn BufRead,
-    output: &mut dyn Write,
-    mode: CalcMode,
-    antenna_model: Option<AntennaModel>,
-) -> TransformerRatio {
-    prompt(
-        output,
-        "Unun/Balun ratio (recommended,1:1,1:2,1:4,1:5,1:6,1:9,1:16,1:49,1:56,1:64; Enter for recommended): ",
-    );
-
-    let ratio_input = read_line(input, "failed to read transformer ratio");
-
-    let trimmed = ratio_input.trim();
-    if trimmed.is_empty() {
-        return recommended_transformer_ratio(mode, antenna_model);
-    }
-
-    if trimmed.eq_ignore_ascii_case("recommended") {
-        return recommended_transformer_ratio(mode, antenna_model);
-    }
-
-    match TransformerRatio::parse(trimmed) {
-        Some(r) => r,
-        None => {
-            let recommended = recommended_transformer_ratio(mode, antenna_model);
-            writeln!(
-                output,
-                "Unknown ratio. Using recommended {}.",
-                recommended.as_label()
-            )
-            .expect("failed to write invalid ratio message");
-            recommended
-        }
-    }
-}
-
-fn prompt_velocity_factor(input: &mut dyn BufRead, output: &mut dyn Write) -> f64 {
-    prompt(output, "Velocity factor (0.50-1.00, Enter for 0.95): ");
-
-    let velocity_input = read_line(input, "failed to read velocity factor");
-    let trimmed = velocity_input.trim();
-    if trimmed.is_empty() {
-        return 0.95;
-    }
-
-    match trimmed.parse::<f64>() {
-        Ok(vf) if (0.5..=1.0).contains(&vf) => vf,
-        _ => {
-            writeln!(output, "Invalid value. Using default 0.95.")
-                .expect("failed to write invalid velocity message");
-            0.95
-        }
-    }
-}
-
-fn prompt_wire_length_window(
-    input: &mut dyn BufRead,
-    output: &mut dyn Write,
-) -> (f64, f64, UnitSystem) {
-    prompt(
-        output,
-        "Constraint units for wire length window (m/ft, Enter for m): ",
-    );
-
-    let unit_input = read_line(input, "failed to read wire length window units");
-    let unit = unit_input.trim().to_ascii_lowercase();
-
-    if unit == "ft" || unit == "feet" {
-        let default_min_ft = DEFAULT_NON_RESONANT_CONFIG.min_len_m / FEET_TO_METERS;
-        let default_max_ft = DEFAULT_NON_RESONANT_CONFIG.max_len_m / FEET_TO_METERS;
-
-        prompt(
-            output,
-            &format!(
-                "Wire min length in feet (Enter for {:.1}): ",
-                default_min_ft
-            ),
-        );
-        let min_input = read_line(input, "failed to read wire min length");
-
-        prompt(
-            output,
-            &format!(
-                "Wire max length in feet (Enter for {:.1}): ",
-                default_max_ft
-            ),
-        );
-        let max_input = read_line(input, "failed to read wire max length");
-
-        let min_ft = min_input
-            .trim()
-            .parse::<f64>()
-            .ok()
-            .unwrap_or(default_min_ft);
-        let max_ft = max_input
-            .trim()
-            .parse::<f64>()
-            .ok()
-            .unwrap_or(default_max_ft);
-
-        if min_ft > 0.0 && max_ft > min_ft {
-            return (
-                min_ft * FEET_TO_METERS,
-                max_ft * FEET_TO_METERS,
-                UnitSystem::Imperial,
-            );
-        }
-
-        writeln!(
-            output,
-            "Invalid wire length window, using defaults {:.1}-{:.1} m.",
-            DEFAULT_NON_RESONANT_CONFIG.min_len_m, DEFAULT_NON_RESONANT_CONFIG.max_len_m
-        )
-        .expect("failed to write invalid wire window message");
-        return (
-            DEFAULT_NON_RESONANT_CONFIG.min_len_m,
-            DEFAULT_NON_RESONANT_CONFIG.max_len_m,
-            UnitSystem::Imperial,
-        );
-    }
-
-    prompt(
-        output,
-        &format!(
-            "Wire min length in meters (Enter for {:.1}): ",
-            DEFAULT_NON_RESONANT_CONFIG.min_len_m
-        ),
-    );
-    let min_input = read_line(input, "failed to read wire min length");
-
-    prompt(
-        output,
-        &format!(
-            "Wire max length in meters (Enter for {:.1}): ",
-            DEFAULT_NON_RESONANT_CONFIG.max_len_m
-        ),
-    );
-    let max_input = read_line(input, "failed to read wire max length");
-
-    let min_len = min_input
-        .trim()
-        .parse::<f64>()
-        .ok()
-        .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m);
-    let max_len = max_input
-        .trim()
-        .parse::<f64>()
-        .ok()
-        .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m);
-
-    if min_len > 0.0 && max_len > min_len {
-        (min_len, max_len, UnitSystem::Metric)
-    } else {
-        writeln!(
-            output,
-            "Invalid wire length window, using defaults {:.1}-{:.1} m.",
-            DEFAULT_NON_RESONANT_CONFIG.min_len_m, DEFAULT_NON_RESONANT_CONFIG.max_len_m
-        )
-        .expect("failed to write invalid wire window message");
-        (
-            DEFAULT_NON_RESONANT_CONFIG.min_len_m,
-            DEFAULT_NON_RESONANT_CONFIG.max_len_m,
-            UnitSystem::Metric,
-        )
-    }
-}
-
-fn prompt_display_units(
-    input: &mut dyn BufRead,
-    output: &mut dyn Write,
-    auto_units: UnitSystem,
-) -> UnitSystem {
-    let label = match auto_units {
-        UnitSystem::Metric => "m",
-        UnitSystem::Imperial => "ft",
-        UnitSystem::Both => "both",
-    };
-    prompt(
-        output,
-        &format!("Display units (m/ft/both, Enter for {}): ", label),
-    );
-    let unit_input = read_line(input, "failed to read display units");
-    let trimmed = unit_input.trim();
-    if trimmed.is_empty() {
-        return auto_units;
-    }
-    match trimmed.to_ascii_lowercase().as_str() {
-        "m" | "metric" => UnitSystem::Metric,
-        "ft" | "imperial" => UnitSystem::Imperial,
-        "both" => UnitSystem::Both,
-        _ => {
-            writeln!(output, "Unknown unit system. Using {}.", label)
-                .expect("failed to write invalid display unit message");
-            auto_units
         }
     }
 }
@@ -941,13 +1004,13 @@ fn interactive_export_prompt(
                     }
                 }
                 other => {
-                    err_msg = Some(format!("unknown format '{}'; skipping export.", other));
+                    err_msg = Some(format!("unknown format '{other}'; skipping export."));
                     break;
                 }
             }
         }
         if let Some(msg) = err_msg {
-            writeln!(output, "{}", msg).expect("failed to write export error message");
+            writeln!(output, "{msg}").expect("failed to write export error message");
             return Vec::new();
         }
         if out.is_empty() {
@@ -993,9 +1056,9 @@ fn interactive_export_prompt(
             results.config.wire_min_m,
             results.config.wire_max_m,
         ) {
-            Ok(()) => writeln!(output, "Exported results to {}", output_path)
+            Ok(()) => writeln!(output, "Exported results to {output_path}")
                 .expect("failed to write export success message"),
-            Err(err) => writeln!(output, "Failed to export {}: {}", output_path, err)
+            Err(err) => writeln!(output, "Failed to export {output_path}: {err}")
                 .expect("failed to write export failure message"),
         }
         chosen.push((fmt, output_path));
@@ -1005,7 +1068,7 @@ fn interactive_export_prompt(
 }
 
 fn prompt(output: &mut dyn Write, text: &str) {
-    write!(output, "{}", text).expect("failed to write interactive prompt");
+    write!(output, "{text}").expect("failed to write interactive prompt");
     output.flush().expect("failed to flush interactive prompt");
 }
 
@@ -1013,116 +1076,6 @@ fn read_line(input: &mut dyn BufRead, error_message: &str) -> String {
     let mut line = String::new();
     input.read_line(&mut line).expect(error_message);
     line
-}
-
-fn parse_band_selection(selection: &str, region: ITURegion) -> Result<Vec<usize>, String> {
-    let mut parsed = Vec::new();
-    let mut seen = HashSet::new();
-
-    for token in selection.split(',') {
-        let token = token.trim();
-        if token.is_empty() {
-            continue;
-        }
-
-        if let Some((start, end)) = token.split_once('-') {
-            let start_idx = parse_single_band_token(start.trim(), region)?;
-            let end_idx = parse_single_band_token(end.trim(), region)?;
-
-            let ordered = ordered_band_indices_for_region(region);
-            let start_pos = ordered
-                .iter()
-                .position(|idx| *idx == start_idx)
-                .ok_or_else(|| format!("unknown range start '{}'.", start.trim()))?;
-            let end_pos = ordered
-                .iter()
-                .position(|idx| *idx == end_idx)
-                .ok_or_else(|| format!("unknown range end '{}'.", end.trim()))?;
-
-            if start_pos <= end_pos {
-                for idx in &ordered[start_pos..=end_pos] {
-                    if seen.insert(*idx) {
-                        parsed.push(*idx);
-                    }
-                }
-            } else {
-                for idx in ordered[end_pos..=start_pos].iter().rev() {
-                    if seen.insert(*idx) {
-                        parsed.push(*idx);
-                    }
-                }
-            }
-            continue;
-        }
-
-        let idx = parse_single_band_token(token, region)?;
-        if seen.insert(idx) {
-            parsed.push(idx);
-        }
-    }
-
-    if parsed.is_empty() {
-        return Err("empty selection; provide at least one band name.".to_string());
-    }
-
-    Ok(parsed)
-}
-
-fn parse_single_band_token(token: &str, region: ITURegion) -> Result<usize, String> {
-    let token = token.trim();
-    if token.is_empty() {
-        return Err("empty band token".to_string());
-    }
-
-    let aliases = band_alias_to_index(region);
-    let key = token.to_ascii_lowercase();
-    aliases
-        .get(&key)
-        .copied()
-        .ok_or_else(|| format!("unknown band '{}'.", token))
-}
-
-fn ordered_band_indices_for_region(region: ITURegion) -> Vec<usize> {
-    get_bands_for_region(region)
-        .into_iter()
-        .map(|(idx, _)| idx + 1)
-        .collect()
-}
-
-fn band_alias_to_index(region: ITURegion) -> HashMap<String, usize> {
-    let mut aliases = HashMap::new();
-
-    for (idx, band) in get_bands_for_region(region) {
-        let one_based = idx + 1;
-        let full_name = band.name.to_ascii_lowercase();
-        aliases.insert(full_name.clone(), one_based);
-
-        if let Some(short_name) = full_name.split_whitespace().next() {
-            aliases.insert(short_name.to_string(), one_based);
-        }
-    }
-
-    aliases
-}
-
-fn band_label_for_index(index: usize, region: ITURegion) -> String {
-    let zero_based = match index.checked_sub(1) {
-        Some(v) => v,
-        None => return index.to_string(),
-    };
-
-    for (idx, band) in get_bands_for_region(region) {
-        if idx == zero_based {
-            return band
-                .name
-                .split_whitespace()
-                .next()
-                .unwrap_or(band.name)
-                .to_string();
-        }
-    }
-
-    index.to_string()
 }
 
 fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat, String)]) {
@@ -1182,7 +1135,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
     }
 
     println!("Equivalent CLI call for this run:");
-    println!("  {}\n", cmd);
+    println!("  {cmd}\n");
 }
 
 fn shell_quote(value: &str) -> String {
@@ -1200,7 +1153,7 @@ fn shell_quote(value: &str) -> String {
     }
 
     let escaped = value.replace('\'', "'\\''");
-    format!("'{}'", escaped)
+    format!("'{escaped}'")
 }
 
 // ---------------------------------------------------------------------------
@@ -1238,698 +1191,34 @@ fn show_all_bands_for_region_to_writer(output: &mut dyn Write, region: ITURegion
 // ---------------------------------------------------------------------------
 
 fn print_results(results: &AppResults) {
-    let mode = results.config.mode;
-    let units = results.config.units;
-    let calculations = &results.calculations;
+    let doc = results_display_document(results);
 
-    let heading = if mode == CalcMode::Resonant {
-        "Resonant Overview:"
-    } else {
-        "Non-resonant Overview (band context):"
-    };
-
-    println!("\n{}", heading);
-    println!("------------------------------------------------------------");
-    println!(
-        "Using transformer ratio: {}",
-        results.config.transformer_ratio.as_label()
-    );
-    println!(
-        "Antenna model: {}",
-        match results.config.antenna_model {
-            None => "all",
-            Some(AntennaModel::Dipole) => "dipole",
-            Some(AntennaModel::InvertedVDipole) => "inverted-v dipole",
-            Some(AntennaModel::EndFedHalfWave) => "end-fed half-wave",
-            Some(AntennaModel::FullWaveLoop) => "full-wave loop",
-            Some(AntennaModel::OffCenterFedDipole) => "off-center-fed dipole",
-        }
-    );
-    println!("------------------------------------------------------------");
-    for calc in calculations {
-        println!(
-            "{}\n",
-            format_calc(calc, units, results.config.antenna_model)
-        );
+    println!("\n{}", doc.overview_heading);
+    for line in doc.overview_header_lines {
+        println!("{line}");
     }
-    println!("Summary for {} band(s):", calculations.len());
-    println!(
-        "  Average minimum skip distance: {:.0} km",
-        calculate_average_min_distance(calculations)
-    );
-    println!(
-        "  Average maximum skip distance: {:.0} km\n",
-        calculate_average_max_distance(calculations)
-    );
-
-    match mode {
-        CalcMode::Resonant => {
-            if matches!(
-                results.config.antenna_model,
-                None | Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole)
-            ) {
-                print_resonant_points_in_window(results);
-            }
-            print_resonant_compromises(results);
+    for view in doc.band_views {
+        println!("{}", view.title);
+        for line in view.lines {
+            println!("{line}");
         }
-        CalcMode::NonResonant => {
-            if results.recommendation.is_some() {
-                print_non_resonant_recommendation(results);
-            } else {
-                println!("No non-resonant recommendation available for the current selection.\n");
-            }
-        }
+        println!();
     }
-}
-
-fn print_resonant_points_in_window(results: &AppResults) {
-    let calculations = &results.calculations;
-    let (min_m, max_m) = (results.config.wire_min_m, results.config.wire_max_m);
-    let min_ft = min_m / FEET_TO_METERS;
-    let max_ft = max_m / FEET_TO_METERS;
-    let units = results.config.units;
-
-    println!("Resonant points within search window:");
-    match units {
-        UnitSystem::Metric => println!("  Search window: {:.2}-{:.2} m", min_m, max_m),
-        UnitSystem::Imperial => println!("  Search window: {:.2}-{:.2} ft", min_ft, max_ft),
-        UnitSystem::Both => println!(
-            "  Search window: {:.2}-{:.2} m ({:.2}-{:.2} ft)",
-            min_m, max_m, min_ft, max_ft
-        ),
-    }
-
-    let mut points: Vec<(f64, String, u32)> = Vec::new();
-    for calc in calculations {
-        let quarter_wave_m = calc.corrected_quarter_wave_m;
-        if quarter_wave_m <= 0.0 {
-            continue;
-        }
-
-        let mut harmonic = 1_u32;
-        loop {
-            let resonant_len_m = quarter_wave_m * f64::from(harmonic);
-            if resonant_len_m > max_m + 1e-9 {
-                break;
-            }
-            if resonant_len_m >= min_m - 1e-9 {
-                points.push((resonant_len_m, calc.band_name.clone(), harmonic));
-            }
-            harmonic += 1;
-        }
-    }
-
-    points.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-
-    if points.is_empty() {
-        println!("  (no resonant points fall within this window)\n");
-        return;
-    }
-
-    for (len_m, band_name, harmonic) in points {
-        let len_ft = len_m / FEET_TO_METERS;
-        match units {
-            UnitSystem::Metric => println!(
-                "  - {}: {}x quarter-wave = {:.2} m",
-                band_name, harmonic, len_m
-            ),
-            UnitSystem::Imperial => println!(
-                "  - {}: {}x quarter-wave = {:.2} ft",
-                band_name, harmonic, len_ft
-            ),
-            UnitSystem::Both => println!(
-                "  - {}: {}x quarter-wave = {:.2} m ({:.2} ft)",
-                band_name, harmonic, len_m, len_ft
-            ),
-        }
+    for line in doc.summary_lines {
+        println!("{line}");
     }
     println!();
-}
 
-fn print_non_resonant_recommendation(results: &AppResults) {
-    let rec = match results.recommendation.as_ref() {
-        Some(r) => r,
-        None => return,
-    };
-    let optima = &results.optima;
-    let window_optima = &results.window_optima;
-    let (min_m, max_m) = (results.config.wire_min_m, results.config.wire_max_m);
-    let min_ft = min_m / FEET_TO_METERS;
-    let max_ft = max_m / FEET_TO_METERS;
-    let units = results.config.units;
-
-    println!("Best non-resonant wire length for selected bands:");
-    match units {
-        UnitSystem::Metric => {
-            println!("  Search window: {:.2}-{:.2} m", min_m, max_m);
-            println!(
-                "  {:.2} m, resonance clearance: {:.2}%\n",
-                rec.length_m, rec.min_resonance_clearance_pct
-            );
-        }
-        UnitSystem::Imperial => {
-            println!("  Search window: {:.2}-{:.2} ft", min_ft, max_ft);
-            println!(
-                "  {:.2} ft, resonance clearance: {:.2}%\n",
-                rec.length_ft, rec.min_resonance_clearance_pct
-            );
-        }
-        UnitSystem::Both => {
-            println!(
-                "  Search window: {:.2}-{:.2} m ({:.2}-{:.2} ft)",
-                min_m, max_m, min_ft, max_ft
-            );
-            println!(
-                "  {:.2} m ({:.2} ft), resonance clearance: {:.2}%\n",
-                rec.length_m, rec.length_ft, rec.min_resonance_clearance_pct
-            );
-        }
-    }
-
-    if optima.len() > 1 {
-        println!("  Additional equal optima in range (ascending):");
-        for (idx, o) in optima.iter().enumerate() {
-            match units {
-                UnitSystem::Metric => println!(
-                    "    {:2}. {:.2} m (clearance: {:.2}%)",
-                    idx + 1,
-                    o.length_m,
-                    o.min_resonance_clearance_pct
-                ),
-                UnitSystem::Imperial => println!(
-                    "    {:2}. {:.2} ft (clearance: {:.2}%)",
-                    idx + 1,
-                    o.length_ft,
-                    o.min_resonance_clearance_pct
-                ),
-                UnitSystem::Both => println!(
-                    "    {:2}. {:.2} m ({:.2} ft, clearance: {:.2}%)",
-                    idx + 1,
-                    o.length_m,
-                    o.length_ft,
-                    o.min_resonance_clearance_pct
-                ),
-            }
+    for section in doc.sections {
+        for line in section.lines {
+            println!("{line}");
         }
         println!();
     }
 
-    if window_optima.len() > 1 {
-        println!("  Local optima in search window (ascending):");
-        for (idx, o) in window_optima.iter().enumerate() {
-            let is_recommended = (o.length_m - rec.length_m).abs() < 1e-6;
-            match units {
-                UnitSystem::Metric => println!(
-                    "    {:2}. {:.2} m (clearance: {:.2}%{})",
-                    idx + 1,
-                    o.length_m,
-                    o.min_resonance_clearance_pct,
-                    if is_recommended { ", recommended" } else { "" }
-                ),
-                UnitSystem::Imperial => println!(
-                    "    {:2}. {:.2} ft (clearance: {:.2}%{})",
-                    idx + 1,
-                    o.length_ft,
-                    o.min_resonance_clearance_pct,
-                    if is_recommended { ", recommended" } else { "" }
-                ),
-                UnitSystem::Both => println!(
-                    "    {:2}. {:.2} m ({:.2} ft, clearance: {:.2}%{})",
-                    idx + 1,
-                    o.length_m,
-                    o.length_ft,
-                    o.min_resonance_clearance_pct,
-                    if is_recommended { ", recommended" } else { "" }
-                ),
-            }
-        }
+    for line in doc.warning_lines {
+        println!("{line}");
         println!();
-    }
-}
-
-fn print_resonant_compromises(results: &AppResults) {
-    let compromises = &results.resonant_compromises;
-    let heading = match results.config.antenna_model {
-        Some(AntennaModel::InvertedVDipole) => {
-            "Closest combined compromises to resonant points (inverted-V guidance):"
-        }
-        Some(AntennaModel::EndFedHalfWave) => {
-            "Closest combined compromises to resonant points (tuner-assisted EFHW guidance):"
-        }
-        Some(AntennaModel::FullWaveLoop) => {
-            "Closest combined compromises to resonant points (tuner-assisted loop guidance):"
-        }
-        Some(AntennaModel::OffCenterFedDipole) => {
-            "Closest combined compromises to resonant points (tuner-assisted OCFD guidance):"
-        }
-        _ => "Closest combined compromises to resonant points:",
-    };
-
-    if compromises.is_empty() {
-        println!("{}", heading);
-        println!("  (none available in this window)\n");
-        return;
-    }
-
-    let units = results.config.units;
-    println!("{}", heading);
-    if matches!(
-        results.config.antenna_model,
-        Some(AntennaModel::EndFedHalfWave)
-            | Some(AntennaModel::FullWaveLoop)
-            | Some(AntennaModel::OffCenterFedDipole)
-    ) {
-        println!(
-            "  Note: These are dipole-derived compromise lengths shown as tuner-assisted starting points."
-        );
-    }
-    if matches!(
-        results.config.antenna_model,
-        Some(AntennaModel::InvertedVDipole)
-    ) {
-        println!(
-            "  Inverted-V mode: each compromise line shows a total wire length; per-leg and span estimates are listed directly below."
-        );
-    }
-    if matches!(
-        results.config.antenna_model,
-        Some(AntennaModel::OffCenterFedDipole)
-    ) {
-        println!(
-            "  OCFD mode: each compromise line shows a total wire length; leg splits are listed directly below."
-        );
-    }
-    for (idx, c) in compromises.iter().take(10).enumerate() {
-        let is_inverted_v = matches!(
-            results.config.antenna_model,
-            Some(AntennaModel::InvertedVDipole)
-        );
-        let is_ocfd = matches!(
-            results.config.antenna_model,
-            Some(AntennaModel::OffCenterFedDipole)
-        );
-        match units {
-            UnitSystem::Metric => println!(
-                "  {:2}. {:.2} m (worst-band delta: {:.2} m)",
-                idx + 1,
-                c.length_m,
-                c.worst_band_distance_m
-            ),
-            UnitSystem::Imperial => println!(
-                "  {:2}. {:.2} ft (worst-band delta: {:.2} ft)",
-                idx + 1,
-                c.length_ft,
-                c.worst_band_distance_m / FEET_TO_METERS
-            ),
-            UnitSystem::Both => println!(
-                "  {:2}. {:.2} m ({:.2} ft), worst-band delta: {:.2} m ({:.2} ft)",
-                idx + 1,
-                c.length_m,
-                c.length_ft,
-                c.worst_band_distance_m,
-                c.worst_band_distance_m / FEET_TO_METERS
-            ),
-        }
-
-        if is_inverted_v {
-            let leg_m = c.length_m / 2.0;
-            let leg_ft = leg_m / FEET_TO_METERS;
-            let span_90_m = leg_m * std::f64::consts::SQRT_2;
-            let span_90_ft = span_90_m / FEET_TO_METERS;
-            let span_120_m = leg_m * 3.0_f64.sqrt();
-            let span_120_ft = span_120_m / FEET_TO_METERS;
-
-            match units {
-                UnitSystem::Metric => {
-                    println!("      each leg: {:.2} m", leg_m);
-                    println!("      span at 90 deg apex: {:.2} m", span_90_m);
-                    println!("      span at 120 deg apex: {:.2} m", span_120_m);
-                }
-                UnitSystem::Imperial => {
-                    println!("      each leg: {:.2} ft", leg_ft);
-                    println!("      span at 90 deg apex: {:.2} ft", span_90_ft);
-                    println!("      span at 120 deg apex: {:.2} ft", span_120_ft);
-                }
-                UnitSystem::Both => {
-                    println!("      each leg: {:.2} m ({:.2} ft)", leg_m, leg_ft);
-                    println!(
-                        "      span at 90 deg apex: {:.2} m ({:.2} ft)",
-                        span_90_m, span_90_ft
-                    );
-                    println!(
-                        "      span at 120 deg apex: {:.2} m ({:.2} ft)",
-                        span_120_m, span_120_ft
-                    );
-                }
-            }
-        }
-
-        if is_ocfd {
-            let split_33_short_m = c.length_m / 3.0;
-            let split_33_long_m = c.length_m * 2.0 / 3.0;
-            let split_20_short_m = c.length_m * 0.2;
-            let split_20_long_m = c.length_m * 0.8;
-            let split_33_short_ft = split_33_short_m / FEET_TO_METERS;
-            let split_33_long_ft = split_33_long_m / FEET_TO_METERS;
-            let split_20_short_ft = split_20_short_m / FEET_TO_METERS;
-            let split_20_long_ft = split_20_long_m / FEET_TO_METERS;
-
-            match units {
-                UnitSystem::Metric => {
-                    println!(
-                        "      33/67 legs: {:.2} m / {:.2} m",
-                        split_33_short_m, split_33_long_m
-                    );
-                    println!(
-                        "      20/80 legs: {:.2} m / {:.2} m",
-                        split_20_short_m, split_20_long_m
-                    );
-                }
-                UnitSystem::Imperial => {
-                    println!(
-                        "      33/67 legs: {:.2} ft / {:.2} ft",
-                        split_33_short_ft, split_33_long_ft
-                    );
-                    println!(
-                        "      20/80 legs: {:.2} ft / {:.2} ft",
-                        split_20_short_ft, split_20_long_ft
-                    );
-                }
-                UnitSystem::Both => {
-                    println!(
-                        "      33/67 legs: {:.2} m / {:.2} m ({:.2} ft / {:.2} ft)",
-                        split_33_short_m, split_33_long_m, split_33_short_ft, split_33_long_ft
-                    );
-                    println!(
-                        "      20/80 legs: {:.2} m / {:.2} m ({:.2} ft / {:.2} ft)",
-                        split_20_short_m, split_20_long_m, split_20_short_ft, split_20_long_ft
-                    );
-                }
-            }
-
-            if let Some(best) = optimize_ocfd_split_for_length(&results.calculations, c.length_m) {
-                match units {
-                    UnitSystem::Metric => println!(
-                        "      Optimized split: {:.0}/{:.0} -> {:.2} m / {:.2} m (worst-leg clearance: {:.2}%)",
-                        best.short_ratio * 100.0,
-                        best.long_ratio * 100.0,
-                        best.short_leg_m,
-                        best.long_leg_m,
-                        best.worst_leg_clearance_pct
-                    ),
-                    UnitSystem::Imperial => println!(
-                        "      Optimized split: {:.0}/{:.0} -> {:.2} ft / {:.2} ft (worst-leg clearance: {:.2}%)",
-                        best.short_ratio * 100.0,
-                        best.long_ratio * 100.0,
-                        best.short_leg_ft,
-                        best.long_leg_ft,
-                        best.worst_leg_clearance_pct
-                    ),
-                    UnitSystem::Both => println!(
-                        "      Optimized split: {:.0}/{:.0} -> {:.2} m / {:.2} m ({:.2} ft / {:.2} ft), worst-leg clearance: {:.2}%",
-                        best.short_ratio * 100.0,
-                        best.long_ratio * 100.0,
-                        best.short_leg_m,
-                        best.long_leg_m,
-                        best.short_leg_ft,
-                        best.long_leg_ft,
-                        best.worst_leg_clearance_pct
-                    ),
-                }
-            }
-        }
-    }
-
-    if compromises.len() > 10 {
-        println!(
-            "  ... and {} more equal compromises",
-            compromises.len() - 10
-        );
-    }
-    println!();
-}
-
-fn print_skipped_band_warnings(results: &AppResults) {
-    if results.skipped_band_indices.is_empty() {
-        return;
-    }
-
-    let skipped = results
-        .skipped_band_indices
-        .iter()
-        .map(|value| value.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    println!(
-        "Warning: the following band selections were invalid and skipped: {}\n",
-        skipped
-    );
-}
-
-fn format_calc(
-    c: &WireCalculation,
-    units: UnitSystem,
-    antenna_model: Option<AntennaModel>,
-) -> String {
-    match units {
-        UnitSystem::Metric => match antenna_model {
-            Some(AntennaModel::Dipole) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} m (base: {:.2} m)\n  Full-wave: {:.2} m (base: {:.2} m)\n  Quarter-wave: {:.2} m (base: {:.2} m)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name, c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.corrected_half_wave_m, c.half_wave_m,
-                c.corrected_full_wave_m, c.full_wave_m,
-                c.corrected_quarter_wave_m, c.quarter_wave_m,
-                c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
-            ),
-            Some(AntennaModel::EndFedHalfWave) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  End-fed half-wave: {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.end_fed_half_wave_m,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            Some(AntennaModel::InvertedVDipole) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Inverted-V total: {:.2} m\n  Inverted-V each leg: {:.2} m\n  Inverted-V span at 90 deg apex: {:.2} m\n  Inverted-V span at 120 deg apex: {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.inverted_v_total_m,
-                c.inverted_v_leg_m,
-                c.inverted_v_span_90_m,
-                c.inverted_v_span_120_m,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            Some(AntennaModel::FullWaveLoop) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Full-wave loop circumference: {:.2} m\n  Full-wave loop square side: {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.full_wave_loop_circumference_m,
-                c.full_wave_loop_square_side_m,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            Some(AntennaModel::OffCenterFedDipole) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  OCFD 33/67 legs: {:.2} m / {:.2} m\n  OCFD 20/80 legs: {:.2} m / {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.ocfd_33_short_leg_m,
-                c.ocfd_33_long_leg_m,
-                c.ocfd_20_short_leg_m,
-                c.ocfd_20_long_leg_m,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            None => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} m (base: {:.2} m)\n  Full-wave: {:.2} m (base: {:.2} m)\n  Quarter-wave: {:.2} m (base: {:.2} m)\n  End-fed half-wave: {:.2} m\n  Inverted-V total: {:.2} m\n  Inverted-V each leg: {:.2} m\n  Inverted-V span at 90 deg apex: {:.2} m\n  Inverted-V span at 120 deg apex: {:.2} m\n  Full-wave loop circumference: {:.2} m\n  Full-wave loop square side: {:.2} m\n  OCFD 33/67 legs: {:.2} m / {:.2} m\n  OCFD 20/80 legs: {:.2} m / {:.2} m\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name, c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.corrected_half_wave_m, c.half_wave_m,
-                c.corrected_full_wave_m, c.full_wave_m,
-                c.corrected_quarter_wave_m, c.quarter_wave_m,
-                c.end_fed_half_wave_m,
-                c.inverted_v_total_m,
-                c.inverted_v_leg_m,
-                c.inverted_v_span_90_m,
-                c.inverted_v_span_120_m,
-                c.full_wave_loop_circumference_m,
-                c.full_wave_loop_square_side_m,
-                c.ocfd_33_short_leg_m,
-                c.ocfd_33_long_leg_m,
-                c.ocfd_20_short_leg_m,
-                c.ocfd_20_long_leg_m,
-                c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
-            ),
-        },
-        UnitSystem::Imperial => match antenna_model {
-            Some(AntennaModel::Dipole) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} ft (base: {:.2} ft)\n  Full-wave: {:.2} ft (base: {:.2} ft)\n  Quarter-wave: {:.2} ft (base: {:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name, c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.corrected_half_wave_ft, c.half_wave_ft,
-                c.corrected_full_wave_ft, c.full_wave_ft,
-                c.corrected_quarter_wave_ft, c.quarter_wave_ft,
-                c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
-            ),
-            Some(AntennaModel::EndFedHalfWave) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  End-fed half-wave: {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.end_fed_half_wave_ft,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            Some(AntennaModel::InvertedVDipole) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Inverted-V total: {:.2} ft\n  Inverted-V each leg: {:.2} ft\n  Inverted-V span at 90 deg apex: {:.2} ft\n  Inverted-V span at 120 deg apex: {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.inverted_v_total_ft,
-                c.inverted_v_leg_ft,
-                c.inverted_v_span_90_ft,
-                c.inverted_v_span_120_ft,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            Some(AntennaModel::FullWaveLoop) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Full-wave loop circumference: {:.2} ft\n  Full-wave loop square side: {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.full_wave_loop_circumference_ft,
-                c.full_wave_loop_square_side_ft,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            Some(AntennaModel::OffCenterFedDipole) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  OCFD 33/67 legs: {:.2} ft / {:.2} ft\n  OCFD 20/80 legs: {:.2} ft / {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.ocfd_33_short_leg_ft,
-                c.ocfd_33_long_leg_ft,
-                c.ocfd_20_short_leg_ft,
-                c.ocfd_20_long_leg_ft,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            None => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} ft (base: {:.2} ft)\n  Full-wave: {:.2} ft (base: {:.2} ft)\n  Quarter-wave: {:.2} ft (base: {:.2} ft)\n  End-fed half-wave: {:.2} ft\n  Inverted-V total: {:.2} ft\n  Inverted-V each leg: {:.2} ft\n  Inverted-V span at 90 deg apex: {:.2} ft\n  Inverted-V span at 120 deg apex: {:.2} ft\n  Full-wave loop circumference: {:.2} ft\n  Full-wave loop square side: {:.2} ft\n  OCFD 33/67 legs: {:.2} ft / {:.2} ft\n  OCFD 20/80 legs: {:.2} ft / {:.2} ft\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name, c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.corrected_half_wave_ft, c.half_wave_ft,
-                c.corrected_full_wave_ft, c.full_wave_ft,
-                c.corrected_quarter_wave_ft, c.quarter_wave_ft,
-                c.end_fed_half_wave_ft,
-                c.inverted_v_total_ft,
-                c.inverted_v_leg_ft,
-                c.inverted_v_span_90_ft,
-                c.inverted_v_span_120_ft,
-                c.full_wave_loop_circumference_ft,
-                c.full_wave_loop_square_side_ft,
-                c.ocfd_33_short_leg_ft,
-                c.ocfd_33_long_leg_ft,
-                c.ocfd_20_short_leg_ft,
-                c.ocfd_20_long_leg_ft,
-                c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km,
-            ),
-        },
-        UnitSystem::Both => match antenna_model {
-            Some(AntennaModel::Dipole) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Half-wave: {:.2} m ({:.2} ft, base: {:.2} m/{:.2} ft)\n  Full-wave: {:.2} m ({:.2} ft, base: {:.2} m/{:.2} ft)\n  Quarter-wave: {:.2} m ({:.2} ft, base: {:.2} m/{:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.corrected_half_wave_m,
-                c.corrected_half_wave_ft,
-                c.half_wave_m,
-                c.half_wave_ft,
-                c.corrected_full_wave_m,
-                c.corrected_full_wave_ft,
-                c.full_wave_m,
-                c.full_wave_ft,
-                c.corrected_quarter_wave_m,
-                c.corrected_quarter_wave_ft,
-                c.quarter_wave_m,
-                c.quarter_wave_ft,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            Some(AntennaModel::EndFedHalfWave) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  End-fed half-wave: {:.2} m ({:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.end_fed_half_wave_m,
-                c.end_fed_half_wave_ft,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            Some(AntennaModel::InvertedVDipole) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Inverted-V total: {:.2} m ({:.2} ft)\n  Inverted-V each leg: {:.2} m ({:.2} ft)\n  Inverted-V span at 90 deg apex: {:.2} m ({:.2} ft)\n  Inverted-V span at 120 deg apex: {:.2} m ({:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.inverted_v_total_m,
-                c.inverted_v_total_ft,
-                c.inverted_v_leg_m,
-                c.inverted_v_leg_ft,
-                c.inverted_v_span_90_m,
-                c.inverted_v_span_90_ft,
-                c.inverted_v_span_120_m,
-                c.inverted_v_span_120_ft,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            Some(AntennaModel::FullWaveLoop) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  Full-wave loop circumference: {:.2} m ({:.2} ft)\n  Full-wave loop square side: {:.2} m ({:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.full_wave_loop_circumference_m,
-                c.full_wave_loop_circumference_ft,
-                c.full_wave_loop_square_side_m,
-                c.full_wave_loop_square_side_ft,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            Some(AntennaModel::OffCenterFedDipole) => format!(
-                "{}\n  Frequency: {:.3} MHz\n  Transformer ratio: {}\n  OCFD 33/67 legs: {:.2} m / {:.2} m ({:.2} ft / {:.2} ft)\n  OCFD 20/80 legs: {:.2} m / {:.2} m ({:.2} ft / {:.2} ft)\n  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
-                c.band_name,
-                c.frequency_mhz,
-                c.transformer_ratio_label,
-                c.ocfd_33_short_leg_m,
-                c.ocfd_33_long_leg_m,
-                c.ocfd_33_short_leg_ft,
-                c.ocfd_33_long_leg_ft,
-                c.ocfd_20_short_leg_m,
-                c.ocfd_20_long_leg_m,
-                c.ocfd_20_short_leg_ft,
-                c.ocfd_20_long_leg_ft,
-                c.skip_distance_min_km,
-                c.skip_distance_max_km,
-                c.skip_distance_avg_km,
-            ),
-            None => format!("{}", c),
-        },
     }
 }
 
@@ -1955,7 +1244,7 @@ mod tests {
         let mut input = Cursor::new(b"invv\n".to_vec());
         let mut output = Vec::new();
 
-        let model = prompt_antenna_model(&mut input, &mut output);
+        let model = prompt_antenna_model_with_default(&mut input, &mut output, None);
 
         assert_eq!(model, Some(AntennaModel::InvertedVDipole));
     }
@@ -1965,7 +1254,8 @@ mod tests {
         let mut input = Cursor::new(b"ft\n40\n80\n".to_vec());
         let mut output = Vec::new();
 
-        let (min_m, max_m, units) = prompt_wire_length_window(&mut input, &mut output);
+        let (min_m, max_m, units) =
+            prompt_wire_length_window_with_default(&mut input, &mut output, None, None);
 
         assert_eq!(units, UnitSystem::Imperial);
         assert!((min_m - 12.192).abs() < 1e-6);
@@ -1994,22 +1284,29 @@ mod tests {
         let mut input = Cursor::new(b"recommended\n".to_vec());
         let mut output = Vec::new();
 
-        let ratio = prompt_transformer_ratio(
+        let ratio = prompt_transformer_ratio_with_default(
             &mut input,
             &mut output,
             CalcMode::Resonant,
             Some(AntennaModel::EndFedHalfWave),
+            None,
         );
 
         assert_eq!(ratio, TransformerRatio::R1To56);
     }
 
     #[test]
-    fn calculate_selected_bands_rejects_invalid_csv_input() {
+    fn calculate_selected_bands_with_defaults_rejects_invalid_csv_input() {
         let mut input = Cursor::new(b"abc,4\n".to_vec());
         let mut output = Vec::new();
+        let mut defaults = InteractiveDefaults::new();
 
-        calculate_selected_bands(&mut input, &mut output, ITURegion::Region1);
+        calculate_selected_bands_with_defaults(
+            &mut input,
+            &mut output,
+            ITURegion::Region1,
+            &mut defaults,
+        );
 
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
         assert!(rendered.contains("Invalid input. Use band names/ranges"));
@@ -2026,13 +1323,13 @@ mod tests {
     #[test]
     fn parse_band_selection_rejects_numeric_indices() {
         let err = parse_band_selection("4,6,10", ITURegion::Region1).unwrap_err();
-        assert!(err.contains("unknown band"));
+        assert!(err.to_string().contains("unknown band"));
     }
 
     #[test]
     fn parse_band_selection_rejects_unknown_band_name() {
         let err = parse_band_selection("banana", ITURegion::Region1).unwrap_err();
-        assert!(err.contains("unknown band"));
+        assert!(err.to_string().contains("unknown band"));
     }
 
     #[test]

@@ -76,7 +76,9 @@ This is not a unit test. It is an empirical regression script used to confirm th
 Environment variables:
 
 - `BIN`: path to the binary to execute, default `target/debug/rusty-wire`
-- `SWEEP_OUT`: path to the temporary sweep output file, default `/tmp/sweep_out.txt`
+- `SWEEP_OUT`: path to the temporary sweep output file, default `/tmp/rw_sweep_result.txt`
+
+The sweep uses CLI band names/ranges (for example `40m`, `20m,17m`, `40m-10m`) to match the current `--bands` parser behavior.
 
 ## Script: ITU Region Band Regression
 

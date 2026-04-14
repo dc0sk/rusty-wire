@@ -167,7 +167,7 @@ That means every other tested split from 20/80 through 45/55 had a worst-case le
 ## 6. Why the Result Can Look Like a "Real" OCFD Ratio
 
 You noticed that candidate 2 looks like a plausible real-world OCFD split.
-That is not accidental, but it also is not based on a stored table of practical Windom ratios.
+That is not accidental, but it also is not based on a stored table of practical OCFD feed-point ratios.
 
 It comes from three things:
 
