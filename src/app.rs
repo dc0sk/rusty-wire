@@ -1006,11 +1006,16 @@ pub fn non_resonant_recommendation_view(results: &AppResults) -> NonResonantReco
                     o.min_resonance_clearance_pct
                 ),
                 UnitSystem::Both => format!(
-                    "    {:2}. {:.2} m ({:.2} ft, clearance: {:.2}%)",
+                    "    {:2}. {:.2} m ({:.2} ft, clearance: {:.2}%{})",
                     idx + 1,
                     o.length_m,
                     o.length_ft,
-                    o.min_resonance_clearance_pct
+                    o.min_resonance_clearance_pct,
+                    if o.is_recommended {
+                        ", recommended"
+                    } else {
+                        ""
+                    }
                 ),
             })
             .collect()
@@ -1051,11 +1056,16 @@ pub fn non_resonant_recommendation_view(results: &AppResults) -> NonResonantReco
                     }
                 ),
                 UnitSystem::Both => format!(
-                    "    {:2}. {:.2} m ({:.2} ft, clearance: {:.2}%)",
+                    "    {:2}. {:.2} m ({:.2} ft, clearance: {:.2}%{})",
                     idx + 1,
                     o.length_m,
                     o.length_ft,
-                    o.min_resonance_clearance_pct
+                    o.min_resonance_clearance_pct,
+                    if o.is_recommended {
+                        ", recommended"
+                    } else {
+                        ""
+                    }
                 ),
             })
             .collect()
@@ -2418,6 +2428,34 @@ mod tests {
         let view = non_resonant_recommendation_view(&results);
         assert!(view.recommended.is_some());
         assert!(view.local_optima.iter().any(|row| row.is_recommended));
+    }
+
+    #[test]
+    fn non_resonant_recommendation_view_marks_recommended_rows_in_both_units_text() {
+        let config = AppConfig {
+            mode: CalcMode::NonResonant,
+            units: UnitSystem::Both,
+            band_indices: vec![4, 5, 6],
+            ..AppConfig::default()
+        };
+        let mut results = run_calculation(config);
+        let recommended = results
+            .recommendation
+            .expect("expected non-resonant recommendation");
+        results.window_optima = vec![
+            recommended,
+            NonResonantRecommendation {
+                length_m: recommended.length_m + 1.0,
+                length_ft: recommended.length_ft + (1.0 / FEET_TO_METERS),
+                min_resonance_clearance_pct: recommended.min_resonance_clearance_pct - 1.0,
+            },
+        ];
+
+        let view = non_resonant_recommendation_view(&results);
+        assert!(view
+            .local_optima_lines
+            .iter()
+            .any(|line| line.contains(", recommended")));
     }
 
     #[test]
