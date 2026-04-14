@@ -387,6 +387,33 @@ pub fn run_interactive() {
     run_interactive_with_io(&mut input, &mut output);
 }
 
+#[derive(Clone)]
+struct InteractiveDefaults {
+    bands: Option<String>,
+    mode: Option<CalcMode>,
+    antenna_model: Option<AntennaModel>,
+    velocity: Option<f64>,
+    transformer_ratio: Option<String>,
+    wire_min_m: Option<f64>,
+    wire_max_m: Option<f64>,
+    units: Option<UnitSystem>,
+}
+
+impl InteractiveDefaults {
+    fn new() -> Self {
+        Self {
+            bands: None,
+            mode: None,
+            antenna_model: None,
+            velocity: None,
+            transformer_ratio: None,
+            wire_min_m: None,
+            wire_max_m: None,
+            units: None,
+        }
+    }
+}
+
 fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
     writeln!(
         output,
@@ -406,6 +433,7 @@ fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
     .expect("failed to write interactive banner");
 
     let mut itu_region = prompt_itu_region(input, output);
+    let mut defaults = InteractiveDefaults::new();
 
     loop {
         writeln!(output, "Menu:").expect("failed to write menu");
@@ -429,8 +457,8 @@ fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
 
         match choice.trim() {
             "1" => show_all_bands_for_region_to_writer(output, itu_region),
-            "2" => calculate_selected_bands(input, output, itu_region),
-            "3" => quick_calculation(input, output, itu_region),
+            "2" => calculate_selected_bands_with_defaults(input, output, itu_region, &mut defaults),
+            "3" => quick_calculation_with_defaults(input, output, itu_region, &mut defaults),
             "4" => {
                 itu_region = prompt_itu_region(input, output);
                 writeln!(
@@ -450,16 +478,29 @@ fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
     }
 }
 
-fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, region: ITURegion) {
+fn calculate_selected_bands_with_defaults(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    region: ITURegion,
+    defaults: &mut InteractiveDefaults,
+) {
     show_all_bands_for_region_to_writer(output, region);
-    prompt(
-        output,
-        "Enter bands (e.g. 40m,20m,10m-15m; Enter for default set): ",
-    );
 
+    let bands_prompt = if let Some(ref last) = defaults.bands {
+        format!(
+            "Enter bands (e.g. 40m,20m,10m-15m; Enter for default set) [{}]: ",
+            last
+        )
+    } else {
+        "Enter bands (e.g. 40m,20m,10m-15m; Enter for default set): ".to_string()
+    };
+    prompt(output, &bands_prompt);
     let band_input = read_line(input, "failed to read selection");
-
-    let trimmed = band_input.trim();
+    let trimmed = if band_input.trim().is_empty() {
+        defaults.bands.as_deref().unwrap_or("")
+    } else {
+        band_input.trim()
+    };
     let indices = if trimmed.is_empty() {
         DEFAULT_BAND_SELECTION.to_vec()
     } else {
@@ -475,13 +516,31 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
             }
         }
     };
+    if !band_input.trim().is_empty() {
+        defaults.bands = Some(band_input.trim().to_string());
+    }
 
-    let mode = prompt_calc_mode(input, output);
-    let antenna_model = prompt_antenna_model(input, output);
-    let velocity = prompt_velocity_factor(input, output);
-    let transformer_ratio = prompt_transformer_ratio(input, output, mode, antenna_model);
+    let mode = prompt_calc_mode_with_default(input, output, defaults.mode);
+    defaults.mode = Some(mode);
+    let antenna_model = prompt_antenna_model_with_default(input, output, defaults.antenna_model);
+    defaults.antenna_model = antenna_model;
+    let velocity = prompt_velocity_factor_with_default(input, output, defaults.velocity);
+    defaults.velocity = Some(velocity);
+    let transformer_ratio = prompt_transformer_ratio_with_default(
+        input,
+        output,
+        mode,
+        antenna_model,
+        defaults.transformer_ratio.as_deref(),
+    );
+    defaults.transformer_ratio = Some(transformer_ratio.as_label().to_string());
     let (wire_min_m, wire_max_m, auto_units) = if mode == CalcMode::NonResonant {
-        prompt_wire_length_window(input, output)
+        prompt_wire_length_window_with_default(
+            input,
+            output,
+            defaults.wire_min_m,
+            defaults.wire_max_m,
+        )
     } else {
         (
             DEFAULT_NON_RESONANT_CONFIG.min_len_m,
@@ -489,7 +548,188 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
             UnitSystem::Both,
         )
     };
-    let units = prompt_display_units(input, output, auto_units);
+    defaults.wire_min_m = Some(wire_min_m);
+    defaults.wire_max_m = Some(wire_max_m);
+    let units = prompt_display_units_with_default(input, output, auto_units, defaults.units);
+    defaults.units = Some(units);
+    // ---- PROMPT HELPERS MOVED TO MODULE LEVEL ----
+
+    fn prompt_calc_mode_with_default(
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+        default: Option<CalcMode>,
+    ) -> CalcMode {
+        writeln!(output, "\nCalculation mode:").ok();
+        writeln!(output, "  1) Resonant (default)").ok();
+        writeln!(output, "  2) Non-resonant").ok();
+        let prompt_str = match default {
+            Some(CalcMode::NonResonant) => "Select calculation mode (1-2) [2]: ",
+            _ => "Select calculation mode (1-2) [1]: ",
+        };
+        prompt(output, prompt_str);
+        let line = read_line(input, "failed to read mode");
+        match line.trim() {
+            "2" => CalcMode::NonResonant,
+            "1" => CalcMode::Resonant,
+            "" => default.unwrap_or(CalcMode::Resonant),
+            _ => CalcMode::Resonant,
+        }
+    }
+
+    fn prompt_antenna_model_with_default(
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+        default: Option<AntennaModel>,
+    ) -> Option<AntennaModel> {
+        writeln!(output, "\nAntenna model:").ok();
+        writeln!(output, "  d) Dipole (default)").ok();
+        writeln!(output, "  e) End-fed half-wave").ok();
+        writeln!(output, "  l) Full-wave loop").ok();
+        writeln!(output, "  v) Inverted-V").ok();
+        writeln!(output, "  o) Off-center-fed dipole (OCFD)").ok();
+        let prompt_str = match default {
+            Some(AntennaModel::EndFedHalfWave) => "Select antenna model (d/e/l/v/o) [e]: ",
+            Some(AntennaModel::FullWaveLoop) => "Select antenna model (d/e/l/v/o) [l]: ",
+            Some(AntennaModel::InvertedVDipole) => "Select antenna model (d/e/l/v/o) [v]: ",
+            Some(AntennaModel::OffCenterFedDipole) => "Select antenna model (d/e/l/v/o) [o]: ",
+            _ => "Select antenna model (d/e/l/v/o) [d]: ",
+        };
+        prompt(output, prompt_str);
+        let line = read_line(input, "failed to read antenna model");
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return default;
+        }
+        match trimmed {
+            "d" | "dipole" => Some(AntennaModel::Dipole),
+            "e" | "efhw" | "end-fed" | "end-fed-half-wave" => Some(AntennaModel::EndFedHalfWave),
+            "l" | "loop" | "full-wave-loop" => Some(AntennaModel::FullWaveLoop),
+            "v" | "inverted-v" | "inverted-v-dipole" => Some(AntennaModel::InvertedVDipole),
+            "o" | "ocfd" | "off-center-fed" | "off-center-fed-dipole" => {
+                Some(AntennaModel::OffCenterFedDipole)
+            }
+            _ => default,
+        }
+    }
+
+    fn prompt_velocity_factor_with_default(
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+        default: Option<f64>,
+    ) -> f64 {
+        let prompt_str = match default {
+            Some(v) => format!("Enter velocity factor (0.5-1.0) [{:.2}]: ", v),
+            None => "Enter velocity factor (0.5-1.0) [0.95]: ".to_string(),
+        };
+        prompt(output, &prompt_str);
+        let line = read_line(input, "failed to read velocity factor");
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return default.unwrap_or(0.95);
+        }
+        match trimmed.parse::<f64>() {
+            Ok(v) if v >= 0.5 && v <= 1.0 => v,
+            _ => default.unwrap_or(0.95),
+        }
+    }
+
+    fn prompt_transformer_ratio_with_default(
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+        mode: CalcMode,
+        antenna_model: Option<AntennaModel>,
+        default: Option<&str>,
+    ) -> TransformerRatio {
+        let prompt_str = match default {
+            Some(val) => format!(
+                "Enter transformer ratio (e.g. 1:9, recommended) [{}]: ",
+                val
+            ),
+            None => "Enter transformer ratio (e.g. 1:9, recommended) [recommended]: ".to_string(),
+        };
+        prompt(output, &prompt_str);
+        let line = read_line(input, "failed to read transformer ratio");
+        let trimmed = line.trim();
+        let raw = if trimmed.is_empty() {
+            default.unwrap_or("recommended")
+        } else {
+            trimmed
+        };
+        if raw == "recommended" {
+            recommended_transformer_ratio(mode, antenna_model)
+        } else {
+            TransformerRatio::parse(raw)
+                .unwrap_or_else(|| recommended_transformer_ratio(mode, antenna_model))
+        }
+    }
+
+    fn prompt_wire_length_window_with_default(
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+        default_min: Option<f64>,
+        default_max: Option<f64>,
+    ) -> (f64, f64, UnitSystem) {
+        let min_prompt = match default_min {
+            Some(v) => format!("Enter minimum wire length (m) [{:.2}]: ", v),
+            None => "Enter minimum wire length (m) [8.00]: ".to_string(),
+        };
+        prompt(output, &min_prompt);
+        let min_line = read_line(input, "failed to read min wire length");
+        let min_val = if min_line.trim().is_empty() {
+            default_min.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m)
+        } else {
+            min_line
+                .trim()
+                .parse()
+                .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m)
+        };
+        let max_prompt = match default_max {
+            Some(v) => format!("Enter maximum wire length (m) [{:.2}]: ", v),
+            None => "Enter maximum wire length (m) [35.00]: ".to_string(),
+        };
+        prompt(output, &max_prompt);
+        let max_line = read_line(input, "failed to read max wire length");
+        let max_val = if max_line.trim().is_empty() {
+            default_max.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m)
+        } else {
+            max_line
+                .trim()
+                .parse()
+                .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m)
+        };
+        (min_val, max_val, UnitSystem::Both)
+    }
+
+    fn prompt_display_units_with_default(
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+        auto_units: UnitSystem,
+        default: Option<UnitSystem>,
+    ) -> UnitSystem {
+        let prompt_str = match default {
+            Some(u) => format!(
+                "Select display units (m/ft/both) [{}]: ",
+                match u {
+                    UnitSystem::Metric => "m",
+                    UnitSystem::Imperial => "ft",
+                    UnitSystem::Both => "both",
+                }
+            ),
+            None => "Select display units (m/ft/both) [both]: ".to_string(),
+        };
+        prompt(output, &prompt_str);
+        let line = read_line(input, "failed to read units");
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return default.unwrap_or(auto_units);
+        }
+        match trimmed {
+            "m" | "meters" => UnitSystem::Metric,
+            "ft" | "feet" => UnitSystem::Imperial,
+            "both" => UnitSystem::Both,
+            _ => default.unwrap_or(auto_units),
+        }
+    }
 
     let config = AppConfig {
         band_indices: indices,
@@ -524,13 +764,27 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
     }
 }
 
-fn quick_calculation(input: &mut dyn BufRead, output: &mut dyn Write, region: ITURegion) {
+fn quick_calculation_with_defaults(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    region: ITURegion,
+    defaults: &mut InteractiveDefaults,
+) {
     show_all_bands_for_region_to_writer(output, region);
-    prompt(output, "Enter one band (e.g. 20m): ");
 
+    let band_prompt = if let Some(ref last) = defaults.bands {
+        format!("Enter one band (e.g. 20m) [{}]: ", last)
+    } else {
+        "Enter one band (e.g. 20m): ".to_string()
+    };
+    prompt(output, &band_prompt);
     let band_input = read_line(input, "failed to read selection");
-
-    let idx = match parse_single_band_token(band_input.trim(), region) {
+    let trimmed = if band_input.trim().is_empty() {
+        defaults.bands.as_deref().unwrap_or("")
+    } else {
+        band_input.trim()
+    };
+    let idx = match parse_single_band_token(trimmed, region) {
         Ok(v) => v,
         Err(_) => {
             writeln!(output, "Invalid band. Use a single band name like 20m.\n")
@@ -538,13 +792,31 @@ fn quick_calculation(input: &mut dyn BufRead, output: &mut dyn Write, region: IT
             return;
         }
     };
+    if !band_input.trim().is_empty() {
+        defaults.bands = Some(band_input.trim().to_string());
+    }
 
-    let mode = prompt_calc_mode(input, output);
-    let antenna_model = prompt_antenna_model(input, output);
-    let velocity = prompt_velocity_factor(input, output);
-    let transformer_ratio = prompt_transformer_ratio(input, output, mode, antenna_model);
+    let mode = prompt_calc_mode_with_default(input, output, defaults.mode);
+    defaults.mode = Some(mode);
+    let antenna_model = prompt_antenna_model_with_default(input, output, defaults.antenna_model);
+    defaults.antenna_model = antenna_model;
+    let velocity = prompt_velocity_factor_with_default(input, output, defaults.velocity);
+    defaults.velocity = Some(velocity);
+    let transformer_ratio = prompt_transformer_ratio_with_default(
+        input,
+        output,
+        mode,
+        antenna_model,
+        defaults.transformer_ratio.as_deref(),
+    );
+    defaults.transformer_ratio = Some(transformer_ratio.as_label().to_string());
     let (wire_min_m, wire_max_m, auto_units) = if mode == CalcMode::NonResonant {
-        prompt_wire_length_window(input, output)
+        prompt_wire_length_window_with_default(
+            input,
+            output,
+            defaults.wire_min_m,
+            defaults.wire_max_m,
+        )
     } else {
         (
             DEFAULT_NON_RESONANT_CONFIG.min_len_m,
@@ -552,7 +824,195 @@ fn quick_calculation(input: &mut dyn BufRead, output: &mut dyn Write, region: IT
             UnitSystem::Both,
         )
     };
-    let units = prompt_display_units(input, output, auto_units);
+    defaults.wire_min_m = Some(wire_min_m);
+    defaults.wire_max_m = Some(wire_max_m);
+    let units = prompt_display_units_with_default(input, output, auto_units, defaults.units);
+    defaults.units = Some(units);
+    // Helper prompt functions with default value support
+    fn prompt_calc_mode_with_default(
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+        default: Option<CalcMode>,
+    ) -> CalcMode {
+        // ...existing code...
+        // For brevity, use the original prompt_calc_mode logic, but show [default] and use it if input is empty
+        use std::io::Write;
+        writeln!(output, "\nCalculation mode:").ok();
+        writeln!(output, "  1) Resonant (default)").ok();
+        writeln!(output, "  2) Non-resonant").ok();
+        let prompt_str = match default {
+            Some(CalcMode::NonResonant) => "Select calculation mode (1-2) [2]: ",
+            _ => "Select calculation mode (1-2) [1]: ",
+        };
+        prompt(output, prompt_str);
+        let line = read_line(input, "failed to read mode");
+        match line.trim() {
+            "2" => CalcMode::NonResonant,
+            "1" => CalcMode::Resonant,
+            "" => default.unwrap_or(CalcMode::Resonant),
+            _ => CalcMode::Resonant,
+        }
+    }
+
+    fn prompt_antenna_model_with_default(
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+        default: Option<AntennaModel>,
+    ) -> Option<AntennaModel> {
+        // ...existing code...
+        // Use the original prompt_antenna_model logic, but show [default] and use it if input is empty
+        use std::io::Write;
+        writeln!(output, "\nAntenna model:").ok();
+        writeln!(output, "  d) Dipole (default)").ok();
+        writeln!(output, "  e) End-fed half-wave").ok();
+        writeln!(output, "  l) Full-wave loop").ok();
+        writeln!(output, "  v) Inverted-V").ok();
+        writeln!(output, "  o) Off-center-fed dipole (OCFD)").ok();
+        let prompt_str = match default {
+            Some(AntennaModel::EndFedHalfWave) => "Select antenna model (d/e/l/v/o) [e]: ",
+            Some(AntennaModel::FullWaveLoop) => "Select antenna model (d/e/l/v/o) [l]: ",
+            Some(AntennaModel::InvertedVDipole) => "Select antenna model (d/e/l/v/o) [v]: ",
+            Some(AntennaModel::OffCenterFedDipole) => "Select antenna model (d/e/l/v/o) [o]: ",
+            _ => "Select antenna model (d/e/l/v/o) [d]: ",
+        };
+        prompt(output, prompt_str);
+        let line = read_line(input, "failed to read antenna model");
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return default;
+        }
+        match trimmed {
+            "d" | "dipole" => Some(AntennaModel::Dipole),
+            "e" | "efhw" | "end-fed" | "end-fed-half-wave" => Some(AntennaModel::EndFedHalfWave),
+            "l" | "loop" | "full-wave-loop" => Some(AntennaModel::FullWaveLoop),
+            "v" | "inverted-v" | "inverted-v-dipole" => Some(AntennaModel::InvertedVDipole),
+            "o" | "ocfd" | "off-center-fed" | "off-center-fed-dipole" => {
+                Some(AntennaModel::OffCenterFedDipole)
+            }
+            _ => default,
+        }
+    }
+
+    fn prompt_velocity_factor_with_default(
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+        default: Option<f64>,
+    ) -> f64 {
+        use std::io::Write;
+        let prompt_str = match default {
+            Some(v) => format!("Enter velocity factor (0.5-1.0) [{:.2}]: ", v),
+            None => "Enter velocity factor (0.5-1.0) [0.95]: ".to_string(),
+        };
+        prompt(output, &prompt_str);
+        let line = read_line(input, "failed to read velocity factor");
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return default.unwrap_or(0.95);
+        }
+        match trimmed.parse::<f64>() {
+            Ok(v) if v >= 0.5 && v <= 1.0 => v,
+            _ => default.unwrap_or(0.95),
+        }
+    }
+
+    fn prompt_transformer_ratio_with_default(
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+        mode: CalcMode,
+        antenna_model: Option<AntennaModel>,
+        default: Option<&str>,
+    ) -> TransformerRatio {
+        let prompt_str = match default {
+            Some(val) => format!(
+                "Enter transformer ratio (e.g. 1:9, recommended) [{}]: ",
+                val
+            ),
+            None => "Enter transformer ratio (e.g. 1:9, recommended) [recommended]: ".to_string(),
+        };
+        prompt(output, &prompt_str);
+        let line = read_line(input, "failed to read transformer ratio");
+        let trimmed = line.trim();
+        let raw = if trimmed.is_empty() {
+            default.unwrap_or("recommended")
+        } else {
+            trimmed
+        };
+        if raw == "recommended" {
+            recommended_transformer_ratio(mode, antenna_model)
+        } else {
+            TransformerRatio::parse(raw)
+                .unwrap_or_else(|| recommended_transformer_ratio(mode, antenna_model))
+        }
+    }
+
+    fn prompt_wire_length_window_with_default(
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+        default_min: Option<f64>,
+        default_max: Option<f64>,
+    ) -> (f64, f64, UnitSystem) {
+        use std::io::Write;
+        let min_prompt = match default_min {
+            Some(v) => format!("Enter minimum wire length (m) [{:.2}]: ", v),
+            None => "Enter minimum wire length (m) [8.00]: ".to_string(),
+        };
+        prompt(output, &min_prompt);
+        let min_line = read_line(input, "failed to read min wire length");
+        let min_val = if min_line.trim().is_empty() {
+            default_min.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m)
+        } else {
+            min_line
+                .trim()
+                .parse()
+                .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.min_len_m)
+        };
+        let max_prompt = match default_max {
+            Some(v) => format!("Enter maximum wire length (m) [{:.2}]: ", v),
+            None => "Enter maximum wire length (m) [35.00]: ".to_string(),
+        };
+        prompt(output, &max_prompt);
+        let max_line = read_line(input, "failed to read max wire length");
+        let max_val = if max_line.trim().is_empty() {
+            default_max.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m)
+        } else {
+            max_line
+                .trim()
+                .parse()
+                .unwrap_or(DEFAULT_NON_RESONANT_CONFIG.max_len_m)
+        };
+        (min_val, max_val, UnitSystem::Both)
+    }
+
+    fn prompt_display_units_with_default(
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+        auto_units: UnitSystem,
+        default: Option<UnitSystem>,
+    ) -> UnitSystem {
+        let prompt_str = match default {
+            Some(u) => format!(
+                "Select display units (m/ft/both) [{}]: ",
+                match u {
+                    UnitSystem::Metric => "m",
+                    UnitSystem::Imperial => "ft",
+                    UnitSystem::Both => "both",
+                }
+            ),
+            None => "Select display units (m/ft/both) [both]: ".to_string(),
+        };
+        prompt(output, &prompt_str);
+        let line = read_line(input, "failed to read units");
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return default.unwrap_or(auto_units);
+        }
+        match trimmed {
+            "m" | "meters" => UnitSystem::Metric,
+            "ft" | "feet" => UnitSystem::Imperial,
+            "both" => UnitSystem::Both,
+            _ => default.unwrap_or(auto_units),
+        }
+    }
 
     let config = AppConfig {
         band_indices: vec![idx],
