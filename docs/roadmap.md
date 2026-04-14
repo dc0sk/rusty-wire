@@ -1,6 +1,6 @@
 # Roadmap
 
-This document captures the most relevant work that remains after the 2.1.0 release.
+This document captures the most relevant work that remains after the 2.2.0 release.
 
 It is intentionally trimmed to the items that are still useful. Completed milestones are kept short so the roadmap stays actionable.
 

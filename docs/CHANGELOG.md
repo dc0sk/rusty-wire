@@ -4,6 +4,8 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-04-14
+
 ### Changed
 - **App-layer display views extracted**: moved reusable results-display view construction into `src/app.rs` so CLI output rendering and future UI surfaces can consume the same normalized presentation data.
 - **Shared helper centralization for UI prep**: consolidated band-selection parsing/label resolution and transformer-fallback messaging in app-layer helpers used by both CLI and upcoming UI integration work.
