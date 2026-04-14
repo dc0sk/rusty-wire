@@ -56,6 +56,16 @@ It lets you:
 - Configure non-resonant wire windows interactively
 - Export results and print an equivalent CLI command
 
+### Interactive Mode: Per-Session Defaults
+
+Starting with the next release, interactive mode remembers your last-used values for each prompt (bands, calculation mode, antenna model, velocity factor, transformer ratio, wire window, and units) during your session. When you repeat a calculation, prompts will pre-fill with your previous choices, making iterative planning much faster.
+
+- To accept the previous value, just press Enter at the prompt.
+- To change a value, type a new one as usual.
+- Defaults reset when you exit and restart the program.
+
+This feature applies to both multi-band and quick single-band calculations in interactive mode.
+
 ## CLI Usage
 
 ```bash
