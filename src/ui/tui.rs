@@ -19,6 +19,7 @@ pub enum TuiAction {
     SetFocus(TuiFocus),
     SetStatusMessage(Option<String>),
     SetBandIndices(Vec<usize>),
+    SetBandIndicesAndRunCalculation(Vec<usize>),
     SetMode(CalcMode),
     SetModeAndRunCalculation(CalcMode),
     SetAntennaModel(Option<AntennaModel>),
@@ -29,6 +30,7 @@ pub enum TuiAction {
     SetDefaultUnits(UnitSystem),
     SetSelectedUnits(Option<UnitSystem>),
     SetRegion(ITURegion),
+    SetRegionAndRunCalculation(ITURegion),
     RunCalculation,
 }
 
@@ -159,6 +161,10 @@ impl TuiState {
             TuiAction::SetFocus(focus) => self.focus = focus,
             TuiAction::SetStatusMessage(message) => self.status_message = message,
             TuiAction::SetBandIndices(band_indices) => self.band_indices = band_indices,
+            TuiAction::SetBandIndicesAndRunCalculation(band_indices) => {
+                self.band_indices = band_indices;
+                return self.run_calculation();
+            }
             TuiAction::SetMode(mode) => self.mode = mode,
             TuiAction::SetModeAndRunCalculation(mode) => {
                 self.mode = mode;
@@ -184,11 +190,50 @@ impl TuiState {
                 self.selected_units = selected_units;
             }
             TuiAction::SetRegion(itu_region) => self.itu_region = itu_region,
+            TuiAction::SetRegionAndRunCalculation(itu_region) => {
+                self.itu_region = itu_region;
+                return self.run_calculation();
+            }
             TuiAction::RunCalculation => return self.run_calculation(),
         }
 
         Ok(())
     }
+}
+
+pub fn render_tui_scaffold(state: &TuiState) -> String {
+    let mut lines = vec![
+        "Rusty Wire TUI scaffold".to_string(),
+        format!("  focus: {:?}", state.focus),
+    ];
+
+    if let Some(panel) = state.results_panel.as_ref() {
+        lines.push(format!("  heading: {}", panel.summary.overview_heading));
+        lines.push(format!("  sections: {}", panel.sections.len()));
+        lines.push(format!("  bands: {}", panel.summary.band_count));
+        lines.extend(
+            panel
+                .summary
+                .summary_lines
+                .iter()
+                .map(|line| format!("  {line}")),
+        );
+
+        if !panel.warnings.warning_lines.is_empty() {
+            lines.push("  warnings:".to_string());
+            lines.extend(
+                panel
+                    .warnings
+                    .warning_lines
+                    .iter()
+                    .map(|line| format!("    {line}")),
+            );
+        }
+    } else {
+        lines.push("  no results available".to_string());
+    }
+
+    lines.join("\n")
 }
 
 #[cfg(test)]
@@ -297,8 +342,39 @@ mod tests {
             .results_panel
             .as_ref()
             .expect("expected results panel state");
-        assert_eq!(panel.summary.overview_heading, "Non-resonant Overview (band context):");
+        assert_eq!(
+            panel.summary.overview_heading,
+            "Non-resonant Overview (band context):"
+        );
         assert_eq!(state.focus, TuiFocus::Results);
+    }
+
+    #[test]
+    fn tui_state_recalculates_after_band_change() {
+        let mut state = TuiState::default();
+
+        state
+            .update(TuiAction::SetBandIndicesAndRunCalculation(vec![4, 6]))
+            .unwrap();
+
+        let panel = state
+            .results_panel
+            .as_ref()
+            .expect("expected results panel state");
+        assert_eq!(state.band_indices, vec![4, 6]);
+        assert_eq!(panel.summary.band_count, 2);
+    }
+
+    #[test]
+    fn tui_state_recalculates_after_region_change() {
+        let mut state = TuiState::default();
+
+        state
+            .update(TuiAction::SetRegionAndRunCalculation(ITURegion::Region2))
+            .unwrap();
+
+        assert_eq!(state.itu_region, ITURegion::Region2);
+        assert!(state.results_panel.is_some());
     }
 
     #[test]
@@ -314,5 +390,17 @@ mod tests {
         assert!(!panel.summary.summary_lines.is_empty());
         assert!(panel.warnings.warning_lines.is_empty());
         assert!(panel.sections.iter().all(|section| section.line_count > 0));
+    }
+
+    #[test]
+    fn render_tui_scaffold_uses_tui_render_contract() {
+        let mut state = TuiState::default();
+
+        state.update(TuiAction::RunCalculation).unwrap();
+
+        let rendered = render_tui_scaffold(&state);
+        assert!(rendered.contains("Rusty Wire TUI scaffold"));
+        assert!(rendered.contains("heading: Resonant Overview:"));
+        assert!(rendered.contains("bands: 7"));
     }
 }
