@@ -302,18 +302,20 @@ pub fn run_from_args(args: &[String]) {
 
     let transformer_ratio = cli.transformer.resolve(cli.mode, cli.antenna);
 
-    let request = AppRequest::from_draft(AppRequestDraft {
+    let state = CliCalculationState {
         band_indices: bands,
-        velocity_factor: cli.velocity,
         mode: cli.mode,
+        antenna_model: cli.antenna,
+        velocity_factor: cli.velocity,
+        transformer_ratio,
         wire_min_m: resolved_window.min_m,
         wire_max_m: resolved_window.max_m,
         default_units: resolved_window.inferred_display_units,
         selected_units: cli.units,
         itu_region: cli.region,
-        transformer_ratio,
-        antenna_model: cli.antenna,
-    });
+    };
+
+    let request = state.to_request();
 
     let results = match execute_request_checked(request) {
         Ok(response) => response.results,
@@ -425,6 +427,36 @@ impl InteractiveCalculationState {
             wire_max_m: self.wire_max_m,
             default_units: self.default_units,
             selected_units: Some(self.selected_units),
+            itu_region: self.itu_region,
+            transformer_ratio: self.transformer_ratio,
+            antenna_model: self.antenna_model,
+        })
+    }
+}
+
+struct CliCalculationState {
+    band_indices: Vec<usize>,
+    mode: CalcMode,
+    antenna_model: Option<AntennaModel>,
+    velocity_factor: f64,
+    transformer_ratio: TransformerRatio,
+    wire_min_m: f64,
+    wire_max_m: f64,
+    default_units: UnitSystem,
+    selected_units: Option<UnitSystem>,
+    itu_region: ITURegion,
+}
+
+impl CliCalculationState {
+    fn to_request(&self) -> AppRequest {
+        AppRequest::from_draft(AppRequestDraft {
+            band_indices: self.band_indices.clone(),
+            velocity_factor: self.velocity_factor,
+            mode: self.mode,
+            wire_min_m: self.wire_min_m,
+            wire_max_m: self.wire_max_m,
+            default_units: self.default_units,
+            selected_units: self.selected_units,
             itu_region: self.itu_region,
             transformer_ratio: self.transformer_ratio,
             antenna_model: self.antenna_model,
@@ -1332,6 +1364,32 @@ mod tests {
         );
 
         assert_eq!(ratio, TransformerRatio::R1To56);
+    }
+
+    #[test]
+    fn cli_calculation_state_translates_to_request() {
+        let request = CliCalculationState {
+            band_indices: vec![4, 6],
+            mode: CalcMode::NonResonant,
+            antenna_model: Some(AntennaModel::OffCenterFedDipole),
+            velocity_factor: 0.92,
+            transformer_ratio: TransformerRatio::R1To4,
+            wire_min_m: 11.0,
+            wire_max_m: 21.0,
+            default_units: UnitSystem::Metric,
+            selected_units: None,
+            itu_region: ITURegion::Region3,
+        }
+        .to_request();
+
+        assert_eq!(request.config.band_indices, vec![4, 6]);
+        assert_eq!(request.config.mode, CalcMode::NonResonant);
+        assert_eq!(request.config.units, UnitSystem::Metric);
+        assert_eq!(request.config.itu_region, ITURegion::Region3);
+        assert_eq!(
+            request.config.antenna_model,
+            Some(AntennaModel::OffCenterFedDipole)
+        );
     }
 
     #[test]

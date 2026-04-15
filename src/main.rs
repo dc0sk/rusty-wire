@@ -3,6 +3,7 @@ mod bands;
 mod calculations;
 mod cli;
 mod export;
+mod ui;
 
 use std::env;
 
