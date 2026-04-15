@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
-use crate::app::{AntennaModel, AppRequestDraft, CalcMode, UnitSystem, DEFAULT_BAND_SELECTION};
+use crate::app::{
+    app_results_view_model, execute_request_checked, AntennaModel, AppError, AppRequest,
+    AppRequestDraft, AppResultsViewModel, CalcMode, UnitSystem, DEFAULT_BAND_SELECTION,
+};
 use crate::bands::ITURegion;
 use crate::calculations::{TransformerRatio, DEFAULT_NON_RESONANT_CONFIG};
 
@@ -24,12 +27,36 @@ pub enum TuiAction {
     SetDefaultUnits(UnitSystem),
     SetSelectedUnits(Option<UnitSystem>),
     SetRegion(ITURegion),
+    RunCalculation,
+}
+
+#[derive(Debug, Clone)]
+pub struct TuiResultsPanelState {
+    pub overview_heading: String,
+    pub summary_lines: Vec<String>,
+    pub warning_lines: Vec<String>,
+    pub section_count: usize,
+    pub band_count: usize,
+}
+
+impl TuiResultsPanelState {
+    fn from_app_view_model(view_model: &AppResultsViewModel) -> Self {
+        Self {
+            overview_heading: view_model.display_document.overview_heading.to_string(),
+            summary_lines: view_model.display_document.summary_lines.clone(),
+            warning_lines: view_model.display_document.warning_lines.clone(),
+            section_count: view_model.display_document.sections.len(),
+            band_count: view_model.display_document.band_views.len(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct TuiState {
     pub focus: TuiFocus,
     pub status_message: Option<String>,
+    pub app_results_view_model: Option<AppResultsViewModel>,
+    pub results_panel: Option<TuiResultsPanelState>,
     pub band_indices: Vec<usize>,
     pub mode: CalcMode,
     pub antenna_model: Option<AntennaModel>,
@@ -47,6 +74,8 @@ impl Default for TuiState {
         Self {
             focus: TuiFocus::Inputs,
             status_message: None,
+            app_results_view_model: None,
+            results_panel: None,
             band_indices: DEFAULT_BAND_SELECTION.to_vec(),
             mode: CalcMode::Resonant,
             antenna_model: None,
@@ -62,6 +91,10 @@ impl Default for TuiState {
 }
 
 impl TuiState {
+    pub fn to_request(&self) -> AppRequest {
+        AppRequest::from_draft(self.to_request_draft())
+    }
+
     pub fn to_request_draft(&self) -> AppRequestDraft {
         AppRequestDraft {
             band_indices: self.band_indices.clone(),
@@ -81,7 +114,7 @@ impl TuiState {
         self.focus = focus;
     }
 
-    pub fn update(&mut self, action: TuiAction) {
+    pub fn update(&mut self, action: TuiAction) -> Result<(), AppError> {
         match action {
             TuiAction::SetFocus(focus) => self.focus = focus,
             TuiAction::SetStatusMessage(message) => self.status_message = message,
@@ -103,7 +136,17 @@ impl TuiState {
                 self.selected_units = selected_units;
             }
             TuiAction::SetRegion(itu_region) => self.itu_region = itu_region,
+            TuiAction::RunCalculation => {
+                let response = execute_request_checked(self.to_request())?;
+                let view_model = app_results_view_model(&response.results);
+                self.results_panel = Some(TuiResultsPanelState::from_app_view_model(&view_model));
+                self.app_results_view_model = Some(view_model);
+                self.focus = TuiFocus::Results;
+                self.status_message = Some("Calculation complete".to_string());
+            }
         }
+
+        Ok(())
     }
 }
 
@@ -119,6 +162,7 @@ mod tests {
         assert_eq!(state.band_indices, DEFAULT_BAND_SELECTION.to_vec());
         assert_eq!(state.mode, CalcMode::Resonant);
         assert!(state.selected_units.is_none());
+        assert!(state.results_panel.is_none());
     }
 
     #[test]
@@ -126,6 +170,8 @@ mod tests {
         let state = TuiState {
             focus: TuiFocus::Results,
             status_message: Some("ready".to_string()),
+            app_results_view_model: None,
+            results_panel: None,
             band_indices: vec![4, 6],
             mode: CalcMode::NonResonant,
             antenna_model: Some(AntennaModel::EndFedHalfWave),
@@ -151,12 +197,16 @@ mod tests {
     fn tui_state_update_applies_actions() {
         let mut state = TuiState::default();
 
-        state.update(TuiAction::SetFocus(TuiFocus::Results));
-        state.update(TuiAction::SetStatusMessage(Some("updated".to_string())));
-        state.update(TuiAction::SetMode(CalcMode::NonResonant));
-        state.update(TuiAction::SetVelocityFactor(0.9));
-        state.update(TuiAction::SetRegion(ITURegion::Region3));
-        state.update(TuiAction::SetSelectedUnits(Some(UnitSystem::Both)));
+        state.update(TuiAction::SetFocus(TuiFocus::Results)).unwrap();
+        state
+            .update(TuiAction::SetStatusMessage(Some("updated".to_string())))
+            .unwrap();
+        state.update(TuiAction::SetMode(CalcMode::NonResonant)).unwrap();
+        state.update(TuiAction::SetVelocityFactor(0.9)).unwrap();
+        state.update(TuiAction::SetRegion(ITURegion::Region3)).unwrap();
+        state
+            .update(TuiAction::SetSelectedUnits(Some(UnitSystem::Both)))
+            .unwrap();
 
         assert_eq!(state.focus, TuiFocus::Results);
         assert_eq!(state.status_message.as_deref(), Some("updated"));
@@ -164,5 +214,23 @@ mod tests {
         assert_eq!(state.velocity_factor, 0.9);
         assert_eq!(state.itu_region, ITURegion::Region3);
         assert_eq!(state.selected_units, Some(UnitSystem::Both));
+    }
+
+    #[test]
+    fn tui_state_run_calculation_stores_results_view_models() {
+        let mut state = TuiState::default();
+
+        state.update(TuiAction::RunCalculation).unwrap();
+
+        assert_eq!(state.focus, TuiFocus::Results);
+        assert_eq!(state.status_message.as_deref(), Some("Calculation complete"));
+        assert!(state.app_results_view_model.is_some());
+        let panel = state
+            .results_panel
+            .as_ref()
+            .expect("expected results panel state");
+        assert_eq!(panel.overview_heading, "Resonant Overview:");
+        assert!(!panel.summary_lines.is_empty());
+        assert!(panel.band_count > 0);
     }
 }
