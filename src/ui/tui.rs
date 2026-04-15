@@ -23,10 +23,12 @@ pub enum TuiAction {
     SetMode(CalcMode),
     SetModeAndRunCalculation(CalcMode),
     SetAntennaModel(Option<AntennaModel>),
+    SetAntennaModelAndRunCalculation(Option<AntennaModel>),
     SetVelocityFactor(f64),
     SetVelocityFactorAndRunCalculation(f64),
     SetTransformerRatio(TransformerRatio),
     SetWireWindow { min_m: f64, max_m: f64 },
+    SetWireWindowAndRunCalculation { min_m: f64, max_m: f64 },
     SetDefaultUnits(UnitSystem),
     SetSelectedUnits(Option<UnitSystem>),
     SetRegion(ITURegion),
@@ -171,6 +173,10 @@ impl TuiState {
                 return self.run_calculation();
             }
             TuiAction::SetAntennaModel(antenna_model) => self.antenna_model = antenna_model,
+            TuiAction::SetAntennaModelAndRunCalculation(antenna_model) => {
+                self.antenna_model = antenna_model;
+                return self.run_calculation();
+            }
             TuiAction::SetVelocityFactor(velocity_factor) => {
                 self.velocity_factor = velocity_factor;
             }
@@ -184,6 +190,11 @@ impl TuiState {
             TuiAction::SetWireWindow { min_m, max_m } => {
                 self.wire_min_m = min_m;
                 self.wire_max_m = max_m;
+            }
+            TuiAction::SetWireWindowAndRunCalculation { min_m, max_m } => {
+                self.wire_min_m = min_m;
+                self.wire_max_m = max_m;
+                return self.run_calculation();
             }
             TuiAction::SetDefaultUnits(default_units) => self.default_units = default_units,
             TuiAction::SetSelectedUnits(selected_units) => {
@@ -201,6 +212,40 @@ impl TuiState {
     }
 }
 
+pub fn render_summary_panel(panel: &TuiSummaryPanelState) -> Vec<String> {
+    let mut lines = vec![format!("  heading: {}", panel.overview_heading)];
+    lines.push(format!("  bands: {}", panel.band_count));
+    lines.extend(panel.summary_lines.iter().map(|line| format!("  {line}")));
+    lines
+}
+
+pub fn render_warnings_panel(panel: &TuiWarningsPanelState) -> Vec<String> {
+    if panel.warning_lines.is_empty() {
+        return Vec::new();
+    }
+
+    let mut lines = vec!["  warnings:".to_string()];
+    lines.extend(panel.warning_lines.iter().map(|line| format!("    {line}")));
+    lines
+}
+
+pub fn render_sections_panel(sections: &[TuiSectionPanelState]) -> Vec<String> {
+    let mut lines = vec![format!("  sections: {}", sections.len())];
+    lines.extend(sections.iter().enumerate().map(|(idx, section)| {
+        let heading = section
+            .heading
+            .as_deref()
+            .unwrap_or("(section without heading)");
+        format!(
+            "    {}. {} [{} lines]",
+            idx + 1,
+            heading,
+            section.line_count
+        )
+    }));
+    lines
+}
+
 pub fn render_tui_scaffold(state: &TuiState) -> String {
     let mut lines = vec![
         "Rusty Wire TUI scaffold".to_string(),
@@ -208,27 +253,9 @@ pub fn render_tui_scaffold(state: &TuiState) -> String {
     ];
 
     if let Some(panel) = state.results_panel.as_ref() {
-        lines.push(format!("  heading: {}", panel.summary.overview_heading));
-        lines.push(format!("  sections: {}", panel.sections.len()));
-        lines.push(format!("  bands: {}", panel.summary.band_count));
-        lines.extend(
-            panel
-                .summary
-                .summary_lines
-                .iter()
-                .map(|line| format!("  {line}")),
-        );
-
-        if !panel.warnings.warning_lines.is_empty() {
-            lines.push("  warnings:".to_string());
-            lines.extend(
-                panel
-                    .warnings
-                    .warning_lines
-                    .iter()
-                    .map(|line| format!("    {line}")),
-            );
-        }
+        lines.extend(render_summary_panel(&panel.summary));
+        lines.extend(render_sections_panel(&panel.sections));
+        lines.extend(render_warnings_panel(&panel.warnings));
     } else {
         lines.push("  no results available".to_string());
     }
@@ -378,6 +405,50 @@ mod tests {
     }
 
     #[test]
+    fn tui_state_recalculates_after_antenna_change() {
+        let mut state = TuiState::default();
+
+        state
+            .update(TuiAction::SetAntennaModelAndRunCalculation(Some(
+                AntennaModel::EndFedHalfWave,
+            )))
+            .unwrap();
+
+        assert_eq!(state.antenna_model, Some(AntennaModel::EndFedHalfWave));
+        let panel = state
+            .results_panel
+            .as_ref()
+            .expect("expected results panel state");
+        assert!(panel.summary.overview_heading.contains("Resonant Overview"));
+    }
+
+    #[test]
+    fn tui_state_recalculates_after_wire_window_change() {
+        let mut state = TuiState::default();
+
+        state
+            .update(TuiAction::SetMode(CalcMode::NonResonant))
+            .unwrap();
+        state
+            .update(TuiAction::SetWireWindowAndRunCalculation {
+                min_m: 12.0,
+                max_m: 24.0,
+            })
+            .unwrap();
+
+        assert_eq!(state.wire_min_m, 12.0);
+        assert_eq!(state.wire_max_m, 24.0);
+        let panel = state
+            .results_panel
+            .as_ref()
+            .expect("expected results panel state");
+        assert_eq!(
+            panel.summary.overview_heading,
+            "Non-resonant Overview (band context):"
+        );
+    }
+
+    #[test]
     fn tui_results_panel_state_splits_render_contract() {
         let mut state = TuiState::default();
 
@@ -402,5 +473,36 @@ mod tests {
         assert!(rendered.contains("Rusty Wire TUI scaffold"));
         assert!(rendered.contains("heading: Resonant Overview:"));
         assert!(rendered.contains("bands: 7"));
+        assert!(rendered.contains("sections: 2"));
+    }
+
+    #[test]
+    fn render_panel_helpers_use_split_contract() {
+        let panel = TuiResultsPanelState {
+            summary: TuiSummaryPanelState {
+                overview_heading: "Example".to_string(),
+                summary_lines: vec!["line one".to_string()],
+                band_count: 2,
+            },
+            warnings: TuiWarningsPanelState {
+                warning_lines: vec!["warn".to_string()],
+            },
+            sections: vec![TuiSectionPanelState {
+                heading: Some("Section A".to_string()),
+                line_count: 3,
+            }],
+        };
+
+        let summary_lines = render_summary_panel(&panel.summary);
+        let warning_lines = render_warnings_panel(&panel.warnings);
+        let section_lines = render_sections_panel(&panel.sections);
+
+        assert!(summary_lines
+            .iter()
+            .any(|line| line.contains("heading: Example")));
+        assert!(warning_lines.iter().any(|line| line.contains("warn")));
+        assert!(section_lines
+            .iter()
+            .any(|line| line.contains("Section A [3 lines]")));
     }
 }
