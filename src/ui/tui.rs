@@ -20,8 +20,10 @@ pub enum TuiAction {
     SetStatusMessage(Option<String>),
     SetBandIndices(Vec<usize>),
     SetMode(CalcMode),
+    SetModeAndRunCalculation(CalcMode),
     SetAntennaModel(Option<AntennaModel>),
     SetVelocityFactor(f64),
+    SetVelocityFactorAndRunCalculation(f64),
     SetTransformerRatio(TransformerRatio),
     SetWireWindow { min_m: f64, max_m: f64 },
     SetDefaultUnits(UnitSystem),
@@ -31,22 +33,50 @@ pub enum TuiAction {
 }
 
 #[derive(Debug, Clone)]
-pub struct TuiResultsPanelState {
+pub struct TuiSummaryPanelState {
     pub overview_heading: String,
     pub summary_lines: Vec<String>,
-    pub warning_lines: Vec<String>,
-    pub section_count: usize,
     pub band_count: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct TuiWarningsPanelState {
+    pub warning_lines: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TuiSectionPanelState {
+    pub heading: Option<String>,
+    pub line_count: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct TuiResultsPanelState {
+    pub summary: TuiSummaryPanelState,
+    pub warnings: TuiWarningsPanelState,
+    pub sections: Vec<TuiSectionPanelState>,
 }
 
 impl TuiResultsPanelState {
     fn from_app_view_model(view_model: &AppResultsViewModel) -> Self {
         Self {
-            overview_heading: view_model.display_document.overview_heading.to_string(),
-            summary_lines: view_model.display_document.summary_lines.clone(),
-            warning_lines: view_model.display_document.warning_lines.clone(),
-            section_count: view_model.display_document.sections.len(),
-            band_count: view_model.display_document.band_views.len(),
+            summary: TuiSummaryPanelState {
+                overview_heading: view_model.display_document.overview_heading.to_string(),
+                summary_lines: view_model.display_document.summary_lines.clone(),
+                band_count: view_model.display_document.band_views.len(),
+            },
+            warnings: TuiWarningsPanelState {
+                warning_lines: view_model.display_document.warning_lines.clone(),
+            },
+            sections: view_model
+                .display_document
+                .sections
+                .iter()
+                .map(|section| TuiSectionPanelState {
+                    heading: section.lines.first().cloned(),
+                    line_count: section.lines.len(),
+                })
+                .collect(),
         }
     }
 }
@@ -91,6 +121,16 @@ impl Default for TuiState {
 }
 
 impl TuiState {
+    fn run_calculation(&mut self) -> Result<(), AppError> {
+        let response = execute_request_checked(self.to_request())?;
+        let view_model = app_results_view_model(&response.results);
+        self.results_panel = Some(TuiResultsPanelState::from_app_view_model(&view_model));
+        self.app_results_view_model = Some(view_model);
+        self.focus = TuiFocus::Results;
+        self.status_message = Some("Calculation complete".to_string());
+        Ok(())
+    }
+
     pub fn to_request(&self) -> AppRequest {
         AppRequest::from_draft(self.to_request_draft())
     }
@@ -120,9 +160,17 @@ impl TuiState {
             TuiAction::SetStatusMessage(message) => self.status_message = message,
             TuiAction::SetBandIndices(band_indices) => self.band_indices = band_indices,
             TuiAction::SetMode(mode) => self.mode = mode,
+            TuiAction::SetModeAndRunCalculation(mode) => {
+                self.mode = mode;
+                return self.run_calculation();
+            }
             TuiAction::SetAntennaModel(antenna_model) => self.antenna_model = antenna_model,
             TuiAction::SetVelocityFactor(velocity_factor) => {
                 self.velocity_factor = velocity_factor;
+            }
+            TuiAction::SetVelocityFactorAndRunCalculation(velocity_factor) => {
+                self.velocity_factor = velocity_factor;
+                return self.run_calculation();
             }
             TuiAction::SetTransformerRatio(transformer_ratio) => {
                 self.transformer_ratio = transformer_ratio;
@@ -136,14 +184,7 @@ impl TuiState {
                 self.selected_units = selected_units;
             }
             TuiAction::SetRegion(itu_region) => self.itu_region = itu_region,
-            TuiAction::RunCalculation => {
-                let response = execute_request_checked(self.to_request())?;
-                let view_model = app_results_view_model(&response.results);
-                self.results_panel = Some(TuiResultsPanelState::from_app_view_model(&view_model));
-                self.app_results_view_model = Some(view_model);
-                self.focus = TuiFocus::Results;
-                self.status_message = Some("Calculation complete".to_string());
-            }
+            TuiAction::RunCalculation => return self.run_calculation(),
         }
 
         Ok(())
@@ -197,13 +238,19 @@ mod tests {
     fn tui_state_update_applies_actions() {
         let mut state = TuiState::default();
 
-        state.update(TuiAction::SetFocus(TuiFocus::Results)).unwrap();
+        state
+            .update(TuiAction::SetFocus(TuiFocus::Results))
+            .unwrap();
         state
             .update(TuiAction::SetStatusMessage(Some("updated".to_string())))
             .unwrap();
-        state.update(TuiAction::SetMode(CalcMode::NonResonant)).unwrap();
+        state
+            .update(TuiAction::SetMode(CalcMode::NonResonant))
+            .unwrap();
         state.update(TuiAction::SetVelocityFactor(0.9)).unwrap();
-        state.update(TuiAction::SetRegion(ITURegion::Region3)).unwrap();
+        state
+            .update(TuiAction::SetRegion(ITURegion::Region3))
+            .unwrap();
         state
             .update(TuiAction::SetSelectedUnits(Some(UnitSystem::Both)))
             .unwrap();
@@ -223,14 +270,49 @@ mod tests {
         state.update(TuiAction::RunCalculation).unwrap();
 
         assert_eq!(state.focus, TuiFocus::Results);
-        assert_eq!(state.status_message.as_deref(), Some("Calculation complete"));
+        assert_eq!(
+            state.status_message.as_deref(),
+            Some("Calculation complete")
+        );
         assert!(state.app_results_view_model.is_some());
         let panel = state
             .results_panel
             .as_ref()
             .expect("expected results panel state");
-        assert_eq!(panel.overview_heading, "Resonant Overview:");
-        assert!(!panel.summary_lines.is_empty());
-        assert!(panel.band_count > 0);
+        assert_eq!(panel.summary.overview_heading, "Resonant Overview:");
+        assert!(!panel.summary.summary_lines.is_empty());
+        assert!(panel.summary.band_count > 0);
+        assert!(!panel.sections.is_empty());
+    }
+
+    #[test]
+    fn tui_state_recalculates_after_mode_change() {
+        let mut state = TuiState::default();
+
+        state
+            .update(TuiAction::SetModeAndRunCalculation(CalcMode::NonResonant))
+            .unwrap();
+
+        let panel = state
+            .results_panel
+            .as_ref()
+            .expect("expected results panel state");
+        assert_eq!(panel.summary.overview_heading, "Non-resonant Overview (band context):");
+        assert_eq!(state.focus, TuiFocus::Results);
+    }
+
+    #[test]
+    fn tui_results_panel_state_splits_render_contract() {
+        let mut state = TuiState::default();
+
+        state.update(TuiAction::RunCalculation).unwrap();
+
+        let panel = state
+            .results_panel
+            .as_ref()
+            .expect("expected results panel state");
+        assert!(!panel.summary.summary_lines.is_empty());
+        assert!(panel.warnings.warning_lines.is_empty());
+        assert!(panel.sections.iter().all(|section| section.line_count > 0));
     }
 }

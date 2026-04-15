@@ -3,7 +3,9 @@ use rusty_wire::ui::tui::{TuiAction, TuiFocus, TuiState};
 fn main() {
     let mut state = TuiState::default();
     state
-        .update(TuiAction::SetStatusMessage(Some("TUI scaffold ready".to_string())))
+        .update(TuiAction::SetStatusMessage(Some(
+            "TUI scaffold ready".to_string(),
+        )))
         .expect("failed to set status message");
     state
         .update(TuiAction::SetFocus(TuiFocus::Inputs))
@@ -18,10 +20,16 @@ fn main() {
         .expect("expected results panel state after calculation");
     println!("Rusty Wire TUI scaffold");
     println!("  focus: {:?}", state.focus);
-    println!("  heading: {}", panel.overview_heading);
-    println!("  sections: {}", panel.section_count);
-    println!("  bands: {}", panel.band_count);
-    for line in &panel.summary_lines {
+    println!("  heading: {}", panel.summary.overview_heading);
+    println!("  sections: {}", panel.sections.len());
+    println!("  bands: {}", panel.summary.band_count);
+    for line in &panel.summary.summary_lines {
         println!("  {line}");
+    }
+    if !panel.warnings.warning_lines.is_empty() {
+        println!("  warnings:");
+        for line in &panel.warnings.warning_lines {
+            println!("    {line}");
+        }
     }
 }
