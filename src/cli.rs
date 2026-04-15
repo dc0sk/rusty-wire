@@ -7,9 +7,9 @@
 use crate::app::{
     app_results_view_model, band_label_for_index, execute_request_checked, parse_band_selection,
     parse_single_band_token, recommended_transformer_ratio,
-    recommended_transformer_ratio_fallback_message, resolve_wire_window_inputs,
-    AntennaModel, AppConfig, AppRequest, AppRequestDraft, AppResults, CalcMode,
-    ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION, FEET_TO_METERS,
+    recommended_transformer_ratio_fallback_message, resolve_wire_window_inputs, AntennaModel,
+    AppConfig, AppRequest, AppRequestDraft, AppResults, CalcMode, ExportFormat, UnitSystem,
+    DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
 use crate::bands::{get_bands_for_region, ITURegion, ALL_REGIONS};
 use crate::calculations::{TransformerRatio, DEFAULT_NON_RESONANT_CONFIG};
@@ -401,6 +401,37 @@ impl InteractiveDefaults {
     }
 }
 
+#[derive(Clone)]
+struct InteractiveCalculationState {
+    band_indices: Vec<usize>,
+    mode: CalcMode,
+    antenna_model: Option<AntennaModel>,
+    velocity_factor: f64,
+    transformer_ratio: TransformerRatio,
+    wire_min_m: f64,
+    wire_max_m: f64,
+    default_units: UnitSystem,
+    selected_units: UnitSystem,
+    itu_region: ITURegion,
+}
+
+impl InteractiveCalculationState {
+    fn to_request(&self) -> AppRequest {
+        AppRequest::from_draft(AppRequestDraft {
+            band_indices: self.band_indices.clone(),
+            velocity_factor: self.velocity_factor,
+            mode: self.mode,
+            wire_min_m: self.wire_min_m,
+            wire_max_m: self.wire_max_m,
+            default_units: self.default_units,
+            selected_units: Some(self.selected_units),
+            itu_region: self.itu_region,
+            transformer_ratio: self.transformer_ratio,
+            antenna_model: self.antenna_model,
+        })
+    }
+}
+
 fn prompt_calc_mode_with_default(
     input: &mut dyn BufRead,
     output: &mut dyn Write,
@@ -781,18 +812,20 @@ fn calculate_selected_bands_with_defaults(
     let units = prompt_display_units_with_default(input, output, auto_units, defaults.units);
     defaults.units = Some(units);
 
-    let request = AppRequest::from_draft(AppRequestDraft {
+    let state = InteractiveCalculationState {
         band_indices: indices,
-        velocity_factor: velocity,
         mode,
+        antenna_model,
+        velocity_factor: velocity,
+        transformer_ratio,
         wire_min_m,
         wire_max_m,
         default_units: auto_units,
-        selected_units: Some(units),
+        selected_units: units,
         itu_region: region,
-        transformer_ratio,
-        antenna_model,
-    });
+    };
+
+    let request = state.to_request();
 
     let results = match execute_request_checked(request) {
         Ok(response) => response.results,
@@ -880,18 +913,20 @@ fn quick_calculation_with_defaults(
     let units = prompt_display_units_with_default(input, output, auto_units, defaults.units);
     defaults.units = Some(units);
 
-    let request = AppRequest::from_draft(AppRequestDraft {
+    let state = InteractiveCalculationState {
         band_indices: vec![idx],
-        velocity_factor: velocity,
         mode,
+        antenna_model,
+        velocity_factor: velocity,
+        transformer_ratio,
         wire_min_m,
         wire_max_m,
         default_units: auto_units,
-        selected_units: Some(units),
+        selected_units: units,
         itu_region: region,
-        transformer_ratio,
-        antenna_model,
-    });
+    };
+
+    let request = state.to_request();
 
     let results = match execute_request_checked(request) {
         Ok(response) => response.results,
@@ -1297,6 +1332,28 @@ mod tests {
         );
 
         assert_eq!(ratio, TransformerRatio::R1To56);
+    }
+
+    #[test]
+    fn interactive_calculation_state_translates_to_request() {
+        let request = InteractiveCalculationState {
+            band_indices: vec![4, 6],
+            mode: CalcMode::NonResonant,
+            antenna_model: Some(AntennaModel::Dipole),
+            velocity_factor: 0.91,
+            transformer_ratio: TransformerRatio::R1To9,
+            wire_min_m: 10.0,
+            wire_max_m: 20.0,
+            default_units: UnitSystem::Metric,
+            selected_units: UnitSystem::Both,
+            itu_region: ITURegion::Region2,
+        }
+        .to_request();
+
+        assert_eq!(request.config.band_indices, vec![4, 6]);
+        assert_eq!(request.config.mode, CalcMode::NonResonant);
+        assert_eq!(request.config.units, UnitSystem::Both);
+        assert_eq!(request.config.itu_region, ITURegion::Region2);
     }
 
     #[test]

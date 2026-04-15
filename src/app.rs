@@ -2373,7 +2373,10 @@ mod tests {
         let view_model = app_results_view_model(&results);
 
         assert!(view_model.export_recommendation.is_none());
-        assert_eq!(view_model.display_document.overview_heading, "Resonant Overview:");
+        assert_eq!(
+            view_model.display_document.overview_heading,
+            "Resonant Overview:"
+        );
     }
 
     #[test]
