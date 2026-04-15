@@ -1,10 +1,4 @@
-mod app;
-mod bands;
-mod calculations;
-mod cli;
-mod export;
-mod ui;
-
+use rusty_wire::cli;
 use std::env;
 
 fn main() {

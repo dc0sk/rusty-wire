@@ -11,6 +11,21 @@ pub enum TuiFocus {
     Export,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum TuiAction {
+    SetFocus(TuiFocus),
+    SetStatusMessage(Option<String>),
+    SetBandIndices(Vec<usize>),
+    SetMode(CalcMode),
+    SetAntennaModel(Option<AntennaModel>),
+    SetVelocityFactor(f64),
+    SetTransformerRatio(TransformerRatio),
+    SetWireWindow { min_m: f64, max_m: f64 },
+    SetDefaultUnits(UnitSystem),
+    SetSelectedUnits(Option<UnitSystem>),
+    SetRegion(ITURegion),
+}
+
 #[derive(Debug, Clone)]
 pub struct TuiState {
     pub focus: TuiFocus,
@@ -65,6 +80,31 @@ impl TuiState {
     pub fn set_focus(&mut self, focus: TuiFocus) {
         self.focus = focus;
     }
+
+    pub fn update(&mut self, action: TuiAction) {
+        match action {
+            TuiAction::SetFocus(focus) => self.focus = focus,
+            TuiAction::SetStatusMessage(message) => self.status_message = message,
+            TuiAction::SetBandIndices(band_indices) => self.band_indices = band_indices,
+            TuiAction::SetMode(mode) => self.mode = mode,
+            TuiAction::SetAntennaModel(antenna_model) => self.antenna_model = antenna_model,
+            TuiAction::SetVelocityFactor(velocity_factor) => {
+                self.velocity_factor = velocity_factor;
+            }
+            TuiAction::SetTransformerRatio(transformer_ratio) => {
+                self.transformer_ratio = transformer_ratio;
+            }
+            TuiAction::SetWireWindow { min_m, max_m } => {
+                self.wire_min_m = min_m;
+                self.wire_max_m = max_m;
+            }
+            TuiAction::SetDefaultUnits(default_units) => self.default_units = default_units,
+            TuiAction::SetSelectedUnits(selected_units) => {
+                self.selected_units = selected_units;
+            }
+            TuiAction::SetRegion(itu_region) => self.itu_region = itu_region,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -105,5 +145,24 @@ mod tests {
         assert_eq!(draft.selected_units, Some(UnitSystem::Both));
         assert_eq!(draft.itu_region, ITURegion::Region2);
         assert_eq!(draft.antenna_model, Some(AntennaModel::EndFedHalfWave));
+    }
+
+    #[test]
+    fn tui_state_update_applies_actions() {
+        let mut state = TuiState::default();
+
+        state.update(TuiAction::SetFocus(TuiFocus::Results));
+        state.update(TuiAction::SetStatusMessage(Some("updated".to_string())));
+        state.update(TuiAction::SetMode(CalcMode::NonResonant));
+        state.update(TuiAction::SetVelocityFactor(0.9));
+        state.update(TuiAction::SetRegion(ITURegion::Region3));
+        state.update(TuiAction::SetSelectedUnits(Some(UnitSystem::Both)));
+
+        assert_eq!(state.focus, TuiFocus::Results);
+        assert_eq!(state.status_message.as_deref(), Some("updated"));
+        assert_eq!(state.mode, CalcMode::NonResonant);
+        assert_eq!(state.velocity_factor, 0.9);
+        assert_eq!(state.itu_region, ITURegion::Region3);
+        assert_eq!(state.selected_units, Some(UnitSystem::Both));
     }
 }
