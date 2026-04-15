@@ -5,11 +5,11 @@
 /// The computation itself is delegated to `app::run_calculation`; the only
 /// imports from the core modules that this file needs are for display helpers.
 use crate::app::{
-    band_label_for_index, execute_request_checked, parse_band_selection, parse_single_band_token,
-    recommended_transformer_ratio, recommended_transformer_ratio_fallback_message,
-    resolve_wire_window_inputs, results_display_document, AntennaModel, AppConfig, AppRequest,
-    AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION,
-    FEET_TO_METERS,
+    app_results_view_model, band_label_for_index, execute_request_checked, parse_band_selection,
+    parse_single_band_token, recommended_transformer_ratio,
+    recommended_transformer_ratio_fallback_message, resolve_wire_window_inputs,
+    AntennaModel, AppConfig, AppRequest, AppRequestDraft, AppResults, CalcMode,
+    ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
 use crate::bands::{get_bands_for_region, ITURegion, ALL_REGIONS};
 use crate::calculations::{TransformerRatio, DEFAULT_NON_RESONANT_CONFIG};
@@ -298,25 +298,24 @@ pub fn run_from_args(args: &[String]) {
         }
     }
 
-    let units = cli.units.unwrap_or(resolved_window.inferred_display_units);
-
     let export_formats = cli.export.unwrap_or_default();
 
     let transformer_ratio = cli.transformer.resolve(cli.mode, cli.antenna);
 
-    let config = AppConfig {
+    let request = AppRequest::from_draft(AppRequestDraft {
         band_indices: bands,
         velocity_factor: cli.velocity,
         mode: cli.mode,
         wire_min_m: resolved_window.min_m,
         wire_max_m: resolved_window.max_m,
-        units,
+        default_units: resolved_window.inferred_display_units,
+        selected_units: cli.units,
         itu_region: cli.region,
         transformer_ratio,
         antenna_model: cli.antenna,
-    };
+    });
 
-    let results = match execute_request_checked(AppRequest::new(config)) {
+    let results = match execute_request_checked(request) {
         Ok(response) => response.results,
         Err(err) => {
             eprintln!("Error: {err}");
@@ -332,11 +331,7 @@ pub fn run_from_args(args: &[String]) {
 
     let single_output = cli.output;
     let export_count = export_formats.len();
-    let export_recommendation = if results.config.mode == CalcMode::NonResonant {
-        results.recommendation.as_ref()
-    } else {
-        None
-    };
+    let view_model = app_results_view_model(&results);
 
     for (i, &fmt) in export_formats.iter().enumerate() {
         let output = if export_count == 1 {
@@ -355,7 +350,7 @@ pub fn run_from_args(args: &[String]) {
             fmt,
             &output,
             &results.calculations,
-            export_recommendation,
+            view_model.export_recommendation.as_ref(),
             results.config.units,
             results.config.wire_min_m,
             results.config.wire_max_m,
@@ -786,19 +781,20 @@ fn calculate_selected_bands_with_defaults(
     let units = prompt_display_units_with_default(input, output, auto_units, defaults.units);
     defaults.units = Some(units);
 
-    let config = AppConfig {
+    let request = AppRequest::from_draft(AppRequestDraft {
         band_indices: indices,
         velocity_factor: velocity,
         mode,
         wire_min_m,
         wire_max_m,
-        units,
+        default_units: auto_units,
+        selected_units: Some(units),
         itu_region: region,
         transformer_ratio,
         antenna_model,
-    };
+    });
 
-    let results = match execute_request_checked(AppRequest::new(config)) {
+    let results = match execute_request_checked(request) {
         Ok(response) => response.results,
         Err(err) => {
             writeln!(output, "Error: {err}\n").expect("failed to write validation error");
@@ -884,19 +880,20 @@ fn quick_calculation_with_defaults(
     let units = prompt_display_units_with_default(input, output, auto_units, defaults.units);
     defaults.units = Some(units);
 
-    let config = AppConfig {
+    let request = AppRequest::from_draft(AppRequestDraft {
         band_indices: vec![idx],
         velocity_factor: velocity,
         mode,
         wire_min_m,
         wire_max_m,
-        units,
+        default_units: auto_units,
+        selected_units: Some(units),
         itu_region: region,
         transformer_ratio,
         antenna_model,
-    };
+    });
 
-    let results = match execute_request_checked(AppRequest::new(config)) {
+    let results = match execute_request_checked(request) {
         Ok(response) => response.results,
         Err(err) => {
             writeln!(output, "Error: {err}\n").expect("failed to write validation error");
@@ -1024,11 +1021,7 @@ fn interactive_export_prompt(
         out
     };
 
-    let export_recommendation = if results.config.mode == CalcMode::NonResonant {
-        results.recommendation.as_ref()
-    } else {
-        None
-    };
+    let view_model = app_results_view_model(results);
 
     let mut chosen = Vec::new();
     for &fmt in &formats {
@@ -1051,7 +1044,7 @@ fn interactive_export_prompt(
             fmt,
             &output_path,
             &results.calculations,
-            export_recommendation,
+            view_model.export_recommendation.as_ref(),
             results.config.units,
             results.config.wire_min_m,
             results.config.wire_max_m,
@@ -1196,7 +1189,7 @@ fn show_all_bands_for_region_to_writer(output: &mut dyn Write, region: ITURegion
 // ---------------------------------------------------------------------------
 
 fn print_results_to_writer(output: &mut dyn Write, results: &AppResults) {
-    let doc = results_display_document(results);
+    let doc = app_results_view_model(results).display_document;
 
     writeln!(output, "\n{}", doc.overview_heading).expect("failed to write results heading");
     for line in doc.overview_header_lines {

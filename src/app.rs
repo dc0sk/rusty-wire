@@ -360,9 +360,37 @@ pub struct AppRequest {
     pub config: AppConfig,
 }
 
+#[derive(Debug, Clone)]
+pub struct AppRequestDraft {
+    pub band_indices: Vec<usize>,
+    pub velocity_factor: f64,
+    pub mode: CalcMode,
+    pub wire_min_m: f64,
+    pub wire_max_m: f64,
+    pub default_units: UnitSystem,
+    pub selected_units: Option<UnitSystem>,
+    pub itu_region: ITURegion,
+    pub transformer_ratio: TransformerRatio,
+    pub antenna_model: Option<AntennaModel>,
+}
+
 impl AppRequest {
     pub fn new(config: AppConfig) -> Self {
         Self { config }
+    }
+
+    pub fn from_draft(draft: AppRequestDraft) -> Self {
+        Self::new(AppConfig {
+            band_indices: draft.band_indices,
+            velocity_factor: draft.velocity_factor,
+            mode: draft.mode,
+            wire_min_m: draft.wire_min_m,
+            wire_max_m: draft.wire_max_m,
+            units: draft.selected_units.unwrap_or(draft.default_units),
+            itu_region: draft.itu_region,
+            transformer_ratio: draft.transformer_ratio,
+            antenna_model: draft.antenna_model,
+        })
     }
 }
 
@@ -420,6 +448,12 @@ pub struct ResultsDisplayDocument {
     pub summary_lines: Vec<String>,
     pub sections: Vec<ResultsTextSectionView>,
     pub warning_lines: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppResultsViewModel {
+    pub display_document: ResultsDisplayDocument,
+    pub export_recommendation: Option<NonResonantRecommendation>,
 }
 
 #[derive(Debug, Clone)]
@@ -904,6 +938,17 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
         summary_lines: overview.summary_lines,
         sections,
         warning_lines: skipped_band_warning(results).into_iter().collect(),
+    }
+}
+
+pub fn app_results_view_model(results: &AppResults) -> AppResultsViewModel {
+    AppResultsViewModel {
+        display_document: results_display_document(results),
+        export_recommendation: if results.config.mode == CalcMode::NonResonant {
+            results.recommendation.clone()
+        } else {
+            None
+        },
     }
 }
 
@@ -2264,6 +2309,71 @@ mod tests {
 
         let response = execute_request_checked(request).expect("expected successful execution");
         assert!(!response.results.calculations.is_empty());
+    }
+
+    #[test]
+    fn app_request_from_draft_uses_selected_units_when_present() {
+        let request = AppRequest::from_draft(AppRequestDraft {
+            band_indices: vec![4],
+            velocity_factor: 0.95,
+            mode: CalcMode::Resonant,
+            wire_min_m: DEFAULT_NON_RESONANT_CONFIG.min_len_m,
+            wire_max_m: DEFAULT_NON_RESONANT_CONFIG.max_len_m,
+            default_units: UnitSystem::Metric,
+            selected_units: Some(UnitSystem::Both),
+            itu_region: ITURegion::Region1,
+            transformer_ratio: TransformerRatio::R1To1,
+            antenna_model: Some(AntennaModel::Dipole),
+        });
+
+        assert_eq!(request.config.units, UnitSystem::Both);
+        assert_eq!(request.config.band_indices, vec![4]);
+    }
+
+    #[test]
+    fn app_request_from_draft_falls_back_to_default_units() {
+        let request = AppRequest::from_draft(AppRequestDraft {
+            band_indices: vec![4],
+            velocity_factor: 0.95,
+            mode: CalcMode::NonResonant,
+            wire_min_m: 10.0,
+            wire_max_m: 20.0,
+            default_units: UnitSystem::Imperial,
+            selected_units: None,
+            itu_region: ITURegion::Region1,
+            transformer_ratio: TransformerRatio::R1To9,
+            antenna_model: None,
+        });
+
+        assert_eq!(request.config.units, UnitSystem::Imperial);
+        assert_eq!(request.config.wire_min_m, 10.0);
+        assert_eq!(request.config.wire_max_m, 20.0);
+    }
+
+    #[test]
+    fn app_results_view_model_exposes_non_resonant_export_recommendation() {
+        let results = run_calculation(AppConfig {
+            mode: CalcMode::NonResonant,
+            ..AppConfig::default()
+        });
+
+        let view_model = app_results_view_model(&results);
+
+        assert!(view_model.export_recommendation.is_some());
+        assert_eq!(
+            view_model.display_document.overview_heading,
+            "Non-resonant Overview (band context):"
+        );
+    }
+
+    #[test]
+    fn app_results_view_model_omits_resonant_export_recommendation() {
+        let results = run_calculation(AppConfig::default());
+
+        let view_model = app_results_view_model(&results);
+
+        assert!(view_model.export_recommendation.is_none());
+        assert_eq!(view_model.display_document.overview_heading, "Resonant Overview:");
     }
 
     #[test]
