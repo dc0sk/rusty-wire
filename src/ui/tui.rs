@@ -27,10 +27,12 @@ pub enum TuiAction {
     SetVelocityFactor(f64),
     SetVelocityFactorAndRunCalculation(f64),
     SetTransformerRatio(TransformerRatio),
+    SetTransformerRatioAndRunCalculation(TransformerRatio),
     SetWireWindow { min_m: f64, max_m: f64 },
     SetWireWindowAndRunCalculation { min_m: f64, max_m: f64 },
     SetDefaultUnits(UnitSystem),
     SetSelectedUnits(Option<UnitSystem>),
+    SetSelectedUnitsAndRunCalculation(Option<UnitSystem>),
     SetRegion(ITURegion),
     SetRegionAndRunCalculation(ITURegion),
     RunCalculation,
@@ -187,6 +189,10 @@ impl TuiState {
             TuiAction::SetTransformerRatio(transformer_ratio) => {
                 self.transformer_ratio = transformer_ratio;
             }
+            TuiAction::SetTransformerRatioAndRunCalculation(transformer_ratio) => {
+                self.transformer_ratio = transformer_ratio;
+                return self.run_calculation();
+            }
             TuiAction::SetWireWindow { min_m, max_m } => {
                 self.wire_min_m = min_m;
                 self.wire_max_m = max_m;
@@ -199,6 +205,10 @@ impl TuiState {
             TuiAction::SetDefaultUnits(default_units) => self.default_units = default_units,
             TuiAction::SetSelectedUnits(selected_units) => {
                 self.selected_units = selected_units;
+            }
+            TuiAction::SetSelectedUnitsAndRunCalculation(selected_units) => {
+                self.selected_units = selected_units;
+                return self.run_calculation();
             }
             TuiAction::SetRegion(itu_region) => self.itu_region = itu_region,
             TuiAction::SetRegionAndRunCalculation(itu_region) => {
@@ -246,21 +256,40 @@ pub fn render_sections_panel(sections: &[TuiSectionPanelState]) -> Vec<String> {
     lines
 }
 
-pub fn render_tui_scaffold(state: &TuiState) -> String {
+pub fn render_panel_block(title: &str, lines: &[String]) -> Vec<String> {
+    let mut block = vec![format!("[{title}]")];
+    if lines.is_empty() {
+        block.push("  (empty)".to_string());
+    } else {
+        block.extend(lines.iter().cloned());
+    }
+    block
+}
+
+pub fn render_tui_layout(state: &TuiState) -> String {
     let mut lines = vec![
-        "Rusty Wire TUI scaffold".to_string(),
-        format!("  focus: {:?}", state.focus),
+        "Rusty Wire TUI".to_string(),
+        format!("Focus: {:?}", state.focus),
     ];
 
     if let Some(panel) = state.results_panel.as_ref() {
-        lines.extend(render_summary_panel(&panel.summary));
-        lines.extend(render_sections_panel(&panel.sections));
-        lines.extend(render_warnings_panel(&panel.warnings));
+        let summary_lines = render_summary_panel(&panel.summary);
+        let section_lines = render_sections_panel(&panel.sections);
+        let warning_lines = render_warnings_panel(&panel.warnings);
+
+        lines.extend(render_panel_block("Summary", &summary_lines));
+        lines.extend(render_panel_block("Sections", &section_lines));
+        lines.extend(render_panel_block("Warnings", &warning_lines));
     } else {
+        lines.push("[Summary]".to_string());
         lines.push("  no results available".to_string());
     }
 
     lines.join("\n")
+}
+
+pub fn render_tui_scaffold(state: &TuiState) -> String {
+    render_tui_layout(state)
 }
 
 #[cfg(test)]
@@ -449,6 +478,34 @@ mod tests {
     }
 
     #[test]
+    fn tui_state_recalculates_after_transformer_change() {
+        let mut state = TuiState::default();
+
+        state
+            .update(TuiAction::SetTransformerRatioAndRunCalculation(
+                TransformerRatio::R1To9,
+            ))
+            .unwrap();
+
+        assert_eq!(state.transformer_ratio, TransformerRatio::R1To9);
+        assert!(state.results_panel.is_some());
+    }
+
+    #[test]
+    fn tui_state_recalculates_after_selected_units_change() {
+        let mut state = TuiState::default();
+
+        state
+            .update(TuiAction::SetSelectedUnitsAndRunCalculation(Some(
+                UnitSystem::Imperial,
+            )))
+            .unwrap();
+
+        assert_eq!(state.selected_units, Some(UnitSystem::Imperial));
+        assert!(state.results_panel.is_some());
+    }
+
+    #[test]
     fn tui_results_panel_state_splits_render_contract() {
         let mut state = TuiState::default();
 
@@ -470,7 +527,10 @@ mod tests {
         state.update(TuiAction::RunCalculation).unwrap();
 
         let rendered = render_tui_scaffold(&state);
-        assert!(rendered.contains("Rusty Wire TUI scaffold"));
+        assert!(rendered.contains("Rusty Wire TUI"));
+        assert!(rendered.contains("[Summary]"));
+        assert!(rendered.contains("[Sections]"));
+        assert!(rendered.contains("[Warnings]"));
         assert!(rendered.contains("heading: Resonant Overview:"));
         assert!(rendered.contains("bands: 7"));
         assert!(rendered.contains("sections: 2"));
@@ -504,5 +564,12 @@ mod tests {
         assert!(section_lines
             .iter()
             .any(|line| line.contains("Section A [3 lines]")));
+    }
+
+    #[test]
+    fn render_panel_block_wraps_lines() {
+        let block = render_panel_block("Demo", &["  alpha".to_string(), "  beta".to_string()]);
+        assert_eq!(block[0], "[Demo]");
+        assert!(block.iter().any(|line| line.contains("alpha")));
     }
 }
