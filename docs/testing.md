@@ -130,4 +130,4 @@ cargo test
 
 - `cargo test` is the authoritative fast feedback loop and should be run for all code changes.
 - The shell scripts are slower and more scenario-oriented; they complement the Rust tests rather than replace them.
-- Interactive mode now has stdin/stdout-driven unit coverage for menu navigation, band entry validation, region switching, transformer prompt handling, and export-format rejection.
+- Interactive mode now has stdin/stdout-driven unit coverage for menu navigation, band entry validation, region switching, transformer prompt handling, export-format rejection, and writer-based rendering of results and equivalent CLI suggestions.

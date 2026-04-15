@@ -122,28 +122,30 @@ The first UI should cover all major CLI/interactive capabilities, but it can als
 
 ## TUI Integration with `ratatui` (and GUI Coexistence)
 
-To provide a modern terminal user interface (TUI) using [`ratatui`](https://github.com/ratatui-org/ratatui) while preserving the ability to add an `iced` GUI later, the following plan will be followed:
+To provide a modern terminal user interface (TUI) using [`ratatui`](https://github.com/ratatui-org/ratatui) while preserving the ability to add an `iced` GUI later, the following plan will be followed.
 
 ### Goals
 
 - Add a TUI frontend using `ratatui` for interactive, keyboard-driven operation
 - Ensure all core logic, state, and validation remain UI-agnostic and reusable
-- Architect the TUI and GUI to coexist, sharing application state and actions
+- Architect the TUI and GUI to coexist while sharing app-layer requests, results, validation, and view helpers
 
 ### Plan
 
-1. **Define AppState and AppAction**
-	- Create a central `AppState` struct representing all user-editable fields, results, and UI status.
-	- Define an `AppAction` enum for all user-driven events (input changes, menu selections, calculation triggers, etc).
-	- Move all calculation, validation, and recommendation logic to pure functions operating on `AppState` and `AppAction`.
+1. **Define the Frontend Boundary First**
+	- Keep `AppConfig` as the validated calculation request and `AppResults` as the shared result contract.
+	- Model TUI and GUI state separately from `AppConfig` so incomplete form input, focus state, panel selection, and transient status messages do not leak into the core app layer.
+	- Add small translation helpers that turn frontend state into `AppRequest` values and map `AppResponse` data into frontend-friendly view models.
+	- Keep calculation, validation, recommendation, and export decisions in `src/app.rs` and related core modules rather than moving them into a universal UI reducer.
 
 2. **Refactor CLI/Interactive Mode**
-	- Refactor CLI and interactive mode to use `AppState` and `AppAction` for all state transitions and calculations.
-	- Ensure prompt helpers and session memory use the same state/actions as the future TUI/GUI.
+	- Continue refactoring CLI and interactive mode to use the shared `AppRequest`/`AppResponse` boundary for calculations and result rendering.
+	- Keep interactive defaults or session memory as thin frontend state, not as the primary application contract.
+	- Reuse the same validation helpers, request builders, and display/view-model helpers that the future TUI/GUI will call.
 
 3. **Scaffold TUI with `ratatui`**
 	- Add a new binary (e.g., `src/bin/tui.rs`) or feature flag for TUI mode.
-	- Implement a basic event loop: render `AppState` to the terminal, dispatch `AppAction` on user input, update state, and re-render.
+	- Implement a basic event loop: render TUI state to the terminal, handle user input events, translate valid requests into `AppRequest`, and re-render from the updated state plus `AppResults`.
 	- Start with core flows: band selection, antenna model, calculation mode, and results display.
 
 4. **Iterate on TUI Features**
@@ -152,9 +154,9 @@ To provide a modern terminal user interface (TUI) using [`ratatui`](https://gith
 	- Add visual polish: layout, color, and accessibility improvements.
 
 5. **Prepare for GUI Coexistence**
-	- Ensure all TUI logic is isolated from core state/actions (no direct calculation or validation in TUI code).
-	- Document and test the `AppState`/`AppAction` contract for future GUI use.
-	- Plan for a future `iced` binary or feature flag using the same state/actions.
+	- Ensure all TUI logic is isolated from the core app contract (no direct calculation or validation in TUI code).
+	- Document and test the `AppRequest`/`AppResponse` contract plus any shared display/view-model helpers for future GUI use.
+	- Plan for a future `iced` binary or feature flag using the same app-layer boundary while keeping its widget state frontend-specific.
 
 6. **Documentation and Testing**
 	- Document the TUI architecture and how it shares logic with CLI and GUI.
@@ -168,11 +170,11 @@ To provide a modern terminal user interface (TUI) using [`ratatui`](https://gith
 
 ### Affected Areas
 
-- `src/app.rs`: AppState, AppAction, core logic
-- `src/cli.rs`: refactor to use shared state/actions
+- `src/app.rs`: shared request/response boundary, validation, and reusable view helpers
+- `src/cli.rs`: refactor to use shared request/response helpers and frontend-local state
 - `src/bin/tui.rs` or `src/ui/tui.rs`: new TUI frontend
-- `src/ui/` or future `src/bin/gui.rs`: future GUI frontend
-- `tests/`: state/action regression coverage
+- `src/ui/` or future `src/bin/gui.rs`: future GUI frontend with its own widget state
+- `tests/`: request/response and frontend-state regression coverage
 
 ## Advanced Input Support
 

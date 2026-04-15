@@ -4,6 +4,10 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+### Changed
+- **Interactive output routing cleanup**: interactive result rendering and equivalent-command suggestions now stay on the injected writer path instead of bypassing it with direct stdout writes.
+- **UI-boundary roadmap clarification**: architecture and roadmap docs now treat `AppRequest`/`AppResponse` as the shared app contract while keeping TUI/GUI state frontend-specific.
+
 ## [2.2.0] - 2026-04-14
 
 ### Changed

@@ -811,11 +811,11 @@ fn calculate_selected_bands_with_defaults(
         return;
     }
 
-    print_results(&results);
-    print_equivalent_cli_call(&results.config, &[]);
+    print_results_to_writer(output, &results);
+    print_equivalent_cli_call_to_writer(output, &results.config, &[]);
     let export_choices = interactive_export_prompt(input, output, &results);
     if !export_choices.is_empty() {
-        print_equivalent_cli_call(&results.config, &export_choices);
+        print_equivalent_cli_call_to_writer(output, &results.config, &export_choices);
     }
 }
 
@@ -908,11 +908,11 @@ fn quick_calculation_with_defaults(
         return;
     }
 
-    print_results(&results);
-    print_equivalent_cli_call(&results.config, &[]);
+    print_results_to_writer(output, &results);
+    print_equivalent_cli_call_to_writer(output, &results.config, &[]);
     let export_choices = interactive_export_prompt(input, output, &results);
     if !export_choices.is_empty() {
-        print_equivalent_cli_call(&results.config, &export_choices);
+        print_equivalent_cli_call_to_writer(output, &results.config, &export_choices);
     }
 }
 
@@ -1078,7 +1078,11 @@ fn read_line(input: &mut dyn BufRead, error_message: &str) -> String {
     line
 }
 
-fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat, String)]) {
+fn print_equivalent_cli_call_to_writer(
+    output: &mut dyn Write,
+    config: &AppConfig,
+    export_choices: &[(ExportFormat, String)],
+) {
     let bands_csv = config
         .band_indices
         .iter()
@@ -1134,8 +1138,9 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
         }
     }
 
-    println!("Equivalent CLI call for this run:");
-    println!("  {cmd}\n");
+    writeln!(output, "Equivalent CLI call for this run:")
+        .expect("failed to write equivalent cli header");
+    writeln!(output, "  {cmd}\n").expect("failed to write equivalent cli command");
 }
 
 fn shell_quote(value: &str) -> String {
@@ -1190,36 +1195,42 @@ fn show_all_bands_for_region_to_writer(output: &mut dyn Write, region: ITURegion
 // Terminal display
 // ---------------------------------------------------------------------------
 
-fn print_results(results: &AppResults) {
+fn print_results_to_writer(output: &mut dyn Write, results: &AppResults) {
     let doc = results_display_document(results);
 
-    println!("\n{}", doc.overview_heading);
+    writeln!(output, "\n{}", doc.overview_heading).expect("failed to write results heading");
     for line in doc.overview_header_lines {
-        println!("{line}");
+        writeln!(output, "{line}").expect("failed to write results header line");
     }
     for view in doc.band_views {
-        println!("{}", view.title);
+        writeln!(output, "{}", view.title).expect("failed to write band title");
         for line in view.lines {
-            println!("{line}");
+            writeln!(output, "{line}").expect("failed to write band line");
         }
-        println!();
+        writeln!(output).expect("failed to write band separator");
     }
     for line in doc.summary_lines {
-        println!("{line}");
+        writeln!(output, "{line}").expect("failed to write summary line");
     }
-    println!();
+    writeln!(output).expect("failed to write summary separator");
 
     for section in doc.sections {
         for line in section.lines {
-            println!("{line}");
+            writeln!(output, "{line}").expect("failed to write section line");
         }
-        println!();
+        writeln!(output).expect("failed to write section separator");
     }
 
     for line in doc.warning_lines {
-        println!("{line}");
-        println!();
+        writeln!(output, "{line}").expect("failed to write warning line");
+        writeln!(output).expect("failed to write warning separator");
     }
+}
+
+fn print_results(results: &AppResults) {
+    let stdout = io::stdout();
+    let mut output = stdout.lock();
+    print_results_to_writer(&mut output, results);
 }
 
 #[cfg(test)]
@@ -1346,14 +1357,38 @@ mod tests {
             antenna_model: None,
         };
 
-        // Assert the formatter input mapping separately since this function prints to stdout.
-        let bands_csv = config
-            .band_indices
-            .iter()
-            .map(|v| band_label_for_index(*v, config.itu_region))
-            .collect::<Vec<String>>()
-            .join(",");
-        assert_eq!(bands_csv, "40m,20m,10m");
+        let mut output = Vec::new();
+
+        print_equivalent_cli_call_to_writer(&mut output, &config, &[]);
+
+        let rendered = String::from_utf8(output).expect("equivalent cli output should be utf-8");
+        assert!(rendered.contains("40m,20m,10m"));
+        assert!(rendered.contains("Equivalent CLI call for this run:"));
+    }
+
+    #[test]
+    fn print_results_to_writer_renders_into_provided_writer() {
+        let mut output = Vec::new();
+        let results = execute_request_checked(AppRequest::new(AppConfig {
+            band_indices: vec![4],
+            velocity_factor: 0.95,
+            mode: CalcMode::Resonant,
+            wire_min_m: DEFAULT_NON_RESONANT_CONFIG.min_len_m,
+            wire_max_m: DEFAULT_NON_RESONANT_CONFIG.max_len_m,
+            units: UnitSystem::Metric,
+            itu_region: ITURegion::Region1,
+            transformer_ratio: TransformerRatio::R1To1,
+            antenna_model: Some(AntennaModel::Dipole),
+        }))
+        .expect("expected valid results")
+        .results;
+
+        print_results_to_writer(&mut output, &results);
+
+        let rendered = String::from_utf8(output).expect("results output should be utf-8");
+        assert!(rendered.contains("Resonant Overview:"));
+        assert!(rendered.contains("Transformer ratio: 1:1"));
+        assert!(rendered.contains("40m"));
     }
 
     #[test]

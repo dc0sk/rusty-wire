@@ -49,7 +49,7 @@ Responsibilities:
 - validation of CLI-specific constraints such as mixed meter/feet inputs
 - interactive prompts and menu flow
 - listing region-aware bands
-- formatting terminal output for resonant and non-resonant runs
+- rendering terminal output for resonant and non-resonant runs via writer-friendly helpers
 - coordinating exports and export warnings
 
 This module owns I/O:
@@ -57,6 +57,8 @@ This module owns I/O:
 - stdin/stdout interaction for interactive mode
 - stderr validation messages
 - user-facing console formatting
+
+Interactive flows now keep rendered results and equivalent-command suggestions on the provided writer abstraction instead of bypassing tests or future alternate front ends with direct stdout writes.
 
 It does not implement the actual RF/wire math itself.
 
@@ -67,10 +69,11 @@ This module is the application orchestration layer.
 Responsibilities:
 
 - defines shared enums such as `CalcMode`, `ExportFormat`, and `UnitSystem`
-- defines `AppConfig` and `AppResults`
+- defines `AppConfig`, `AppRequest`, `AppResults`, and `AppResponse`
 - normalizes reusable wire-window input through shared app-layer helpers used by CLI and future UI code
 - parses reusable band-selection input and band-label resolution through shared app-layer helpers used by CLI and future UI code
 - formats reusable transformer-recommendation fallback messaging for CLI and future UI code
+- provides reusable results-display/view helpers consumed by the CLI and intended for future UI reuse
 - maps selected band indices to region-specific band definitions
 - resolves mode- and antenna-aware default transformer recommendations
 - runs one calculation pass for the full request
@@ -134,6 +137,8 @@ The project follows a simple layered approach:
 - algorithms in `calculations.rs`
 - file export in `export.rs`
 
+For upcoming TUI/GUI work, frontend-specific widget or session state should stay outside `app.rs` and translate into the shared `AppRequest`/`AppResponse` boundary.
+
 This split keeps most changes localized:
 
 - adding a new flag usually touches `cli.rs`
@@ -161,4 +166,4 @@ The current design deliberately favors:
 - unit-testable core logic with a thin CLI shell
 - a small number of explicit export formats and calculation modes
 
-The main remaining structural opportunity is cleaner error propagation from `app.rs` into `cli.rs`. Interactive mode is now exercised with stdin/stdout-driven tests, so that area is in better shape than earlier releases.
+The main remaining structural opportunities are cleaner user-facing error formatting in `cli.rs` and continued refinement of app-layer view helpers so future front ends can reuse shared output semantics without inheriting terminal-specific assumptions.

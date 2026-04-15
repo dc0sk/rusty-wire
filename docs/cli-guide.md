@@ -58,13 +58,15 @@ It lets you:
 
 ### Interactive Mode: Per-Session Defaults
 
-Starting with the next release, interactive mode remembers your last-used values for each prompt (bands, calculation mode, antenna model, velocity factor, transformer ratio, wire window, and units) during your session. When you repeat a calculation, prompts will pre-fill with your previous choices, making iterative planning much faster.
+Interactive mode remembers your last-used values for each prompt (bands, calculation mode, antenna model, velocity factor, transformer ratio, wire window, and units) during your session. When you repeat a calculation, prompts pre-fill with your previous choices, making iterative planning much faster.
 
 - To accept the previous value, just press Enter at the prompt.
 - To change a value, type a new one as usual.
 - Defaults reset when you exit and restart the program.
 
 This feature applies to both multi-band and quick single-band calculations in interactive mode.
+
+Interactive mode uses the same shared app-layer request/response and validation helpers as the non-interactive CLI path, so calculation and validation behavior stay aligned across both workflows.
 
 ## CLI Usage
 
