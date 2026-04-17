@@ -4,9 +4,13 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Backlog documentation**: added `docs/backlog.md` to track implementation-ready follow-up tasks that are agreed but not yet active roadmap work.
+
 ### Changed
 - **Interactive output routing cleanup**: interactive result rendering and equivalent-command suggestions now stay on the injected writer path instead of bypassing it with direct stdout writes.
 - **UI-boundary roadmap clarification**: architecture and roadmap docs now treat `AppRequest`/`AppResponse` as the shared app contract while keeping TUI/GUI state frontend-specific.
+- **Roadmap/backlog linkage**: roadmap now points to `docs/backlog.md` for near-term TUI follow-ups such as editable export-path input and inline field-level validation hints.
 
 ## [2.2.0] - 2026-04-14
 

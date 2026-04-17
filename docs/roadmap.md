@@ -4,6 +4,11 @@ This document captures the most relevant work that remains after the 2.2.0 relea
 
 It is intentionally trimmed to the items that are still useful. Completed milestones are kept short so the roadmap stays actionable.
 
+## Backlog Tracking
+
+- Implementation-ready follow-up tasks that are not yet active roadmap work are tracked in [docs/backlog.md](backlog.md).
+- Current TUI follow-ups tracked there: editable export output-path input and per-field inline validation hints.
+
 ## Recently Landed
 
 These areas are no longer roadmap items:
