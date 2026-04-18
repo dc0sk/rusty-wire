@@ -1,160 +1,67 @@
 # Roadmap
 
-This document captures the most relevant work that remains after the 2.1.0 release.
+This page tracks high-value work after 2.1.0.
 
-It is intentionally trimmed to the items that are still useful. Completed milestones are kept short so the roadmap stays actionable.
+## Recently Completed
 
-## Recently Landed
+- clap-based CLI parsing with explicit `--interactive`
+- region-aware band selection and named band/range inputs
+- antenna model expansion: dipole, inverted-v, EFHW, loop, OCFD
+- recommended transformer defaults by mode/model
+- export path hardening
+- SBOM generation and pre-push enforcement
+- broad unit/integration/script coverage
 
-These areas are no longer roadmap items:
+## Current Priorities
 
-- clap-based CLI parsing and no-argument help behavior
-- interactive mode restoration behind `--interactive`
-- interactive-mode I/O refactor and automated prompt/menu coverage
-- region-aware band selection and named band/range input
-- antenna model expansion through EFHW, loop, inverted-V, and OCFD
-- recommended transformer selection with mode/model-aware defaults
-- export path validation hardening
-- SBOM generation and pre-push SBOM enforcement
-- unit, integration, and regression-script coverage for current CLI behavior
-- testing, architecture, and CLI documentation refresh
+1. Error handling cleanup
+2. App-layer API refinements for future GUI work
+3. Search/analysis controls for power users
+4. Advanced frequency and custom-band inputs
+5. Additional antenna models and recommendation logic
 
-## Remaining High-Value Improvements
+## 1) Error Handling Cleanup
 
-## Error Handling Cleanup
+- Return structured errors from app-layer calculation paths.
+- Centralize final user-facing formatting in `src/cli.rs`.
+- Reduce duplicated validation between CLI and interactive mode.
 
-- return structured errors from `app::run_calculation` and related helpers instead of relying on terminal-oriented reporting
-- centralize end-user error formatting in `src/cli.rs`
-- reduce duplicated validation and conversion logic shared between interactive prompts and non-interactive CLI execution
+## 2) GUI Readiness (`iced` Prerequisites)
 
-This would make the code easier to reuse from future front ends and easier to test at the app layer.
+- Stabilize an app-layer request/response boundary around `AppConfig` and `AppResults`.
+- Keep shared summaries and warnings reusable outside terminal output.
+- Add app-layer contract tests to protect future UI work.
+- Decide packaging direction: single binary with multiple entry paths, or library + separate binaries.
 
-## UI Integration
+## 3) Search and Analysis Controls
 
-The project is structurally close to being usable from an `iced` desktop UI, but it is not quite there yet. The core calculation path is already separated from terminal I/O, which is a strong starting point. Before adding the UI itself, a few refactors should be treated as prerequisites so the GUI does not end up re-implementing CLI behavior in widget code.
+- Add configurable non-resonant resolution (`--precision` or `--step`).
+- Add optional batch runs over multiple velocity factors or transformer ratios.
+- Add a compact automation-oriented summary/report mode.
 
-### Prerequisite Refactors for an `iced` UI
+## 4) Advanced Input Support
 
-- move remaining user-facing error decisions fully out of terminal-oriented code paths and expose structured app-layer errors that a GUI can render cleanly
-- define a stable request/response boundary around `AppConfig` and `AppResults` so both CLI and UI use the same application service interface
-- separate pure result formatting from terminal printing so a GUI can reuse summaries, labels, warnings, and recommendation text without scraping CLI output
-- extract reusable validation helpers for wire-window constraints, band selection, transformer recommendation messaging, and export configuration
-- introduce explicit view-friendly metadata where useful, such as recommended transformer explanations, skipped-band reasons, and per-band annotations
-- review long-running or repeated operations such as export generation and future sweeps/batch runs so they can be surfaced as asynchronous UI tasks instead of blocking the event loop
-- decide whether the project should remain a single binary with multiple entry paths or be split into a reusable library crate plus separate CLI/UI binaries
-- add a small set of integration-style tests around the app-layer request/response contract so future UI work is protected from CLI refactors
+- Support direct frequency input (`--freq 7.1`).
+- Support explicit frequency lists (`--freq-list ...`).
+- Support user-defined band presets via config file.
 
-### `iced` Architecture Tasks
+## 5) Antenna and Recommendation Expansion
 
-- choose an application structure for `iced`: single-window first, with explicit state sections for inputs, results, exports, and status messages
-- model UI state separately from `AppConfig` so incomplete form input and validated calculation requests are not conflated
-- create a translation layer between UI state and `AppConfig`/`AppResults`
-- plan reusable components for band selection, antenna model selection, transformer recommendation display, result panels, and export actions
-- define how charts/tables/scrollable result panes should be represented in `iced`, especially for multi-band results and compromise candidates
-- decide how exports and future long-running scans report progress, success, and failure in the UI
+- Add more antenna models beyond current set.
+- Improve recommendation transparency in help/output.
+- Evaluate optional transformer ranking/optimization passes while keeping explicit overrides.
 
-### Features That Make Sense in the UI
+## Secondary Backlog
 
-The first UI should cover all major CLI/interactive capabilities, but it can also go beyond them in ways that are awkward in a terminal.
-
-#### Baseline Feature Parity with CLI/Interactive
-
-- region selection with immediate refresh of available bands
-- named band and range selection with a list-based multi-select alternative
-- calculation mode switching between resonant and non-resonant
-- antenna model selection including all current models
-- transformer selection with visible `recommended` rationale
-- wire-window controls with unit-aware entry and inline validation
-- unit-system output controls
-- full results display for per-band lengths, skip distances, resonant points, non-resonant recommendations, and resonant compromises
-- export actions for all supported output formats
-
-#### UI-First Enhancements Beyond the CLI
-
-- side-by-side comparison of multiple configurations, such as different velocity factors, transformer ratios, or antenna models
-- live recalculation as inputs change, optionally with debounce for heavier operations
-- richer band pickers with grouped amateur/shortwave sections, search, and preset chips
-- collapsible result panels for dipole, EFHW, loop, inverted-V, and OCFD views
-- visual highlighting of recommended transformer ratio, skipped bands, and resonance-clearance warnings
-- result bookmarking or saved sessions for returning to previous scenarios
-- graphical presentation of resonant points and non-resonant optima across the search window
-- export preview before writing files
-- guided workflows or setup wizards for common use cases such as EFHW planning, random-wire exploration, or OCFD split review
-- a future custom-band/preset editor once user-defined band support exists
-
-#### Nice-to-Have UI Features for Later
-
-- multi-window or detachable analysis panes
-- printable/shareable report preview
-- theme support and accessibility-focused layout options
-- persistent user preferences for units, region, default mode, and export behavior
-- background task history for exports and heavier analysis runs
-
-## Advanced Input Support
-
-- support direct frequency input such as `--freq 7.1`
-- support multiple explicit frequencies such as `--freq-list 7.0,10.1`
-- support user-defined band presets through a config file such as `bands.toml` or `bands.json`
-
-These would make the tool more useful outside fixed amateur-band workflows.
-
-## Transformer Recommendation and Selection
-
-- keep `--transformer recommended` as the default entry point, but make the recommendation model more transparent in CLI help and output
-- evaluate whether EFHW should remain fixed at `1:56` or be promoted to a ranked recommendation across `1:49`, `1:56`, and `1:64`
-- consider an optional recommendation/optimization pass that compares plausible transformer ratios for the selected mode, antenna model, and band set
-- present recommendations as guidance while still allowing explicit user override
-
-The current implementation uses fixed recommended defaults by mode and antenna model. Future work here is about ranking or optimizing those choices rather than hard-coding more one-off rules.
-
-## Search and Analysis Controls
-
-- add a configurable `--precision` or `--step` option for non-resonant search resolution
-- add batch output for multiple velocity factors or multiple transformer ratios in one run
-- add a compact `--report` or `--summary` mode for automation-friendly output
-
-These changes would improve power-user workflows without requiring a large architectural shift.
-
-## Antenna Model Expansion
-
-- add additional models beyond the current dipole, inverted-V, EFHW, loop, and OCFD support
-- explore trap, hybrid, and other multi-section antenna models
-- evaluate whether more antenna-specific feed recommendations should be modeled in the application layer
-
-This remains one of the most substantial feature areas and likely requires changes in both `src/calculations.rs` and the user-facing configuration model.
-
-## Export Improvements
-
-- add richer machine-readable export formats such as YAML
-- consider HTML export for printable/shareable reports
-- improve the JSON schema for programmatic consumers if external integration becomes important
-
-## Logging and Automation Modes
-
-- add `--quiet` and/or `--verbose` flags
-- add a `--dry-run` mode for automation and script validation
-
-These would make the CLI easier to integrate into larger workflows.
-
-## Suggested Priority Order
-
-If work continues incrementally, a good order is:
-
-1. error-handling cleanup
-2. UI-integration prerequisite refactors
-3. first-pass `iced` UI with feature parity
-4. configurable non-resonant search resolution
-5. direct/custom frequency input
-6. transformer recommendation optimization
-7. logging and automation modes
-8. next-generation antenna models
+- New export targets (for example YAML/HTML)
+- Logging and automation flags (`--quiet`, `--verbose`, `--dry-run`)
+- UI-first enhancements after baseline parity (comparison views, saved sessions, richer visualizations)
 
 ## Affected Areas
 
-- `src/cli.rs`: CLI options, interactive prompts, validation, automation modes, recommendation messaging
-- `src/app.rs`: request orchestration, recommendation policy, and error propagation
-- `src/calculations.rs`: new antenna models, search controls, and transformer-comparison logic
-- `src/bands.rs`: custom/user-defined bands and frequency presets
-- `src/export.rs`: richer export formats and schemas
-- future `src/ui.rs` or `src/ui/`: `iced` application state, views, actions, and UI-to-app translation
-- `tests/` and `scripts/`: expanded regression coverage as features grow
+- `src/cli.rs`: options, validation, messaging
+- `src/app.rs`: orchestration and error propagation
+- `src/calculations.rs`: optimization and model logic
+- `src/bands.rs`: custom-band support
+- `src/export.rs`: format/schema evolution
+- `tests/` and `scripts/`: regression coverage

@@ -4,7 +4,26 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
-- No changes yet.
+### Changed
+- **Documentation consolidation**: reduced redundancy across README, CLI guide, testing guide, and roadmap; tightened command references and moved deep details to their canonical docs.
+
+### Added
+- **Session exports documentation**: added `docs/steering.md` and `docs/memories.md` exports for session steering and memory state snapshots.
+
+## [2.2.0] - 2026-04-14
+
+### Added
+- **Interactive session defaults**: interactive mode now remembers user choices during a session and reuses them as prompt defaults.
+
+### Changed
+- **UI-integration preparation**: refactored application layering by extracting display views into the app layer and centralizing shared band/transformer helpers.
+- **Validation and CLI cleanup**: refactored app-side validation and streamlined CLI housekeeping to support cleaner front-end boundaries.
+- **Regression updates**: refreshed supporting regression coverage/scripts to align with helper and app-layer refactors.
+- **Documentation refresh**: updated roadmap and user/developer docs to reflect interactive session defaults and UI-prep architecture direction.
+
+### Fixed
+- **Output labeling**: fixed the recommended marker in both-units optima output.
+- **Antenna naming**: corrected OCFD/Windom mislabeling in display output.
 
 ## [2.1.0] - 2026-04-12
 

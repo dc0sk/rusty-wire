@@ -6,41 +6,6 @@ A Rust-based utility for wire-antenna planning across ham-radio and shortwave ba
 
 See [docs/CHANGELOG.md](docs/CHANGELOG.md) for the full release history.
 
-## Quick Start
-
-> [!TIP]
-> New to Rusty Wire? Start with interactive mode first:
->
-> ```bash
-> ./target/release/rusty-wire --interactive
-> ```
->
-> It walks you through region, bands, mode, antenna model, units, and export options step by step.
-
-### Build from source
-
-```bash
-cargo build --release
-```
-
-### Show CLI help
-
-```bash
-./target/release/rusty-wire
-```
-
-### Run interactive mode
-
-```bash
-./target/release/rusty-wire --interactive
-```
-
-### Run from Cargo during development
-
-```bash
-cargo run -- [OPTIONS]
-```
-
 ## Features
 
 - **Resonant calculations**: Half-wave, full-wave, and quarter-wave dipole lengths
@@ -58,52 +23,56 @@ cargo run -- [OPTIONS]
 - **ITU region support**: Region-aware amateur band ranges (default: Region 1)
 - **Band database**: Pre-configured ham and shortwave bands
 
+## Quick Start
+
+Build:
+
+```bash
+cargo build --release
+```
+
+Show help:
+
+```bash
+./target/release/rusty-wire
+```
+
+Run interactive mode:
+
+```bash
+./target/release/rusty-wire --interactive
+```
+
+Run from Cargo during development:
+
+```bash
+cargo run -- [OPTIONS]
+```
+
 ## Documentation
 
-For comprehensive CLI documentation and examples, see [docs/cli-guide.md](docs/cli-guide.md).
-For test execution details, see [docs/testing.md](docs/testing.md).
-For module layout and system design, see [docs/architecture.md](docs/architecture.md).
-For planned future enhancements, see [docs/roadmap.md](docs/roadmap.md).
-
-Key topics:
-- CLI usage and all options
-- Interactive mode via `--interactive`
-- Transformer recommendation defaults and explicit override behavior
-- ITU region selection (`--region 1|2|3`)
-- Resonant vs. non-resonant mode differences
-- Wire search window (non-resonant only)
-- Export format selection
-- Unit system input/output control
-- Multi-optima feature
-- Testing with `cargo test` and the included shell scripts
-- Project architecture and module boundaries
-- Planned future enhancements and feature roadmap
+- CLI usage and examples: [docs/cli-guide.md](docs/cli-guide.md)
+- Testing workflow: [docs/testing.md](docs/testing.md)
+- Module design and execution flow: [docs/architecture.md](docs/architecture.md)
+- Planned work: [docs/roadmap.md](docs/roadmap.md)
+- Release history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## Testing
 
-For the full testing guide, including `cargo test` and all bundled regression scripts, see [docs/testing.md](docs/testing.md).
+Primary check:
 
-Verify the multi-optima feature:
+```bash
+cargo test
+```
+
+Additional regression scripts:
 
 ```bash
 ./scripts/test-multi-optima.sh
-```
-
-This script performs an exhaustive parameter sweep and exits on the first case where multiple optima are found.
-
-Verify ITU region band ranges:
-
-```bash
 ./scripts/test-itu-region-bands.sh
 ```
 
-This script checks all listed band ranges for Regions 1, 2, and 3.
-
-Interactive mode is available explicitly via:
-
-```bash
-cargo run -- --interactive
-```
+For full details, see [docs/testing.md](docs/testing.md).
 
 ## SBOM
 
@@ -162,10 +131,6 @@ It runs:
 
 SPDX generation is normalized for deterministic output (requires `jq` or `jaq`).
 If `sbom/rusty-wire.spdx.json` changes during pre-push, the hook blocks push until the updated SBOM is committed.
-
-## Architecture
-
-For a full architectural overview, see [docs/architecture.md](docs/architecture.md).
 
 ## Examples
 
