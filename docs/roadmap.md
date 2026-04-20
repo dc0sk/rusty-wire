@@ -2,12 +2,23 @@
 
 This document captures the most relevant work that remains after the 2.2.0 release.
 
-It is intentionally trimmed to the items that are still useful. Completed milestones are kept short so the roadmap stays actionable.
+## Recently Completed
 
-## Recently Landed
+- clap-based CLI parsing with explicit `--interactive`
+- region-aware band selection and named band/range inputs
+- antenna model expansion: dipole, inverted-v, EFHW, loop, OCFD
+- recommended transformer defaults by mode/model
+- export path hardening
+- SBOM generation and pre-push enforcement
+- broad unit/integration/script coverage
 
-These areas are no longer roadmap items:
+## Current Priorities
 
+1. Error handling cleanup
+2. App-layer API refinements for future GUI work
+3. Search/analysis controls for power users
+4. Advanced frequency and custom-band inputs
+5. Additional antenna models and recommendation logic
 - clap-based CLI parsing and no-argument help behavior
 - interactive mode restoration behind `--interactive`
 - interactive-mode I/O refactor and automated prompt/menu coverage
@@ -22,14 +33,18 @@ These areas are no longer roadmap items:
 - shared app-layer band-selection parsing and label resolution for CLI and future UI input paths
 - shared app-layer transformer recommendation fallback messaging for CLI and future UI input paths
 
-## Remaining High-Value Improvements
+## 1) Error Handling Cleanup
 
-## Error Handling Cleanup
+- Return structured errors from app-layer calculation paths.
+- Centralize final user-facing formatting in `src/cli.rs`.
+- Reduce duplicated validation between CLI and interactive mode.
 
-- return structured errors from `app::run_calculation` and related helpers instead of relying on terminal-oriented reporting
-- centralize end-user error formatting in `src/cli.rs`
-- reduce duplicated validation and conversion logic shared between interactive prompts and non-interactive CLI execution
+## 2) GUI Readiness (`iced` Prerequisites)
 
+- Stabilize an app-layer request/response boundary around `AppConfig` and `AppResults`.
+- Keep shared summaries and warnings reusable outside terminal output.
+- Add app-layer contract tests to protect future UI work.
+- Decide packaging direction: single binary with multiple entry paths, or library + separate binaries.
 ### Implementation Plan
 
 1. **Inventory All Error Handling**
@@ -57,11 +72,13 @@ These areas are no longer roadmap items:
 
 This will make the code easier to reuse from future front ends and easier to test at the app layer.
 
-## UI Integration
+## 3) Search and Analysis Controls
 
-The project is structurally close to being usable from an `iced` desktop UI, but it is not quite there yet. The core calculation path is already separated from terminal I/O, which is a strong starting point. Before adding the UI itself, a few refactors should be treated as prerequisites so the GUI does not end up re-implementing CLI behavior in widget code.
+- Add configurable non-resonant resolution (`--precision` or `--step`).
+- Add optional batch runs over multiple velocity factors or transformer ratios.
+- Add a compact automation-oriented summary/report mode.
 
-### Prerequisite Refactors for an `iced` UI
+## 4) Advanced Input Support
 
 - move remaining user-facing error decisions fully out of terminal-oriented code paths and expose structured app-layer errors that a GUI can render cleanly
 - define a stable request/response boundary around `AppConfig` and `AppResults` so both CLI and UI use the same application service interface
@@ -73,17 +90,17 @@ The project is structurally close to being usable from an `iced` desktop UI, but
 - decide whether the project should remain a single binary with multiple entry paths or be split into a reusable library crate plus separate CLI/UI binaries
 - add a small set of integration-style tests around the app-layer request/response contract so future UI work is protected from CLI refactors
 
-### `iced` Architecture Tasks
+## 5) Antenna and Recommendation Expansion
 
-- choose an application structure for `iced`: single-window first, with explicit state sections for inputs, results, exports, and status messages
-- model UI state separately from `AppConfig` so incomplete form input and validated calculation requests are not conflated
-- create a translation layer between UI state and `AppConfig`/`AppResults`
-- plan reusable components for band selection, antenna model selection, transformer recommendation display, result panels, and export actions
-- define how charts/tables/scrollable result panes should be represented in `iced`, especially for multi-band results and compromise candidates
-- decide how exports and future long-running scans report progress, success, and failure in the UI
+- Add more antenna models beyond current set.
+- Improve recommendation transparency in help/output.
+- Evaluate optional transformer ranking/optimization passes while keeping explicit overrides.
 
-### Features That Make Sense in the UI
+## Secondary Backlog
 
+- New export targets (for example YAML/HTML)
+- Logging and automation flags (`--quiet`, `--verbose`, `--dry-run`)
+- UI-first enhancements after baseline parity (comparison views, saved sessions, richer visualizations)
 The first UI should cover all major CLI/interactive capabilities, but it can also go beyond them in ways that are awkward in a terminal.
 
 #### Baseline Feature Parity with CLI/Interactive
@@ -236,10 +253,9 @@ If work continues incrementally, a good order is:
 
 ## Affected Areas
 
-- `src/cli.rs`: CLI options, interactive prompts, validation, automation modes, recommendation messaging
-- `src/app.rs`: request orchestration, recommendation policy, and error propagation
-- `src/calculations.rs`: new antenna models, search controls, and transformer-comparison logic
-- `src/bands.rs`: custom/user-defined bands and frequency presets
-- `src/export.rs`: richer export formats and schemas
-- future `src/ui.rs` or `src/ui/`: `iced` application state, views, actions, and UI-to-app translation
-- `tests/` and `scripts/`: expanded regression coverage as features grow
+- `src/cli.rs`: options, validation, messaging
+- `src/app.rs`: orchestration and error propagation
+- `src/calculations.rs`: optimization and model logic
+- `src/bands.rs`: custom-band support
+- `src/export.rs`: format/schema evolution
+- `tests/` and `scripts/`: regression coverage

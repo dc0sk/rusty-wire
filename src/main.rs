@@ -1,11 +1,8 @@
-mod app;
-mod bands;
-mod calculations;
-mod cli;
-mod export;
-
 use std::env;
+use std::process;
 
 fn main() {
-    cli::run_from_args(&env::args().collect::<Vec<String>>());
+    if !rusty_wire::run_cli(&env::args().collect::<Vec<String>>()) {
+        process::exit(1);
+    }
 }

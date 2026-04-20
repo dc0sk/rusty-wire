@@ -31,12 +31,12 @@ use std::io::{self, BufRead, Write};
 #[command(arg_required_else_help = true)]
 struct Cli {
     /// ITU Region (1=Europe/Africa/Middle East, 2=Americas, 3=Asia-Pacific)
-    #[arg(short, long, value_enum, default_value_t = DEFAULT_ITU_REGION)]
-    region: ITURegion,
+    #[arg(short, long, value_enum, default_value = "1")]
+    region: CliITURegion,
 
     /// Calculation mode
-    #[arg(short, long, value_enum, default_value_t = CalcMode::Resonant)]
-    mode: CalcMode,
+    #[arg(short, long, value_enum, default_value = "resonant")]
+    mode: CliCalcMode,
 
     /// Band names/ranges (comma-separated, e.g., "40m,20m,10m-15m,60m-80m")
     #[arg(short, long)]
@@ -52,7 +52,7 @@ struct Cli {
 
     /// Antenna model (omit to show all models per band)
     #[arg(long, value_enum)]
-    antenna: Option<AntennaModel>,
+    antenna: Option<CliAntennaModel>,
 
     /// Wire length window minimum in meters
     #[arg(long)]
@@ -70,13 +70,17 @@ struct Cli {
     #[arg(long)]
     wire_max_ft: Option<f64>,
 
+    /// Non-resonant search step in meters (default: 0.05 m)
+    #[arg(long)]
+    step: Option<f64>,
+
     /// Display units (m, ft, both)
     #[arg(short, long, value_enum)]
-    units: Option<UnitSystem>,
+    units: Option<CliUnitSystem>,
 
     /// Export formats (comma-separated: csv, json, markdown, txt)
     #[arg(short, long, value_delimiter = ',')]
-    export: Option<Vec<ExportFormat>>,
+    export: Option<Vec<CliExportFormat>>,
 
     /// Output file path for exports
     #[arg(short, long)]
@@ -91,7 +95,33 @@ struct Cli {
     interactive: bool,
 }
 
-#[derive(clap::ValueEnum, Clone, Debug)]
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+enum CliAntennaModel {
+    #[clap(name = "dipole", help = "Center-fed dipole model")]
+    Dipole,
+    #[clap(name = "inverted-v", help = "Inverted-V dipole model")]
+    InvertedVDipole,
+    #[clap(name = "efhw", help = "End-fed half-wave model")]
+    EndFedHalfWave,
+    #[clap(name = "loop", help = "Full-wave loop model")]
+    FullWaveLoop,
+    #[clap(name = "ocfd", help = "Off-center-fed dipole (OCFD) model")]
+    OffCenterFedDipole,
+}
+
+impl From<CliAntennaModel> for AntennaModel {
+    fn from(model: CliAntennaModel) -> Self {
+        match model {
+            CliAntennaModel::Dipole => AntennaModel::Dipole,
+            CliAntennaModel::InvertedVDipole => AntennaModel::InvertedVDipole,
+            CliAntennaModel::EndFedHalfWave => AntennaModel::EndFedHalfWave,
+            CliAntennaModel::FullWaveLoop => AntennaModel::FullWaveLoop,
+            CliAntennaModel::OffCenterFedDipole => AntennaModel::OffCenterFedDipole,
+        }
+    }
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
 enum CliCalcMode {
     Resonant,
     NonResonant,
@@ -106,7 +136,7 @@ impl From<CliCalcMode> for CalcMode {
     }
 }
 
-#[derive(clap::ValueEnum, Clone, Debug)]
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
 enum CliUnitSystem {
     M,
     Ft,
@@ -123,7 +153,7 @@ impl From<CliUnitSystem> for UnitSystem {
     }
 }
 
-#[derive(clap::ValueEnum, Clone, Debug)]
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
 enum CliExportFormat {
     Csv,
     Json,
@@ -228,7 +258,7 @@ impl CliTransformerSelection {
     }
 }
 
-#[derive(clap::ValueEnum, Clone, Debug)]
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
 enum CliITURegion {
     #[clap(name = "1")]
     Region1,
@@ -253,25 +283,26 @@ impl From<CliITURegion> for ITURegion {
 // ---------------------------------------------------------------------------
 
 /// Entry point when CLI arguments are present.
-pub fn run_from_args(args: &[String]) {
+/// Returns `true` on success, `false` if an error prevented completion.
+pub fn run_from_args(args: &[String]) -> bool {
     let cli = Cli::parse_from(args.iter().map(|s| s.as_str()));
 
     if cli.interactive {
         run_interactive();
-        return;
+        return true;
     }
 
     if cli.list_bands {
-        show_all_bands_for_region(cli.region);
-        return;
+        show_all_bands_for_region(cli.region.into());
+        return true;
     }
 
     let bands = match &cli.bands {
-        Some(selection) => match parse_band_selection(selection, cli.region) {
+        Some(selection) => match parse_band_selection(selection, cli.region.into()) {
             Ok(parsed) => parsed,
             Err(err) => {
                 eprintln!("Error: invalid --bands value: {err}");
-                return;
+                return false;
             }
         },
         None => DEFAULT_BAND_SELECTION.to_vec(),
@@ -286,7 +317,7 @@ pub fn run_from_args(args: &[String]) {
         Ok(window) => window,
         Err(err) => {
             eprintln!("Error: {err}");
-            return;
+            return false;
         }
     };
 
@@ -294,39 +325,46 @@ pub fn run_from_args(args: &[String]) {
     if let Some(ref output) = cli.output {
         if let Err(err) = validate_export_path(output) {
             eprintln!("Error: invalid output path: {err}");
-            return;
+            return false;
         }
     }
 
-    let units = cli.units.unwrap_or(resolved_window.inferred_display_units);
+    let units = cli
+        .units
+        .map(UnitSystem::from)
+        .unwrap_or(resolved_window.inferred_display_units);
 
-    let export_formats = cli.export.unwrap_or_default();
+    let export_formats: Vec<ExportFormat> = cli
+        .export
+        .unwrap_or_default()
+        .into_iter()
+        .map(ExportFormat::from)
+        .collect();
 
-    let transformer_ratio = cli.transformer.resolve(cli.mode, cli.antenna);
+    let mode = CalcMode::from(cli.mode);
+    let antenna_model = cli.antenna.map(AntennaModel::from);
+    let transformer_ratio = cli.transformer.resolve(mode, antenna_model);
 
     let config = AppConfig {
         band_indices: bands,
         velocity_factor: cli.velocity,
-        mode: cli.mode,
+        mode,
         wire_min_m: resolved_window.min_m,
         wire_max_m: resolved_window.max_m,
+        step_m: cli.step.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.step_m),
         units,
-        itu_region: cli.region,
+        itu_region: cli.region.into(),
         transformer_ratio,
-        antenna_model: cli.antenna,
+        antenna_model,
     };
 
     let results = match execute_request_checked(AppRequest::new(config)) {
         Ok(response) => response.results,
         Err(err) => {
             eprintln!("Error: {err}");
-            return;
+            return false;
         }
     };
-    if results.calculations.is_empty() {
-        println!("No valid bands selected.");
-        return;
-    }
 
     print_results(&results);
 
@@ -361,10 +399,11 @@ pub fn run_from_args(args: &[String]) {
             results.config.wire_max_m,
         ) {
             eprintln!("Failed to export {output}: {err}");
-            std::process::exit(1);
+            return false;
         }
         println!("Exported results to {output}");
     }
+    true
 }
 
 // ---------------------------------------------------------------------------
@@ -792,6 +831,7 @@ fn calculate_selected_bands_with_defaults(
         mode,
         wire_min_m,
         wire_max_m,
+        step_m: DEFAULT_NON_RESONANT_CONFIG.step_m,
         units,
         itu_region: region,
         transformer_ratio,
@@ -805,11 +845,6 @@ fn calculate_selected_bands_with_defaults(
             return;
         }
     };
-    if results.calculations.is_empty() {
-        writeln!(output, "No valid bands selected.\n")
-            .expect("failed to write empty result message");
-        return;
-    }
 
     print_results(&results);
     print_equivalent_cli_call(&results.config, &[]);
@@ -890,6 +925,7 @@ fn quick_calculation_with_defaults(
         mode,
         wire_min_m,
         wire_max_m,
+        step_m: DEFAULT_NON_RESONANT_CONFIG.step_m,
         units,
         itu_region: region,
         transformer_ratio,
@@ -903,10 +939,6 @@ fn quick_calculation_with_defaults(
             return;
         }
     };
-    if results.calculations.is_empty() {
-        writeln!(output, "Band not found.\n").expect("failed to write band not found message");
-        return;
-    }
 
     print_results(&results);
     print_equivalent_cli_call(&results.config, &[]);
@@ -1340,6 +1372,7 @@ mod tests {
             mode: CalcMode::Resonant,
             wire_min_m: DEFAULT_NON_RESONANT_CONFIG.min_len_m,
             wire_max_m: DEFAULT_NON_RESONANT_CONFIG.max_len_m,
+            step_m: DEFAULT_NON_RESONANT_CONFIG.step_m,
             units: UnitSystem::Metric,
             itu_region: ITURegion::Region1,
             transformer_ratio: TransformerRatio::R1To1,

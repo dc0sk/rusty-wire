@@ -8,7 +8,9 @@ pub enum AppError {
     InvalidUnitSystem(String),
     InvalidAntennaModel(String),
     InvalidBandSelection(String),
+    InvalidSearchStep(f64),
     EmptyBandSelection,
+    AllBandsSkipped,
 }
 
 impl fmt::Display for AppError {
@@ -37,8 +39,17 @@ impl fmt::Display for AppError {
             AppError::InvalidUnitSystem(s) => write!(f, "Invalid unit system: {s}"),
             AppError::InvalidAntennaModel(s) => write!(f, "Invalid antenna model: {s}"),
             AppError::InvalidBandSelection(s) => write!(f, "Invalid band selection: {s}"),
+            AppError::InvalidSearchStep(step) => {
+                write!(
+                    f,
+                    "search step must be greater than 0 and less than the wire length window (got {step:.4} m)"
+                )
+            }
             AppError::EmptyBandSelection => {
                 write!(f, "empty selection; provide at least one band name.")
+            }
+            AppError::AllBandsSkipped => {
+                write!(f, "no valid bands for the selected ITU region")
             }
         }
     }
@@ -58,7 +69,6 @@ use crate::calculations::{
     NonResonantSearchConfig, ResonantCompromise, TransformerRatio, WireCalculation,
     DEFAULT_NON_RESONANT_CONFIG,
 };
-use clap::ValueEnum;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::str::FromStr;
@@ -120,25 +130,6 @@ impl FromStr for CalcMode {
     }
 }
 
-impl ValueEnum for CalcMode {
-    fn value_variants<'a>() -> &'a [Self] {
-        &[CalcMode::Resonant, CalcMode::NonResonant]
-    }
-
-    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
-        match self {
-            CalcMode::Resonant => Some(
-                clap::builder::PossibleValue::new("resonant")
-                    .help("Calculate resonant wire lengths"),
-            ),
-            CalcMode::NonResonant => Some(
-                clap::builder::PossibleValue::new("non-resonant")
-                    .help("Find optimal non-resonant wire length within constraints"),
-            ),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportFormat {
     Csv,
@@ -175,32 +166,6 @@ impl FromStr for ExportFormat {
     }
 }
 
-impl ValueEnum for ExportFormat {
-    fn value_variants<'a>() -> &'a [Self] {
-        &[
-            ExportFormat::Csv,
-            ExportFormat::Json,
-            ExportFormat::Markdown,
-            ExportFormat::Txt,
-        ]
-    }
-
-    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
-        match self {
-            ExportFormat::Csv => Some(clap::builder::PossibleValue::new("csv").help("CSV format")),
-            ExportFormat::Json => {
-                Some(clap::builder::PossibleValue::new("json").help("JSON format"))
-            }
-            ExportFormat::Markdown => {
-                Some(clap::builder::PossibleValue::new("markdown").help("Markdown format"))
-            }
-            ExportFormat::Txt => {
-                Some(clap::builder::PossibleValue::new("txt").help("Plain text format"))
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnitSystem {
     Metric,
@@ -219,22 +184,6 @@ impl FromStr for UnitSystem {
             _ => Err(AppError::InvalidUnitSystem(format!(
                 "'{s}' (must be 'm', 'ft', or 'both')"
             ))),
-        }
-    }
-}
-
-impl ValueEnum for UnitSystem {
-    fn value_variants<'a>() -> &'a [Self] {
-        &[UnitSystem::Metric, UnitSystem::Imperial, UnitSystem::Both]
-    }
-
-    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
-        match self {
-            UnitSystem::Metric => Some(clap::builder::PossibleValue::new("m").help("Meters")),
-            UnitSystem::Imperial => Some(clap::builder::PossibleValue::new("ft").help("Feet")),
-            UnitSystem::Both => {
-                Some(clap::builder::PossibleValue::new("both").help("Both meters and feet"))
-            }
         }
     }
 }
@@ -267,39 +216,6 @@ impl FromStr for AntennaModel {
     }
 }
 
-impl ValueEnum for AntennaModel {
-    fn value_variants<'a>() -> &'a [Self] {
-        &[
-            AntennaModel::Dipole,
-            AntennaModel::InvertedVDipole,
-            AntennaModel::EndFedHalfWave,
-            AntennaModel::FullWaveLoop,
-            AntennaModel::OffCenterFedDipole,
-        ]
-    }
-
-    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
-        match self {
-            AntennaModel::Dipole => {
-                Some(clap::builder::PossibleValue::new("dipole").help("Center-fed dipole model"))
-            }
-            AntennaModel::InvertedVDipole => Some(
-                clap::builder::PossibleValue::new("inverted-v").help("Inverted-V dipole model"),
-            ),
-            AntennaModel::EndFedHalfWave => {
-                Some(clap::builder::PossibleValue::new("efhw").help("End-fed half-wave model"))
-            }
-            AntennaModel::FullWaveLoop => {
-                Some(clap::builder::PossibleValue::new("loop").help("Full-wave loop model"))
-            }
-            AntennaModel::OffCenterFedDipole => Some(
-                clap::builder::PossibleValue::new("ocfd")
-                    .help("Off-center-fed dipole (OCFD) model"),
-            ),
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // AppConfig – all inputs needed for a single calculation run
 // ---------------------------------------------------------------------------
@@ -311,6 +227,7 @@ pub struct AppConfig {
     pub mode: CalcMode,
     pub wire_min_m: f64,
     pub wire_max_m: f64,
+    pub step_m: f64,
     pub units: UnitSystem,
     pub itu_region: ITURegion,
     pub transformer_ratio: TransformerRatio,
@@ -325,6 +242,7 @@ impl Default for AppConfig {
             mode: CalcMode::Resonant,
             wire_min_m: DEFAULT_NON_RESONANT_CONFIG.min_len_m,
             wire_max_m: DEFAULT_NON_RESONANT_CONFIG.max_len_m,
+            step_m: DEFAULT_NON_RESONANT_CONFIG.step_m,
             units: UnitSystem::Both,
             itu_region: DEFAULT_ITU_REGION,
             transformer_ratio: DEFAULT_TRANSFORMER_RATIO,
@@ -580,7 +498,7 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
     let non_res_cfg = NonResonantSearchConfig {
         min_len_m: config.wire_min_m,
         max_len_m: config.wire_max_m,
-        step_m: DEFAULT_NON_RESONANT_CONFIG.step_m,
+        step_m: config.step_m,
         preferred_center_m: (config.wire_min_m + config.wire_max_m) / 2.0,
     };
     let recommendation =
@@ -613,6 +531,10 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
 }
 
 pub fn validate_config(config: &AppConfig) -> Result<(), AppError> {
+    if config.band_indices.is_empty() {
+        return Err(AppError::EmptyBandSelection);
+    }
+
     if !(0.5..=1.0).contains(&config.velocity_factor) {
         return Err(AppError::InvalidVelocityFactor(config.velocity_factor));
     }
@@ -622,6 +544,11 @@ pub fn validate_config(config: &AppConfig) -> Result<(), AppError> {
             min_m: config.wire_min_m,
             max_m: config.wire_max_m,
         });
+    }
+
+    let window = config.wire_max_m - config.wire_min_m;
+    if config.step_m <= 0.0 || config.step_m >= window {
+        return Err(AppError::InvalidSearchStep(config.step_m));
     }
 
     Ok(())
@@ -795,7 +722,11 @@ fn band_alias_to_index(region: ITURegion) -> HashMap<String, usize> {
 /// handling before rendering output.
 pub fn run_calculation_checked(config: AppConfig) -> Result<AppResults, AppError> {
     validate_config(&config)?;
-    Ok(run_calculation(config))
+    let results = run_calculation(config);
+    if results.calculations.is_empty() {
+        return Err(AppError::AllBandsSkipped);
+    }
+    Ok(results)
 }
 
 /// Validate and execute a full app-layer request.
@@ -2174,6 +2105,55 @@ mod tests {
     }
 
     #[test]
+    fn validate_config_rejects_empty_band_selection() {
+        let mut config = AppConfig::default();
+        config.band_indices = vec![];
+
+        let err = validate_config(&config).expect_err("expected empty band selection error");
+        assert_eq!(err, AppError::EmptyBandSelection);
+    }
+
+    #[test]
+    fn validate_config_rejects_zero_step() {
+        let mut config = AppConfig::default();
+        config.step_m = 0.0;
+
+        let err = validate_config(&config).expect_err("expected invalid step error");
+        assert_eq!(err, AppError::InvalidSearchStep(0.0));
+    }
+
+    #[test]
+    fn validate_config_rejects_step_exceeding_window() {
+        let mut config = AppConfig::default();
+        config.wire_min_m = 8.0;
+        config.wire_max_m = 10.0;
+        config.step_m = 5.0;
+
+        let err = validate_config(&config).expect_err("expected invalid step error");
+        assert_eq!(err, AppError::InvalidSearchStep(5.0));
+    }
+
+    #[test]
+    fn validate_config_accepts_custom_step_within_window() {
+        let mut config = AppConfig::default();
+        config.wire_min_m = 8.0;
+        config.wire_max_m = 35.0;
+        config.step_m = 0.01;
+
+        assert!(validate_config(&config).is_ok());
+    }
+
+    #[test]
+    fn run_calculation_checked_returns_all_bands_skipped_for_invalid_region_indices() {
+        let mut config = AppConfig::default();
+        // Use an index well beyond any real band to guarantee all calculations are skipped.
+        config.band_indices = vec![9999];
+
+        let err = run_calculation_checked(config).expect_err("expected all-bands-skipped error");
+        assert_eq!(err, AppError::AllBandsSkipped);
+    }
+
+    #[test]
     fn resolve_wire_window_inputs_uses_metric_defaults() {
         let resolved = resolve_wire_window_inputs(None, None, None, None)
             .expect("expected default wire window to resolve");
@@ -2633,6 +2613,77 @@ mod tests {
         assert!(lines
             .iter()
             .any(|line| line.contains("no resonant points fall within this window")));
+    }
+
+    // --- App API contract tests (guard the stable GUI-facing boundary) ---
+
+    #[test]
+    fn app_request_from_config_round_trips() {
+        let config = AppConfig::default();
+        let request = AppRequest::from(config.clone());
+        assert_eq!(request.config.velocity_factor, config.velocity_factor);
+        assert_eq!(request.config.mode, config.mode);
+        assert_eq!(request.config.band_indices, config.band_indices);
+    }
+
+    #[test]
+    fn execute_request_checked_response_contains_results() {
+        let response = execute_request_checked(AppRequest::new(AppConfig::default()))
+            .expect("default config should succeed");
+        assert!(!response.results.calculations.is_empty());
+        assert_eq!(response.results.config.mode, CalcMode::Resonant);
+    }
+
+    #[test]
+    fn results_display_document_is_fully_populated_for_resonant_default() {
+        let results = run_calculation(AppConfig::default());
+        let doc = results_display_document(&results);
+
+        assert!(!doc.overview_heading.is_empty());
+        assert!(!doc.overview_header_lines.is_empty());
+        assert!(!doc.band_views.is_empty());
+        assert!(!doc.summary_lines.is_empty());
+        assert!(!doc.sections.is_empty());
+    }
+
+    #[test]
+    fn results_display_document_is_fully_populated_for_non_resonant() {
+        let mut config = AppConfig::default();
+        config.mode = CalcMode::NonResonant;
+        let results = run_calculation(config);
+        let doc = results_display_document(&results);
+
+        assert!(!doc.overview_heading.is_empty());
+        assert!(!doc.band_views.is_empty());
+        assert!(!doc.sections.is_empty());
+    }
+
+    #[test]
+    fn all_antenna_models_execute_without_error() {
+        let models = [
+            Some(AntennaModel::Dipole),
+            Some(AntennaModel::InvertedVDipole),
+            Some(AntennaModel::EndFedHalfWave),
+            Some(AntennaModel::FullWaveLoop),
+            Some(AntennaModel::OffCenterFedDipole),
+            None,
+        ];
+        for model in &models {
+            let mut config = AppConfig::default();
+            config.antenna_model = *model;
+            execute_request_checked(AppRequest::new(config))
+                .expect("all antenna models should succeed with default config");
+        }
+    }
+
+    #[test]
+    fn all_calc_modes_execute_without_error() {
+        for mode in &[CalcMode::Resonant, CalcMode::NonResonant] {
+            let mut config = AppConfig::default();
+            config.mode = *mode;
+            execute_request_checked(AppRequest::new(config))
+                .expect("both calc modes should succeed with default config");
+        }
     }
 }
 

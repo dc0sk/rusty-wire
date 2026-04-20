@@ -1,51 +1,35 @@
 # Testing
 
-This document describes the automated test coverage in Rusty Wire and how to run it.
+Rusty Wire uses three test layers:
 
-## Overview
+- Rust tests via `cargo test` (unit + integration)
+- `scripts/test-itu-region-bands.sh` for region-band regression checks
+- `scripts/test-multi-optima.sh` for non-resonant multi-optima regression sweeps
 
-Rusty Wire currently uses three layers of testing:
-
-- `cargo test` for unit tests and integration tests
-- `scripts/test-multi-optima.sh` for empirical non-resonant multi-optima discovery
-- `scripts/test-itu-region-bands.sh` for region-aware band listing regression checks
-
-The codebase currently includes:
-
-- Unit tests in `src/app.rs`, `src/bands.rs`, `src/calculations.rs`, `src/cli.rs`, and `src/export.rs`
-- Integration tests in `tests/cli_integration.rs`
-
-## Cargo Test
-
-Run the full Rust test suite:
+## Primary Command
 
 ```bash
 cargo test
 ```
-
-This executes:
-
-- Unit tests for application configuration and orchestration
-- Unit tests for band and region models
-- Unit tests for calculation algorithms and transformer ratios
-- Unit tests for export path validation and formatting behavior
-- Integration tests that invoke the compiled `rusty-wire` binary through `std::process::Command`
 
 Useful variants:
 
 ```bash
 cargo test -- --nocapture
 cargo test cli_integration
-cargo test run_calculation
 ```
 
-Use `--nocapture` when you want to see test output while debugging.
+## Integration Coverage
 
-## Integration Tests
+Integration tests live in `tests/cli_integration.rs` and validate real binary behavior, including:
 
-The integration suite in `tests/cli_integration.rs` exercises the real binary rather than internal helper functions.
+- no-argument help output
+- invalid input validation (for example velocity and mixed-unit window flags)
+- region-aware band listing
+- transformer recommendation resolution
+- export path behavior for single and multi-format runs
 
-Current CLI integration coverage includes:
+## Regression Scripts
 
 - no-argument invocation prints help
 - mixed meter/feet constraints return a validation error
@@ -88,46 +72,48 @@ Run:
 ./scripts/test-itu-region-bands.sh
 ```
 
-Purpose:
+Checks listed ranges for Regions 1, 2, and 3.
 
-- builds the project if needed
-- checks listed bands for Regions 1, 2, and 3
-- verifies region-specific amateur band ranges remain correct
+### Multi-optima sweep
 
-This script is primarily a regression check for the region-aware band database and CLI band listing behavior.
+```bash
+./scripts/test-multi-optima.sh
+```
+
+Builds and sweeps parameter combinations, then exits at the first confirmed multi-optima case.
+
+Environment variables for the sweep script:
+- `BIN` default: `target/debug/rusty-wire`
+- `SWEEP_OUT` default: `/tmp/sweep_out.txt`
 
 ## Recommended Workflow
 
-For normal development:
+Default pre-push verification:
 
 ```bash
+cargo fmt
+cargo check
 cargo test
 ```
 
-For changes affecting CLI behavior, regions, or exports:
+On version bump (before tagging):
+
+```bash
+cargo sbom
+cargo sbom-cdx
+git add sbom/
+```
+
+When changing region or band behavior:
 
 ```bash
 cargo test
 ./scripts/test-itu-region-bands.sh
 ```
 
-For changes affecting non-resonant optimization behavior:
+When changing non-resonant optimization behavior:
 
 ```bash
 cargo test
 ./scripts/test-multi-optima.sh
 ```
-
-For a broader confidence check after larger refactors:
-
-```bash
-cargo test
-./scripts/test-itu-region-bands.sh
-./scripts/test-multi-optima.sh
-```
-
-## Notes
-
-- `cargo test` is the authoritative fast feedback loop and should be run for all code changes.
-- The shell scripts are slower and more scenario-oriented; they complement the Rust tests rather than replace them.
-- Interactive mode now has stdin/stdout-driven unit coverage for menu navigation, band entry validation, region switching, transformer prompt handling, and export-format rejection.

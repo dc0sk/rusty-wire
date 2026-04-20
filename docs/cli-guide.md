@@ -1,10 +1,12 @@
-# Rusty Wire
+# CLI Guide
 
 **Version 2.2.0**
 
-Rusty Wire is a Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.
+Use this page as the command reference for Rusty Wire.
 
-See [CHANGELOG.md](CHANGELOG.md) for the full release history.
+For test procedures, see [testing.md](testing.md).
+For architecture details, see [architecture.md](architecture.md).
+For release history, see [CHANGELOG.md](CHANGELOG.md).
 
 It supports:
 - Resonant wire length calculations (half-wave, full-wave, quarter-wave)
@@ -68,193 +70,123 @@ This feature applies to both multi-band and quick single-band calculations in in
 
 ## CLI Usage
 
+
 ```bash
 rusty-wire [OPTIONS]
 ```
 
-If running from source during development, use:
+From source:
 
 ```bash
 cargo run -- [OPTIONS]
 ```
 
-### Core options
+Interactive mode:
 
-- `--help` — Display help message
-- `--interactive` — Launch interactive menu mode
-- `--list-bands` — List all available bands
-- `--region <1|2|3>` — ITU region selection (default: `1`)
-- `--bands <csv>` — Comma-separated band names and optional ranges (e.g., `40m,20m,10m-15m,60m-80m`)
-- `--mode <resonant|non-resonant>` — Calculation mode (default: resonant)
-- `--antenna <dipole|inverted-v|efhw|loop|ocfd>` — Filter output to a single antenna model (default: all models)
-- `--transformer <recommended|1:1|1:2|1:4|1:5|1:6|1:9|1:16|1:49|1:56|1:64>` — Feed transformer selection (default: `recommended`)
-- `--velocity <value>` — Velocity factor (0.0–1.0, default: 0.95)
+```bash
+rusty-wire --interactive
+```
 
-### Non-resonant search window constraints
+## Core Options
 
-> Only relevant for `--mode non-resonant`.
+- `--help` Show help
+- `--interactive` Start interactive mode
+- `--list-bands` List bands for selected region
+- `--region <1|2|3>` ITU region (default: `1`)
+- `--bands <csv>` Band names/ranges, for example `40m,20m,10m-15m`
+- `--mode <resonant|non-resonant>` Calculation mode (default: `resonant`)
+- `--velocity <value>` Velocity factor, valid range `0.50..=1.00` (default: `0.95`)
+- `--antenna <dipole|inverted-v|efhw|loop|ocfd>` Filter output to one model (omit to show all)
+- `--transformer <recommended|1:1|1:2|1:4|1:5|1:6|1:9|1:16|1:49|1:56|1:64>`
+- `--units <m|ft|both>` Output unit filter
 
-Metric (default):
-- `--wire-min <meters>` — Minimum wire length in meters
-- `--wire-max <meters>` — Maximum wire length in meters
+## Non-Resonant Window Options
 
-Feet (optional alternative):
-- `--wire-min-ft <feet>` — Minimum wire length in feet
-- `--wire-max-ft <feet>` — Maximum wire length in feet
+Only used with `--mode non-resonant`.
 
-Notes:
-- Do not mix meter and feet constraints in the same command.
-- If no `--bands` are provided, Rusty Wire uses the built-in default band set.
-- Region-specific amateur band ranges are applied before calculation.
+Metric:
+- `--wire-min <meters>`
+- `--wire-max <meters>`
 
-### ITU region behavior
+Imperial:
+- `--wire-min-ft <feet>`
+- `--wire-max-ft <feet>`
 
-- Region `1`: Europe, Africa, Middle East
-- Region `2`: Americas
-- Region `3`: Asia-Pacific
+Rules:
+- Do not mix metric and imperial window flags in the same command.
+- If `--bands` is omitted, Rusty Wire uses the built-in default band set.
 
-Example regional differences currently modeled:
+## Transformer Recommendation Defaults
+
+`--transformer recommended` is the default. Current policy:
+
+- Resonant + no specific model: `1:1`
+- Non-resonant + no specific model: `1:9`
+- Dipole / inverted-v / loop: `1:1`
+- EFHW: `1:56`
+- OCFD: `1:4`
+
+You can always override with an explicit ratio.
+
+## Export Options
+
+- `--export <csv,json,markdown,txt>` One or more formats
+- `--output <file>` Output path (single format uses this name; multiple formats use per-format filenames)
+
+Path safety:
+- Absolute paths are rejected.
+- Parent traversal with `..` is rejected.
+
+## Region Notes
+
+Modeled differences include:
 - 80m: R1 `3.5-3.8`, R2 `3.5-4.0`, R3 `3.5-3.9`
 - 40m: R1 `7.0-7.2`, R2 `7.0-7.3`, R3 `7.0-7.2`
-- 60m: harmonized segment `5.3515-5.3665`
-
-### Unit system and display options
-
-- `--units <m|ft|both>` — Display units for output (auto-detected from input, default: both when mixing inputs)
-  - `m` — Metric only (meters)
-  - `ft` — Imperial only (feet)
-  - `both` — Both metrics and imperial
-
-### Antenna model selection
-
-- If `--antenna` is omitted, per-band output includes dipole, end-fed half-wave, full-wave loop, inverted-V, and OCFD dimensions.
-- If `--antenna dipole` is selected, output is filtered to dipole lengths.
-- If `--antenna inverted-v` is selected, output is filtered to inverted-V total length, per-leg length, and estimated span at common apex angles.
-- If `--antenna efhw` is selected, output is filtered to end-fed half-wave lengths.
-- If `--antenna loop` is selected, output is filtered to full-wave loop dimensions.
-- If `--antenna ocfd` is selected, output is filtered to off-center-fed dipole leg splits.
-- Resonant point summary remains dipole-oriented and is shown for `dipole`, `inverted-v`, or when all models are shown.
-- Compromise lengths are shown for all antenna selections; in `efhw`, `loop`, and `ocfd` modes they are labeled as tuner-assisted, dipole-derived guidance.
-- In `ocfd` mode, each compromise line is a total wire length and now includes:
-  - explicit 33/67 leg lengths
-  - explicit 20/80 leg lengths
-  - an optimized split ratio recommendation with worst-leg resonance-clearance percentage
-
-### Transformer recommendations
-
-- `--transformer recommended` is the default and resolves to a concrete ratio from the selected mode and antenna model.
-- Current built-in recommendations are:
-  - generic resonant mode: `1:1`
-  - generic non-resonant mode: `1:9`
-  - dipole, inverted-V, and loop: `1:1`
-  - EFHW: `1:56`
-  - OCFD: `1:4`
-- You can always override the recommendation with an explicit ratio.
-- The current recommendation logic is a fixed policy, not a transformer optimization pass.
-
-### Export options
-
-- `--export <format-list>` — Comma-separated export formats (e.g., `csv,json,markdown,txt`)
-  - `csv` — Comma-separated values
-  - `json` — JSON format
-  - `markdown` — Markdown table format
-  - `txt` — Plain text table format
-- `--output <file>` — Output file path for exports (default: generates filename per format). Only relative file paths are accepted; absolute paths and parent-directory references (`..`) are rejected for safety.
-
-Exports also include resonant points within the active search window for each selected band.
-In resonant mode, non-resonant recommendation payloads are omitted from exports.
-
-### SBOM generation
-
-Rusty Wire supports SBOM generation using Cargo with both SPDX and CycloneDX output.
-
-SPDX is the default/recommended format.
-
-Install SBOM support:
-
-```bash
-cargo install cargo-sbom
-```
-
-Generate SPDX via the repository alias:
-
-```bash
-cargo sbom
-```
-
-Generate CycloneDX JSON:
-
-```bash
-cargo sbom-cdx
-```
-
-Or use the helper script:
-
-```bash
-./scripts/generate-sbom.sh
-```
-
-Use CycloneDX from the helper script:
-
-```bash
-./scripts/generate-sbom.sh cyclonedx
-```
-
-Default tracked outputs are `sbom/rusty-wire.spdx.json` and `sbom/rusty-wire.cdx.json`.
-
-Pre-push workflow in this repository regenerates `sbom/rusty-wire.spdx.json` with deterministic normalization (requires `jq` or `jaq`) and blocks push until SBOM updates are committed.
+- 60m: harmonized `5.3515-5.3665`
 
 ## Examples
 
-### 1) Default run with defaults (resonant + default bands)
+Resonant run:
 
 ```bash
-rusty-wire --velocity 0.95
+rusty-wire --mode resonant --bands 40m,20m --velocity 0.95
 ```
 
-### 2) Resonant calculation for selected bands
+Non-resonant run with metric window:
 
 ```bash
-rusty-wire --mode resonant --bands 20m,10m --velocity 0.90
+rusty-wire --mode non-resonant --bands 40m,20m,10m --wire-min 10 --wire-max 35
 ```
 
-### 2a) Region-specific listing and calculation
+Non-resonant run with feet window:
 
 ```bash
-rusty-wire --list-bands --region 1
-rusty-wire --region 2 --mode resonant --bands 40m --velocity 0.95
+rusty-wire --mode non-resonant --bands 20m,15m --wire-min-ft 30 --wire-max-ft 90 --units ft
 ```
 
-### 3) Non-resonant optimization with metric constraints
+Antenna-specific resonant output:
 
 ```bash
-rusty-wire --mode non-resonant --bands 20m,10m --velocity 0.90 --wire-min 10 --wire-max 20
+rusty-wire --mode resonant --bands 40m,20m --antenna ocfd --transformer recommended
 ```
 
-### 4) Non-resonant optimization with feet constraints
+List regional bands:
 
 ```bash
-rusty-wire --mode non-resonant --bands 20m,10m --velocity 0.90 --wire-min-ft 30 --wire-max-ft 90
+rusty-wire --list-bands --region 2
 ```
 
-### 5) Export to single format (CSV)
-
-```bash
-rusty-wire --mode resonant --bands 40m-10m --export csv --output results.csv
-```
-
-### 6) Export to multiple formats simultaneously
+Export multiple formats:
 
 ```bash
 rusty-wire --mode non-resonant --bands 20m,10m-15m --export csv,json,markdown --output results
 ```
 
-This generates: `results.csv`, `results.json`, `results.md`
-
-### 7) Metric-only output and export
+SBOM commands:
 
 ```bash
-rusty-wire --mode non-resonant --bands 20m,10m --wire-min 10 --wire-max 20 --units m --export csv,json
+cargo sbom
+cargo sbom-cdx
 ```
 
 ### 8) Imperial-only output and export

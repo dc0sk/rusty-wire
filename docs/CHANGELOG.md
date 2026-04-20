@@ -4,15 +4,36 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
-## [2.2.0] - 2026-04-14
+### Added
+- **Library entry point** (`src/lib.rs`): app, bands, and calculations modules are now exposed as a proper library crate; a thin `run_cli(args)` function bridges the binary entry-point to the CLI module. External front-ends (e.g. a future GUI) can depend on `rusty_wire::app::*` without pulling in CLI logic.
+- **Shadow CLI types complete**: added `CliAntennaModel` and applied `Copy` to all CLI shadow enums; all five domain-facing fields in the `Cli` struct (`region`, `mode`, `antenna`, `units`, `export`) now use dedicated `Cli*` shadow types instead of the domain types directly.
+- **App-layer contract tests**: six tests guard the stable `AppRequest → AppResponse` API boundary and assert that `ResultsDisplayDocument` is fully populated for both resonant and non-resonant defaults, and that all antenna models and calc modes execute without error.
+- **Structured error handling (Priority 1)**: extended `AppError` with `EmptyBandSelection` and `AllBandsSkipped` variants; added empty-band check to `validate_config` and post-calculation check to `run_calculation_checked`. Removed three duplicated `calculations.is_empty()` guards from `cli.rs`.
+- **Proper CLI exit codes**: `run_from_args` now returns `bool`; `main.rs` propagates a non-zero exit code on any error.
+- **Regression coverage**: new unit and integration tests for all new error paths including exit code assertions.
+- **`--step` flag for configurable non-resonant search resolution**: `AppConfig` now carries `step_m: f64` (default 0.05 m); the `--step <METERS>` CLI flag overrides it. `AppError::InvalidSearchStep` is returned when the step is ≤ 0 or ≥ the wire length window. Four unit tests and three integration tests cover valid, zero, and out-of-window cases.
 
 ### Changed
-- **App-layer display views extracted**: moved reusable results-display view construction into `src/app.rs` so CLI output rendering and future UI surfaces can consume the same normalized presentation data.
-- **Shared helper centralization for UI prep**: consolidated band-selection parsing/label resolution and transformer-fallback messaging in app-layer helpers used by both CLI and upcoming UI integration work.
-- **Regression/docs refresh for refactor coverage**: updated architecture and testing docs plus regression paths to reflect the shared helper and display-view extraction changes.
+- **clap decoupled from domain types**: `CalcMode`, `ExportFormat`, `UnitSystem`, `AntennaModel`, and `ITURegion` no longer implement `clap::ValueEnum`; the CLI wiring lives entirely in `cli.rs`.
+- **Documentation consolidation**: reduced redundancy across README, CLI guide, testing guide, and roadmap; tightened command references and moved deep details to their canonical docs.
+
+### Added
+- **Session exports documentation**: added `docs/steering.md` and `docs/memories.md` exports for session steering and memory state snapshots.
+
+## [2.2.0] - 2026-04-14
+
+### Added
+- **Interactive session defaults**: interactive mode now remembers user choices during a session and reuses them as prompt defaults.
+
+### Changed
+- **UI-integration preparation**: refactored application layering by extracting display views into the app layer and centralizing shared band/transformer helpers.
+- **Validation and CLI cleanup**: refactored app-side validation and streamlined CLI housekeeping to support cleaner front-end boundaries.
+- **Regression updates**: refreshed supporting regression coverage/scripts to align with helper and app-layer refactors.
+- **Documentation refresh**: updated roadmap and user/developer docs to reflect interactive session defaults and UI-prep architecture direction.
 
 ### Fixed
-- **OCFD/Windom labeling clarity**: corrected mislabeling in OCFD compromise/output paths so terminology is consistent with off-center-fed dipole behavior and guidance text.
+- **Output labeling**: fixed the recommended marker in both-units optima output.
+- **Antenna naming**: corrected OCFD/Windom mislabeling in display output.
 
 ## [2.1.0] - 2026-04-12
 
@@ -27,8 +48,7 @@ All notable changes to Rusty Wire are documented here.
 ## [2.0.0] - 2026-04-12
 
 ### Added
-- **SBOM generation via Cargo**: added Cargo aliases for SPDX and CycloneDX generation using `cargo-sbom`, with `cargo sbom` defaulting to SPDX and `cargo sbom-cdx` for CycloneDX JSON.
-- **Pre-push SPDX SBOM step**: added a repository pre-push hook that regenerates `sbom/rusty-wire.spdx.json` and blocks push when the tracked SBOM is outdated.
+- **SBOM generation via Cargo**: added Cargo aliases for SPDX and CycloneDX generation using `cargo-sbom`, with `cargo sbom` defaulting to SPDX and `cargo sbom-cdx` for CycloneDX JSON. SBOM regeneration is run on version bumps, not on every push.
 
 ### Changed
 - **Band selection syntax refactor (breaking)**: `--bands` now accepts real band names and name ranges such as `10m,40m,10m-15m,60m-80m` in both CLI and interactive mode.

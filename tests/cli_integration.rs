@@ -38,6 +38,7 @@ fn mixed_meter_and_feet_constraints_show_error() {
         .expect("failed to run rusty-wire");
     let stderr = String::from_utf8_lossy(&output.stderr);
 
+    assert!(!output.status.success());
     assert!(stderr.contains("cannot mix meter and feet constraints"));
 }
 
@@ -49,6 +50,7 @@ fn invalid_velocity_shows_error() {
         .expect("failed to run rusty-wire");
     let stderr = String::from_utf8_lossy(&output.stderr);
 
+    assert!(!output.status.success());
     assert!(stderr.contains("velocity factor must be between 0.50 and 1.00"));
 }
 
@@ -276,4 +278,101 @@ fn efhw_recommended_transformer_resolves_to_1_56() {
 
     assert!(output.status.success());
     assert!(stdout.contains("Using transformer ratio: 1:56"));
+}
+
+#[test]
+fn invalid_wire_window_inverted_shows_structured_error() {
+    // Passing a min larger than max should produce a structured AppError through execute_request_checked.
+    let output = binary()
+        .args([
+            "--bands",
+            "40m",
+            "--mode",
+            "non-resonant",
+            "--wire-min",
+            "100",
+            "--wire-max",
+            "10",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("invalid wire length window in meters"));
+}
+
+#[test]
+fn velocity_out_of_range_shows_structured_error() {
+    let output = binary()
+        .args(["--bands", "40m", "--velocity", "0.1"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("velocity factor must be between 0.50 and 1.00 (got 0.100)"));
+}
+
+#[test]
+fn step_flag_accepted_and_non_resonant_succeeds() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m,20m",
+            "--mode",
+            "non-resonant",
+            "--step",
+            "0.01",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn step_flag_zero_shows_structured_error() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m,20m",
+            "--mode",
+            "non-resonant",
+            "--step",
+            "0",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("search step must be greater than 0"));
+}
+
+#[test]
+fn step_flag_exceeding_window_shows_structured_error() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m",
+            "--mode",
+            "non-resonant",
+            "--wire-min",
+            "8",
+            "--wire-max",
+            "10",
+            "--step",
+            "5",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("search step must be greater than 0"));
 }
