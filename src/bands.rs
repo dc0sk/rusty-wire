@@ -1,4 +1,3 @@
-use clap::ValueEnum;
 /// Define ham radio and shortwave bands with their characteristics
 use std::fmt;
 use std::str::FromStr;
@@ -65,16 +64,6 @@ impl FromStr for ITURegion {
             "3" => Ok(ITURegion::Region3),
             _ => Err(format!("Invalid ITU region '{}'. Must be 1, 2, or 3.", s)),
         }
-    }
-}
-
-impl ValueEnum for ITURegion {
-    fn value_variants<'a>() -> &'a [Self] {
-        ALL_REGIONS
-    }
-
-    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
-        Some(clap::builder::PossibleValue::new(self.short_name()).help(self.long_name()))
     }
 }
 

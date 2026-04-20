@@ -30,12 +30,12 @@ use std::io::{self, BufRead, Write};
 #[command(arg_required_else_help = true)]
 struct Cli {
     /// ITU Region (1=Europe/Africa/Middle East, 2=Americas, 3=Asia-Pacific)
-    #[arg(short, long, value_enum, default_value_t = DEFAULT_ITU_REGION)]
-    region: ITURegion,
+    #[arg(short, long, value_enum, default_value = "1")]
+    region: CliITURegion,
 
     /// Calculation mode
-    #[arg(short, long, value_enum, default_value_t = CalcMode::Resonant)]
-    mode: CalcMode,
+    #[arg(short, long, value_enum, default_value = "resonant")]
+    mode: CliCalcMode,
 
     /// Band names/ranges (comma-separated, e.g., "40m,20m,10m-15m,60m-80m")
     #[arg(short, long)]
@@ -51,7 +51,7 @@ struct Cli {
 
     /// Antenna model (omit to show all models per band)
     #[arg(long, value_enum)]
-    antenna: Option<AntennaModel>,
+    antenna: Option<CliAntennaModel>,
 
     /// Wire length window minimum in meters
     #[arg(long)]
@@ -71,11 +71,11 @@ struct Cli {
 
     /// Display units (m, ft, both)
     #[arg(short, long, value_enum)]
-    units: Option<UnitSystem>,
+    units: Option<CliUnitSystem>,
 
     /// Export formats (comma-separated: csv, json, markdown, txt)
     #[arg(short, long, value_delimiter = ',')]
-    export: Option<Vec<ExportFormat>>,
+    export: Option<Vec<CliExportFormat>>,
 
     /// Output file path for exports
     #[arg(short, long)]
@@ -90,7 +90,33 @@ struct Cli {
     interactive: bool,
 }
 
-#[derive(clap::ValueEnum, Clone, Debug)]
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+enum CliAntennaModel {
+    #[clap(name = "dipole", help = "Center-fed dipole model")]
+    Dipole,
+    #[clap(name = "inverted-v", help = "Inverted-V dipole model")]
+    InvertedVDipole,
+    #[clap(name = "efhw", help = "End-fed half-wave model")]
+    EndFedHalfWave,
+    #[clap(name = "loop", help = "Full-wave loop model")]
+    FullWaveLoop,
+    #[clap(name = "ocfd", help = "Off-center-fed dipole (OCFD) model")]
+    OffCenterFedDipole,
+}
+
+impl From<CliAntennaModel> for AntennaModel {
+    fn from(model: CliAntennaModel) -> Self {
+        match model {
+            CliAntennaModel::Dipole => AntennaModel::Dipole,
+            CliAntennaModel::InvertedVDipole => AntennaModel::InvertedVDipole,
+            CliAntennaModel::EndFedHalfWave => AntennaModel::EndFedHalfWave,
+            CliAntennaModel::FullWaveLoop => AntennaModel::FullWaveLoop,
+            CliAntennaModel::OffCenterFedDipole => AntennaModel::OffCenterFedDipole,
+        }
+    }
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
 enum CliCalcMode {
     Resonant,
     NonResonant,
@@ -105,7 +131,7 @@ impl From<CliCalcMode> for CalcMode {
     }
 }
 
-#[derive(clap::ValueEnum, Clone, Debug)]
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
 enum CliUnitSystem {
     M,
     Ft,
@@ -122,7 +148,7 @@ impl From<CliUnitSystem> for UnitSystem {
     }
 }
 
-#[derive(clap::ValueEnum, Clone, Debug)]
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
 enum CliExportFormat {
     Csv,
     Json,
@@ -227,7 +253,7 @@ impl CliTransformerSelection {
     }
 }
 
-#[derive(clap::ValueEnum, Clone, Debug)]
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
 enum CliITURegion {
     #[clap(name = "1")]
     Region1,
@@ -262,12 +288,12 @@ pub fn run_from_args(args: &[String]) -> bool {
     }
 
     if cli.list_bands {
-        show_all_bands_for_region(cli.region);
+        show_all_bands_for_region(cli.region.into());
         return true;
     }
 
     let bands = match &cli.bands {
-        Some(selection) => match parse_band_selection(selection, cli.region) {
+        Some(selection) => match parse_band_selection(selection, cli.region.into()) {
             Ok(parsed) => parsed,
             Err(err) => {
                 eprintln!("Error: invalid --bands value: {}", err);
@@ -328,18 +354,20 @@ pub fn run_from_args(args: &[String]) -> bool {
         .map(ExportFormat::from)
         .collect::<Vec<_>>();
 
-    let transformer_ratio = cli.transformer.resolve(cli.mode, cli.antenna);
+    let mode = CalcMode::from(cli.mode);
+    let antenna_model = cli.antenna.map(AntennaModel::from);
+    let transformer_ratio = cli.transformer.resolve(mode, antenna_model);
 
     let config = AppConfig {
         band_indices: bands,
         velocity_factor: cli.velocity,
-        mode: CalcMode::from(cli.mode),
+        mode,
         wire_min_m,
         wire_max_m,
         units,
-        itu_region: cli.region,
+        itu_region: cli.region.into(),
         transformer_ratio,
-        antenna_model: cli.antenna,
+        antenna_model,
     };
 
     let results = match execute_request_checked(AppRequest::new(config)) {

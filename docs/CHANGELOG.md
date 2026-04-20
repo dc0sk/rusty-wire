@@ -5,11 +5,15 @@ All notable changes to Rusty Wire are documented here.
 ## [Unreleased]
 
 ### Added
-- **Structured error handling (Priority 1)**: extended `AppError` with `EmptyBandSelection` and `AllBandsSkipped` variants; added empty-band check to `validate_config` and post-calculation check to `run_calculation_checked`. Removed three duplicated `calculations.is_empty()` guards from `cli.rs` — all error paths now flow through the app layer.
-- **Proper CLI exit codes**: `run_from_args` now returns `bool`; `main.rs` propagates a non-zero exit code on any error, fixing the bug where invalid inputs silently exited 0.
-- **Regression coverage**: added unit tests for `EmptyBandSelection` and `AllBandsSkipped`; added integration tests for invalid wire window and out-of-range velocity including exit code assertions.
+- **Library entry point** (`src/lib.rs`): app, bands, and calculations modules are now exposed as a proper library crate; a thin `run_cli(args)` function bridges the binary entry-point to the CLI module. External front-ends (e.g. a future GUI) can depend on `rusty_wire::app::*` without pulling in CLI logic.
+- **Shadow CLI types complete**: added `CliAntennaModel` and applied `Copy` to all CLI shadow enums; all five domain-facing fields in the `Cli` struct (`region`, `mode`, `antenna`, `units`, `export`) now use dedicated `Cli*` shadow types instead of the domain types directly.
+- **App-layer contract tests**: six tests guard the stable `AppRequest → AppResponse` API boundary and assert that `ResultsDisplayDocument` is fully populated for both resonant and non-resonant defaults, and that all antenna models and calc modes execute without error.
+- **Structured error handling (Priority 1)**: extended `AppError` with `EmptyBandSelection` and `AllBandsSkipped` variants; added empty-band check to `validate_config` and post-calculation check to `run_calculation_checked`. Removed three duplicated `calculations.is_empty()` guards from `cli.rs`.
+- **Proper CLI exit codes**: `run_from_args` now returns `bool`; `main.rs` propagates a non-zero exit code on any error.
+- **Regression coverage**: new unit and integration tests for all new error paths including exit code assertions.
 
 ### Changed
+- **clap decoupled from domain types**: `CalcMode`, `ExportFormat`, `UnitSystem`, `AntennaModel`, and `ITURegion` no longer implement `clap::ValueEnum`; the CLI wiring lives entirely in `cli.rs`.
 - **Documentation consolidation**: reduced redundancy across README, CLI guide, testing guide, and roadmap; tightened command references and moved deep details to their canonical docs.
 
 ### Added
