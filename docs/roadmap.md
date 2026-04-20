@@ -1,6 +1,6 @@
 # Roadmap
 
-This document captures the most relevant work that remains after the 2.2.0 release.
+This document captures the most relevant work that remains after the 2.3.0 release.
 
 ## Recently Completed
 
@@ -11,27 +11,23 @@ This document captures the most relevant work that remains after the 2.2.0 relea
 - export path hardening
 - SBOM generation and pre-push enforcement
 - broad unit/integration/script coverage
+- structured error handling with `AppError` across all validation paths
+- proper CLI exit codes (`run_from_args` returns `bool`)
+- shadow CLI types decoupled from domain types
+- library crate entry point (`src/lib.rs`)
+- app-layer contract tests for `AppRequest → AppResponse` boundary
+- shared app-layer wire-window normalization and band-selection parsing
+- configurable non-resonant search step (`--step`)
+- `--quiet` flag for single-line scripting output
+- `--freq <MHz>` flag for direct frequency input (bypasses band selection)
+- `--velocity-sweep <v1,v2,...>` flag for multi-VF comparison tables
 
 ## Current Priorities
 
-1. Error handling cleanup
-2. App-layer API refinements for future GUI work
-3. Search/analysis controls for power users
-4. Advanced frequency and custom-band inputs
-5. Additional antenna models and recommendation logic
-- clap-based CLI parsing and no-argument help behavior
-- interactive mode restoration behind `--interactive`
-- interactive-mode I/O refactor and automated prompt/menu coverage
-- region-aware band selection and named band/range input
-- antenna model expansion through EFHW, loop, inverted-V, and OCFD
-- recommended transformer selection with mode/model-aware defaults
-- export path validation hardening
-- SBOM generation and pre-push SBOM enforcement
-- unit, integration, and regression-script coverage for current CLI behavior
-- testing, architecture, and CLI documentation refresh
-- shared app-layer wire-window normalization for CLI and future UI input paths
-- shared app-layer band-selection parsing and label resolution for CLI and future UI input paths
-- shared app-layer transformer recommendation fallback messaging for CLI and future UI input paths
+1. App-layer API refinements for future GUI work
+2. Advanced custom-band inputs
+3. Additional antenna models and recommendation logic
+4. Interactive-mode testability and automated prompt coverage
 
 ## 1) Error Handling Cleanup
 

@@ -4,6 +4,8 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-04-20
+
 ### Added
 - **`--quiet` flag**: suppresses the full results table. In non-resonant mode prints only the recommended wire length on a single line (respects `--units`); in resonant mode exits silently with code 0. Useful for scripting and automation.
 - **`--freq <MHz>` flag**: computes wire lengths for a single explicit frequency instead of scanning named bands. Accepts any positive value up to 1000 MHz; bypasses band selection entirely. Combines with `--mode`, `--antenna`, `--quiet`, and all other output flags. `AppConfig` gained a `custom_freq_mhz: Option<f64>` field; `AppError::InvalidFrequency` is returned for out-of-range values.
@@ -15,14 +17,11 @@ All notable changes to Rusty Wire are documented here.
 - **Structured error handling (Priority 1)**: extended `AppError` with `EmptyBandSelection` and `AllBandsSkipped` variants; added empty-band check to `validate_config` and post-calculation check to `run_calculation_checked`. Removed three duplicated `calculations.is_empty()` guards from `cli.rs`.
 - **Proper CLI exit codes**: `run_from_args` now returns `bool`; `main.rs` propagates a non-zero exit code on any error.
 - **Regression coverage**: new unit and integration tests for all new error paths including exit code assertions.
-- **`--step` flag for configurable non-resonant search resolution**: `AppConfig` now carries `step_m: f64` (default 0.05 m); the `--step <METERS>` CLI flag overrides it. `AppError::InvalidSearchStep` is returned when the step is ≤ 0 or ≥ the wire length window. Four unit tests and three integration tests cover valid, zero, and out-of-window cases.
+- **`--step` flag for configurable non-resonant search resolution**: `AppConfig` now carries `step_m: f64` (default 0.05 m); the `--step <METERS>` CLI flag overrides it. `AppError::InvalidSearchStep` is returned when the step is ≤ 0 or ≥ the wire length window.
 
 ### Changed
 - **clap decoupled from domain types**: `CalcMode`, `ExportFormat`, `UnitSystem`, `AntennaModel`, and `ITURegion` no longer implement `clap::ValueEnum`; the CLI wiring lives entirely in `cli.rs`.
-- **Documentation consolidation**: reduced redundancy across README, CLI guide, testing guide, and roadmap; tightened command references and moved deep details to their canonical docs.
-
-### Added
-- **Session exports documentation**: added `docs/steering.md` and `docs/memories.md` exports for session steering and memory state snapshots.
+- **Documentation consolidation**: reduced redundancy across README, CLI guide, testing guide, and roadmap; tightened command references and moved deep details to their canonical docs. Consolidated `memories.md` and `copilot-memories.md` into a single up-to-date `copilot-memories.md`.
 
 ## [2.2.0] - 2026-04-14
 

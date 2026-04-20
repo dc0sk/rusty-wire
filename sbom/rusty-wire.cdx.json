@@ -2,6 +2,346 @@
   "bomFormat": "CycloneDX",
   "components": [
     {
+      "author": "",
+      "bom-ref": "CycloneDxRef-Component-is_terminal_polyfill-1.70.2",
+      "description": "Polyfill for `is_terminal` stdlib feature for use with older MSRVs",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/polyfill-rs/is_terminal_polyfill"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "is_terminal_polyfill",
+      "purl": "pkg:cargo/is_terminal_polyfill@1.70.2",
+      "type": "library",
+      "version": "1.70.2"
+    },
+    {
+      "author": "",
+      "bom-ref": "CycloneDxRef-Component-anstream-1.0.0",
+      "description": "IO stream adapters for writing colored text that will gracefully degrade according to your terminal's capabilities.",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-cli/anstyle.git"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "anstream",
+      "purl": "pkg:cargo/anstream@1.0.0",
+      "type": "library",
+      "version": "1.0.0"
+    },
+    {
+      "author": "",
+      "bom-ref": "CycloneDxRef-Component-clap-4.6.0",
+      "description": "A simple to use, efficient, and full-featured Command Line Argument Parser",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/clap-rs/clap"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "clap",
+      "purl": "pkg:cargo/clap@4.6.0",
+      "type": "library",
+      "version": "4.6.0"
+    },
+    {
+      "author": "",
+      "bom-ref": "CycloneDxRef-Component-anstyle-parse-1.0.0",
+      "description": "Parse ANSI Style Escapes",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-cli/anstyle.git"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "anstyle-parse",
+      "purl": "pkg:cargo/anstyle-parse@1.0.0",
+      "type": "library",
+      "version": "1.0.0"
+    },
+    {
+      "author": "",
+      "bom-ref": "CycloneDxRef-Component-clap_lex-1.1.0",
+      "description": "Minimal, flexible command line parser",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/clap-rs/clap"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "clap_lex",
+      "purl": "pkg:cargo/clap_lex@1.1.0",
+      "type": "library",
+      "version": "1.1.0"
+    },
+    {
+      "author": "Danny Guo <danny@dannyguo.com>, maxbachmann <oss@maxbachmann.de>",
+      "bom-ref": "CycloneDxRef-Component-strsim-0.11.1",
+      "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein,\nOSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and Sørensen-Dice.\n",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/strsim/"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/rapidfuzz/strsim-rs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/rapidfuzz/strsim-rs"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "name": "strsim",
+      "purl": "pkg:cargo/strsim@0.11.1",
+      "type": "library",
+      "version": "0.11.1"
+    },
+    {
+      "author": "",
+      "bom-ref": "CycloneDxRef-Component-heck-0.5.0",
+      "description": "heck is a case conversion library.",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/withoutboats/heck"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "heck",
+      "purl": "pkg:cargo/heck@0.5.0",
+      "type": "library",
+      "version": "0.5.0"
+    },
+    {
+      "author": "David Tolnay <dtolnay@gmail.com>, Alex Crichton <alex@alexcrichton.com>",
+      "bom-ref": "CycloneDxRef-Component-proc-macro2-1.0.106",
+      "description": "A substitute implementation of the compiler's `proc_macro` API to decouple token-based libraries from the procedural macro use case.",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/proc-macro2"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/proc-macro2"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "proc-macro2",
+      "purl": "pkg:cargo/proc-macro2@1.0.106",
+      "type": "library",
+      "version": "1.0.106"
+    },
+    {
+      "author": "",
+      "bom-ref": "CycloneDxRef-Component-colorchoice-1.0.5",
+      "description": "Global override of color control",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-cli/anstyle.git"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "colorchoice",
+      "purl": "pkg:cargo/colorchoice@1.0.5",
+      "type": "library",
+      "version": "1.0.5"
+    },
+    {
+      "author": "David Tolnay <dtolnay@gmail.com>",
+      "bom-ref": "CycloneDxRef-Component-syn-2.0.117",
+      "description": "Parser for Rust source code",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/syn"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/dtolnay/syn"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "syn",
+      "purl": "pkg:cargo/syn@2.0.117",
+      "type": "library",
+      "version": "2.0.117"
+    },
+    {
+      "author": "",
+      "bom-ref": "CycloneDxRef-Component-windows-sys-0.61.2",
+      "description": "Rust for Windows",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/windows-rs"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "windows-sys",
+      "purl": "pkg:cargo/windows-sys@0.61.2",
+      "type": "library",
+      "version": "0.61.2"
+    },
+    {
+      "author": "",
+      "bom-ref": "CycloneDxRef-Component-once_cell_polyfill-1.70.2",
+      "description": "Polyfill for `OnceCell` stdlib feature for use with older MSRVs",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/polyfill-rs/once_cell_polyfill"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "once_cell_polyfill",
+      "purl": "pkg:cargo/once_cell_polyfill@1.70.2",
+      "type": "library",
+      "version": "1.70.2"
+    },
+    {
+      "author": "",
+      "bom-ref": "CycloneDxRef-Component-anstyle-wincon-3.0.11",
+      "description": "Styling legacy Windows terminals",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/rust-cli/anstyle.git"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "anstyle-wincon",
+      "purl": "pkg:cargo/anstyle-wincon@3.0.11",
+      "type": "library",
+      "version": "3.0.11"
+    },
+    {
+      "author": "Joe Wilm <joe@jwilm.com>, Christian Duerr <contact@christianduerr.com>",
+      "bom-ref": "CycloneDxRef-Component-utf8parse-0.2.2",
+      "description": "Table-driven UTF-8 parser",
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.rs/utf8parse/"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/alacritty/vte"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "name": "utf8parse",
+      "purl": "pkg:cargo/utf8parse@0.2.2",
+      "type": "library",
+      "version": "0.2.2"
+    },
+    {
+      "author": "",
+      "bom-ref": "CycloneDxRef-Component-clap_derive-4.6.0",
+      "description": "Parse command line argument by defining a struct, derive crate.",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/clap-rs/clap"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "clap_derive",
+      "purl": "pkg:cargo/clap_derive@4.6.0",
+      "type": "application",
+      "version": "4.6.0"
+    },
+    {
+      "author": "",
+      "bom-ref": "CycloneDxRef-Component-clap_builder-4.6.0",
+      "description": "A simple to use, efficient, and full-featured Command Line Argument Parser",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/clap-rs/clap"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "name": "clap_builder",
+      "purl": "pkg:cargo/clap_builder@4.6.0",
+      "type": "library",
+      "version": "4.6.0"
+    },
+    {
       "author": "David Tolnay <dtolnay@gmail.com>",
       "bom-ref": "CycloneDxRef-Component-unicode-ident-1.0.24",
       "description": "Determine whether characters have the XID_Start or XID_Continue properties according to Unicode Standard Annex #31",
@@ -27,8 +367,8 @@
     },
     {
       "author": "",
-      "bom-ref": "CycloneDxRef-Component-anstream-1.0.0",
-      "description": "IO stream adapters for writing colored text that will gracefully degrade according to your terminal's capabilities.",
+      "bom-ref": "CycloneDxRef-Component-anstyle-query-1.1.5",
+      "description": "Look up colored console capabilities",
       "externalReferences": [
         {
           "type": "vcs",
@@ -40,50 +380,10 @@
           "expression": "MIT OR Apache-2.0"
         }
       ],
-      "name": "anstream",
-      "purl": "pkg:cargo/anstream@1.0.0",
+      "name": "anstyle-query",
+      "purl": "pkg:cargo/anstyle-query@1.1.5",
       "type": "library",
-      "version": "1.0.0"
-    },
-    {
-      "author": "",
-      "bom-ref": "CycloneDxRef-Component-once_cell_polyfill-1.70.2",
-      "description": "Polyfill for `OnceCell` stdlib feature for use with older MSRVs",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/polyfill-rs/once_cell_polyfill"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "once_cell_polyfill",
-      "purl": "pkg:cargo/once_cell_polyfill@1.70.2",
-      "type": "library",
-      "version": "1.70.2"
-    },
-    {
-      "author": "",
-      "bom-ref": "CycloneDxRef-Component-clap_derive-4.6.0",
-      "description": "Parse command line argument by defining a struct, derive crate.",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/clap-rs/clap"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "clap_derive",
-      "purl": "pkg:cargo/clap_derive@4.6.0",
-      "type": "application",
-      "version": "4.6.0"
+      "version": "1.1.5"
     },
     {
       "author": "David Tolnay <dtolnay@gmail.com>",
@@ -148,320 +448,14 @@
       "purl": "pkg:cargo/windows-link@0.2.1",
       "type": "library",
       "version": "0.2.1"
-    },
-    {
-      "author": "",
-      "bom-ref": "CycloneDxRef-Component-anstyle-query-1.1.5",
-      "description": "Look up colored console capabilities",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/rust-cli/anstyle.git"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "anstyle-query",
-      "purl": "pkg:cargo/anstyle-query@1.1.5",
-      "type": "library",
-      "version": "1.1.5"
-    },
-    {
-      "author": "",
-      "bom-ref": "CycloneDxRef-Component-clap_builder-4.6.0",
-      "description": "A simple to use, efficient, and full-featured Command Line Argument Parser",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/clap-rs/clap"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "clap_builder",
-      "purl": "pkg:cargo/clap_builder@4.6.0",
-      "type": "library",
-      "version": "4.6.0"
-    },
-    {
-      "author": "",
-      "bom-ref": "CycloneDxRef-Component-colorchoice-1.0.5",
-      "description": "Global override of color control",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/rust-cli/anstyle.git"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "colorchoice",
-      "purl": "pkg:cargo/colorchoice@1.0.5",
-      "type": "library",
-      "version": "1.0.5"
-    },
-    {
-      "author": "David Tolnay <dtolnay@gmail.com>, Alex Crichton <alex@alexcrichton.com>",
-      "bom-ref": "CycloneDxRef-Component-proc-macro2-1.0.106",
-      "description": "A substitute implementation of the compiler's `proc_macro` API to decouple token-based libraries from the procedural macro use case.",
-      "externalReferences": [
-        {
-          "type": "documentation",
-          "url": "https://docs.rs/proc-macro2"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/dtolnay/proc-macro2"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "proc-macro2",
-      "purl": "pkg:cargo/proc-macro2@1.0.106",
-      "type": "library",
-      "version": "1.0.106"
-    },
-    {
-      "author": "David Tolnay <dtolnay@gmail.com>",
-      "bom-ref": "CycloneDxRef-Component-syn-2.0.117",
-      "description": "Parser for Rust source code",
-      "externalReferences": [
-        {
-          "type": "documentation",
-          "url": "https://docs.rs/syn"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/dtolnay/syn"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "syn",
-      "purl": "pkg:cargo/syn@2.0.117",
-      "type": "library",
-      "version": "2.0.117"
-    },
-    {
-      "author": "",
-      "bom-ref": "CycloneDxRef-Component-heck-0.5.0",
-      "description": "heck is a case conversion library.",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/withoutboats/heck"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "heck",
-      "purl": "pkg:cargo/heck@0.5.0",
-      "type": "library",
-      "version": "0.5.0"
-    },
-    {
-      "author": "",
-      "bom-ref": "CycloneDxRef-Component-is_terminal_polyfill-1.70.2",
-      "description": "Polyfill for `is_terminal` stdlib feature for use with older MSRVs",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/polyfill-rs/is_terminal_polyfill"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "is_terminal_polyfill",
-      "purl": "pkg:cargo/is_terminal_polyfill@1.70.2",
-      "type": "library",
-      "version": "1.70.2"
-    },
-    {
-      "author": "",
-      "bom-ref": "CycloneDxRef-Component-clap_lex-1.1.0",
-      "description": "Minimal, flexible command line parser",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/clap-rs/clap"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "clap_lex",
-      "purl": "pkg:cargo/clap_lex@1.1.0",
-      "type": "library",
-      "version": "1.1.0"
-    },
-    {
-      "author": "",
-      "bom-ref": "CycloneDxRef-Component-anstyle-wincon-3.0.11",
-      "description": "Styling legacy Windows terminals",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/rust-cli/anstyle.git"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "anstyle-wincon",
-      "purl": "pkg:cargo/anstyle-wincon@3.0.11",
-      "type": "library",
-      "version": "3.0.11"
-    },
-    {
-      "author": "Joe Wilm <joe@jwilm.com>, Christian Duerr <contact@christianduerr.com>",
-      "bom-ref": "CycloneDxRef-Component-utf8parse-0.2.2",
-      "description": "Table-driven UTF-8 parser",
-      "externalReferences": [
-        {
-          "type": "documentation",
-          "url": "https://docs.rs/utf8parse/"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/alacritty/vte"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "Apache-2.0 OR MIT"
-        }
-      ],
-      "name": "utf8parse",
-      "purl": "pkg:cargo/utf8parse@0.2.2",
-      "type": "library",
-      "version": "0.2.2"
-    },
-    {
-      "author": "",
-      "bom-ref": "CycloneDxRef-Component-clap-4.6.0",
-      "description": "A simple to use, efficient, and full-featured Command Line Argument Parser",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/clap-rs/clap"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "clap",
-      "purl": "pkg:cargo/clap@4.6.0",
-      "type": "library",
-      "version": "4.6.0"
-    },
-    {
-      "author": "",
-      "bom-ref": "CycloneDxRef-Component-anstyle-parse-1.0.0",
-      "description": "Parse ANSI Style Escapes",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/rust-cli/anstyle.git"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "anstyle-parse",
-      "purl": "pkg:cargo/anstyle-parse@1.0.0",
-      "type": "library",
-      "version": "1.0.0"
-    },
-    {
-      "author": "",
-      "bom-ref": "CycloneDxRef-Component-windows-sys-0.61.2",
-      "description": "Rust for Windows",
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/microsoft/windows-rs"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT OR Apache-2.0"
-        }
-      ],
-      "name": "windows-sys",
-      "purl": "pkg:cargo/windows-sys@0.61.2",
-      "type": "library",
-      "version": "0.61.2"
-    },
-    {
-      "author": "Danny Guo <danny@dannyguo.com>, maxbachmann <oss@maxbachmann.de>",
-      "bom-ref": "CycloneDxRef-Component-strsim-0.11.1",
-      "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein,\nOSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and Sørensen-Dice.\n",
-      "externalReferences": [
-        {
-          "type": "documentation",
-          "url": "https://docs.rs/strsim/"
-        },
-        {
-          "type": "website",
-          "url": "https://github.com/rapidfuzz/strsim-rs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/rapidfuzz/strsim-rs"
-        }
-      ],
-      "licenses": [
-        {
-          "expression": "MIT"
-        }
-      ],
-      "name": "strsim",
-      "purl": "pkg:cargo/strsim@0.11.1",
-      "type": "library",
-      "version": "0.11.1"
     }
   ],
   "dependencies": [
     {
       "dependsOn": [
-        "CycloneDxRef-Component-colorchoice-1.0.5",
-        "CycloneDxRef-Component-utf8parse-0.2.2",
-        "CycloneDxRef-Component-is_terminal_polyfill-1.70.2",
-        "CycloneDxRef-Component-anstyle-wincon-3.0.11",
-        "CycloneDxRef-Component-anstyle-query-1.1.5",
-        "CycloneDxRef-Component-anstyle-parse-1.0.0",
-        "CycloneDxRef-Component-anstyle-1.0.14"
+        "CycloneDxRef-Component-windows-link-0.2.1"
       ],
-      "ref": "CycloneDxRef-Component-anstream-1.0.0"
+      "ref": "CycloneDxRef-Component-windows-sys-0.61.2"
     },
     {
       "dependsOn": [
@@ -471,9 +465,15 @@
     },
     {
       "dependsOn": [
-        "CycloneDxRef-Component-windows-link-0.2.1"
+        "CycloneDxRef-Component-clap-4.6.0"
       ],
-      "ref": "CycloneDxRef-Component-windows-sys-0.61.2"
+      "ref": "CycloneDxRef-Component-rusty-wire-2.3.0"
+    },
+    {
+      "dependsOn": [
+        "CycloneDxRef-Component-unicode-ident-1.0.24"
+      ],
+      "ref": "CycloneDxRef-Component-proc-macro2-1.0.106"
     },
     {
       "dependsOn": [
@@ -483,9 +483,28 @@
     },
     {
       "dependsOn": [
-        "CycloneDxRef-Component-utf8parse-0.2.2"
+        "CycloneDxRef-Component-quote-1.0.45",
+        "CycloneDxRef-Component-heck-0.5.0",
+        "CycloneDxRef-Component-syn-2.0.117",
+        "CycloneDxRef-Component-proc-macro2-1.0.106"
       ],
-      "ref": "CycloneDxRef-Component-anstyle-parse-1.0.0"
+      "ref": "CycloneDxRef-Component-clap_derive-4.6.0"
+    },
+    {
+      "dependsOn": [
+        "CycloneDxRef-Component-clap_builder-4.6.0",
+        "CycloneDxRef-Component-clap_derive-4.6.0"
+      ],
+      "ref": "CycloneDxRef-Component-clap-4.6.0"
+    },
+    {
+      "dependsOn": [
+        "CycloneDxRef-Component-strsim-0.11.1",
+        "CycloneDxRef-Component-clap_lex-1.1.0",
+        "CycloneDxRef-Component-anstream-1.0.0",
+        "CycloneDxRef-Component-anstyle-1.0.14"
+      ],
+      "ref": "CycloneDxRef-Component-clap_builder-4.6.0"
     },
     {
       "dependsOn": [
@@ -497,40 +516,9 @@
     },
     {
       "dependsOn": [
-        "CycloneDxRef-Component-clap_lex-1.1.0",
-        "CycloneDxRef-Component-anstyle-1.0.14",
-        "CycloneDxRef-Component-anstream-1.0.0",
-        "CycloneDxRef-Component-strsim-0.11.1"
+        "CycloneDxRef-Component-utf8parse-0.2.2"
       ],
-      "ref": "CycloneDxRef-Component-clap_builder-4.6.0"
-    },
-    {
-      "dependsOn": [
-        "CycloneDxRef-Component-clap-4.6.0"
-      ],
-      "ref": "CycloneDxRef-Component-rusty-wire-2.1.0"
-    },
-    {
-      "dependsOn": [
-        "CycloneDxRef-Component-clap_derive-4.6.0",
-        "CycloneDxRef-Component-clap_builder-4.6.0"
-      ],
-      "ref": "CycloneDxRef-Component-clap-4.6.0"
-    },
-    {
-      "dependsOn": [
-        "CycloneDxRef-Component-unicode-ident-1.0.24"
-      ],
-      "ref": "CycloneDxRef-Component-proc-macro2-1.0.106"
-    },
-    {
-      "dependsOn": [
-        "CycloneDxRef-Component-syn-2.0.117",
-        "CycloneDxRef-Component-quote-1.0.45",
-        "CycloneDxRef-Component-proc-macro2-1.0.106",
-        "CycloneDxRef-Component-heck-0.5.0"
-      ],
-      "ref": "CycloneDxRef-Component-clap_derive-4.6.0"
+      "ref": "CycloneDxRef-Component-anstyle-parse-1.0.0"
     },
     {
       "dependsOn": [
@@ -539,6 +527,18 @@
         "CycloneDxRef-Component-unicode-ident-1.0.24"
       ],
       "ref": "CycloneDxRef-Component-syn-2.0.117"
+    },
+    {
+      "dependsOn": [
+        "CycloneDxRef-Component-utf8parse-0.2.2",
+        "CycloneDxRef-Component-is_terminal_polyfill-1.70.2",
+        "CycloneDxRef-Component-anstyle-wincon-3.0.11",
+        "CycloneDxRef-Component-anstyle-1.0.14",
+        "CycloneDxRef-Component-anstyle-parse-1.0.0",
+        "CycloneDxRef-Component-anstyle-query-1.1.5",
+        "CycloneDxRef-Component-colorchoice-1.0.5"
+      ],
+      "ref": "CycloneDxRef-Component-anstream-1.0.0"
     }
   ],
   "metadata": {
@@ -551,7 +551,7 @@
       "components": [
         {
           "author": "Simon Keimer (DC0SK)",
-          "bom-ref": "CycloneDxRef-Component-rusty-wire-2.1.0",
+          "bom-ref": "CycloneDxRef-Component-rusty-wire-2.3.0",
           "externalReferences": [],
           "licenses": [
             {
@@ -559,14 +559,14 @@
             }
           ],
           "name": "rusty-wire",
-          "type": "application",
-          "version": "2.1.0"
+          "type": "library",
+          "version": "2.3.0"
         }
       ],
       "name": "rusty-wire",
       "type": "application"
     },
-    "timestamp": "2026-04-12T17:30:33.195Z",
+    "timestamp": "2026-04-20T19:53:02.198Z",
     "tools": [
       {
         "name": "cargo-sbom",
@@ -574,7 +574,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:2528129c-467d-4e30-be39-ba7803c3e3f6",
+  "serialNumber": "urn:uuid:290a8090-6343-4d24-9423-09fdd6b472be",
   "specVersion": "1.6",
   "version": 1
 }
