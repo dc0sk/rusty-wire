@@ -313,3 +313,66 @@ fn velocity_out_of_range_shows_structured_error() {
     assert!(!output.status.success());
     assert!(stderr.contains("velocity factor must be between 0.50 and 1.00 (got 0.100)"));
 }
+
+#[test]
+fn step_flag_accepted_and_non_resonant_succeeds() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m,20m",
+            "--mode",
+            "non-resonant",
+            "--step",
+            "0.01",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn step_flag_zero_shows_structured_error() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m,20m",
+            "--mode",
+            "non-resonant",
+            "--step",
+            "0",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("search step must be greater than 0"));
+}
+
+#[test]
+fn step_flag_exceeding_window_shows_structured_error() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m",
+            "--mode",
+            "non-resonant",
+            "--wire-min",
+            "8",
+            "--wire-max",
+            "10",
+            "--step",
+            "5",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("search step must be greater than 0"));
+}

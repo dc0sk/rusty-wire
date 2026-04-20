@@ -69,6 +69,10 @@ struct Cli {
     #[arg(long)]
     wire_max_ft: Option<f64>,
 
+    /// Non-resonant search step in meters (default: 0.05 m)
+    #[arg(long)]
+    step: Option<f64>,
+
     /// Display units (m, ft, both)
     #[arg(short, long, value_enum)]
     units: Option<CliUnitSystem>,
@@ -364,6 +368,7 @@ pub fn run_from_args(args: &[String]) -> bool {
         mode,
         wire_min_m,
         wire_max_m,
+        step_m: cli.step.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.step_m),
         units,
         itu_region: cli.region.into(),
         transformer_ratio,
@@ -540,6 +545,7 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
         mode,
         wire_min_m,
         wire_max_m,
+        step_m: DEFAULT_NON_RESONANT_CONFIG.step_m,
         units,
         itu_region: region,
         transformer_ratio,
@@ -598,6 +604,7 @@ fn quick_calculation(input: &mut dyn BufRead, output: &mut dyn Write, region: IT
         mode,
         wire_min_m,
         wire_max_m,
+        step_m: DEFAULT_NON_RESONANT_CONFIG.step_m,
         units,
         itu_region: region,
         transformer_ratio,
@@ -1392,6 +1399,7 @@ mod tests {
             mode: CalcMode::Resonant,
             wire_min_m: DEFAULT_NON_RESONANT_CONFIG.min_len_m,
             wire_max_m: DEFAULT_NON_RESONANT_CONFIG.max_len_m,
+            step_m: DEFAULT_NON_RESONANT_CONFIG.step_m,
             units: UnitSystem::Metric,
             itu_region: ITURegion::Region1,
             transformer_ratio: TransformerRatio::R1To1,

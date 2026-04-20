@@ -11,6 +11,7 @@ All notable changes to Rusty Wire are documented here.
 - **Structured error handling (Priority 1)**: extended `AppError` with `EmptyBandSelection` and `AllBandsSkipped` variants; added empty-band check to `validate_config` and post-calculation check to `run_calculation_checked`. Removed three duplicated `calculations.is_empty()` guards from `cli.rs`.
 - **Proper CLI exit codes**: `run_from_args` now returns `bool`; `main.rs` propagates a non-zero exit code on any error.
 - **Regression coverage**: new unit and integration tests for all new error paths including exit code assertions.
+- **`--step` flag for configurable non-resonant search resolution**: `AppConfig` now carries `step_m: f64` (default 0.05 m); the `--step <METERS>` CLI flag overrides it. `AppError::InvalidSearchStep` is returned when the step is ≤ 0 or ≥ the wire length window. Four unit tests and three integration tests cover valid, zero, and out-of-window cases.
 
 ### Changed
 - **clap decoupled from domain types**: `CalcMode`, `ExportFormat`, `UnitSystem`, `AntennaModel`, and `ITURegion` no longer implement `clap::ValueEnum`; the CLI wiring lives entirely in `cli.rs`.

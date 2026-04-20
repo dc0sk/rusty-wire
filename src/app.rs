@@ -161,6 +161,7 @@ pub struct AppConfig {
     pub mode: CalcMode,
     pub wire_min_m: f64,
     pub wire_max_m: f64,
+    pub step_m: f64,
     pub units: UnitSystem,
     pub itu_region: ITURegion,
     pub transformer_ratio: TransformerRatio,
@@ -175,6 +176,7 @@ impl Default for AppConfig {
             mode: CalcMode::Resonant,
             wire_min_m: DEFAULT_NON_RESONANT_CONFIG.min_len_m,
             wire_max_m: DEFAULT_NON_RESONANT_CONFIG.max_len_m,
+            step_m: DEFAULT_NON_RESONANT_CONFIG.step_m,
             units: UnitSystem::Both,
             itu_region: DEFAULT_ITU_REGION,
             transformer_ratio: DEFAULT_TRANSFORMER_RATIO,
@@ -398,6 +400,7 @@ pub struct BandDisplayView {
 pub enum AppError {
     InvalidVelocityFactor(f64),
     InvalidWireLengthWindow { min_m: f64, max_m: f64 },
+    InvalidSearchStep(f64),
     EmptyBandSelection,
     AllBandsSkipped,
 }
@@ -415,6 +418,12 @@ impl fmt::Display for AppError {
                 write!(
                     f,
                     "invalid wire length window in meters ({min_m:.3}..{max_m:.3})"
+                )
+            }
+            AppError::InvalidSearchStep(step) => {
+                write!(
+                    f,
+                    "search step must be greater than 0 and less than the wire length window (got {step:.4} m)"
                 )
             }
             AppError::EmptyBandSelection => {
@@ -451,7 +460,7 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
     let non_res_cfg = NonResonantSearchConfig {
         min_len_m: config.wire_min_m,
         max_len_m: config.wire_max_m,
-        step_m: DEFAULT_NON_RESONANT_CONFIG.step_m,
+        step_m: config.step_m,
         preferred_center_m: (config.wire_min_m + config.wire_max_m) / 2.0,
     };
     let recommendation =
@@ -497,6 +506,11 @@ pub fn validate_config(config: &AppConfig) -> Result<(), AppError> {
             min_m: config.wire_min_m,
             max_m: config.wire_max_m,
         });
+    }
+
+    let window = config.wire_max_m - config.wire_min_m;
+    if config.step_m <= 0.0 || config.step_m >= window {
+        return Err(AppError::InvalidSearchStep(config.step_m));
     }
 
     Ok(())
@@ -1872,6 +1886,36 @@ mod tests {
 
         let err = validate_config(&config).expect_err("expected empty band selection error");
         assert_eq!(err, AppError::EmptyBandSelection);
+    }
+
+    #[test]
+    fn validate_config_rejects_zero_step() {
+        let mut config = AppConfig::default();
+        config.step_m = 0.0;
+
+        let err = validate_config(&config).expect_err("expected invalid step error");
+        assert_eq!(err, AppError::InvalidSearchStep(0.0));
+    }
+
+    #[test]
+    fn validate_config_rejects_step_exceeding_window() {
+        let mut config = AppConfig::default();
+        config.wire_min_m = 8.0;
+        config.wire_max_m = 10.0;
+        config.step_m = 5.0;
+
+        let err = validate_config(&config).expect_err("expected invalid step error");
+        assert_eq!(err, AppError::InvalidSearchStep(5.0));
+    }
+
+    #[test]
+    fn validate_config_accepts_custom_step_within_window() {
+        let mut config = AppConfig::default();
+        config.wire_min_m = 8.0;
+        config.wire_max_m = 35.0;
+        config.step_m = 0.01;
+
+        assert!(validate_config(&config).is_ok());
     }
 
     #[test]
