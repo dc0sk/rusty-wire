@@ -252,17 +252,18 @@ impl From<CliITURegion> for ITURegion {
 // ---------------------------------------------------------------------------
 
 /// Entry point when CLI arguments are present.
-pub fn run_from_args(args: &[String]) {
+/// Returns `true` on success, `false` if an error prevented completion.
+pub fn run_from_args(args: &[String]) -> bool {
     let cli = Cli::parse_from(args.iter().map(|s| s.as_str()));
 
     if cli.interactive {
         run_interactive();
-        return;
+        return true;
     }
 
     if cli.list_bands {
         show_all_bands_for_region(cli.region);
-        return;
+        return true;
     }
 
     let bands = match &cli.bands {
@@ -270,7 +271,7 @@ pub fn run_from_args(args: &[String]) {
             Ok(parsed) => parsed,
             Err(err) => {
                 eprintln!("Error: invalid --bands value: {}", err);
-                return;
+                return false;
             }
         },
         None => DEFAULT_BAND_SELECTION.to_vec(),
@@ -282,7 +283,7 @@ pub fn run_from_args(args: &[String]) {
 
     if using_ft && using_m {
         eprintln!("Error: cannot mix meter and feet constraints; choose one unit system");
-        return;
+        return false;
     }
 
     let (wire_min_m, wire_max_m) = if using_ft {
@@ -308,7 +309,7 @@ pub fn run_from_args(args: &[String]) {
     if let Some(ref output) = cli.output {
         if let Err(err) = validate_export_path(output) {
             eprintln!("Error: invalid output path: {}", err);
-            return;
+            return false;
         }
     }
 
@@ -345,13 +346,9 @@ pub fn run_from_args(args: &[String]) {
         Ok(response) => response.results,
         Err(err) => {
             eprintln!("Error: {}", err);
-            return;
+            return false;
         }
     };
-    if results.calculations.is_empty() {
-        println!("No valid bands selected.");
-        return;
-    }
 
     print_results(&results);
 
@@ -386,10 +383,11 @@ pub fn run_from_args(args: &[String]) {
             results.config.wire_max_m,
         ) {
             eprintln!("Failed to export {}: {}", output, err);
-            std::process::exit(1);
+            return false;
         }
         println!("Exported results to {}", output);
     }
+    true
 }
 
 // ---------------------------------------------------------------------------
@@ -527,11 +525,6 @@ fn calculate_selected_bands(input: &mut dyn BufRead, output: &mut dyn Write, reg
             return;
         }
     };
-    if results.calculations.is_empty() {
-        writeln!(output, "No valid bands selected.\n")
-            .expect("failed to write empty result message");
-        return;
-    }
 
     print_results(&results);
     print_equivalent_cli_call(&results.config, &[]);
@@ -590,10 +583,6 @@ fn quick_calculation(input: &mut dyn BufRead, output: &mut dyn Write, region: IT
             return;
         }
     };
-    if results.calculations.is_empty() {
-        writeln!(output, "Band not found.\n").expect("failed to write band not found message");
-        return;
-    }
 
     print_results(&results);
     print_equivalent_cli_call(&results.config, &[]);

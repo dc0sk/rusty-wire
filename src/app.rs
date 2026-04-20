@@ -493,6 +493,8 @@ pub struct BandDisplayView {
 pub enum AppError {
     InvalidVelocityFactor(f64),
     InvalidWireLengthWindow { min_m: f64, max_m: f64 },
+    EmptyBandSelection,
+    AllBandsSkipped,
 }
 
 impl fmt::Display for AppError {
@@ -509,6 +511,12 @@ impl fmt::Display for AppError {
                     f,
                     "invalid wire length window in meters ({min_m:.3}..{max_m:.3})"
                 )
+            }
+            AppError::EmptyBandSelection => {
+                write!(f, "no valid bands selected")
+            }
+            AppError::AllBandsSkipped => {
+                write!(f, "no valid bands for the selected ITU region")
             }
         }
     }
@@ -571,6 +579,10 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
 }
 
 pub fn validate_config(config: &AppConfig) -> Result<(), AppError> {
+    if config.band_indices.is_empty() {
+        return Err(AppError::EmptyBandSelection);
+    }
+
     if !(0.5..=1.0).contains(&config.velocity_factor) {
         return Err(AppError::InvalidVelocityFactor(config.velocity_factor));
     }
@@ -591,7 +603,11 @@ pub fn validate_config(config: &AppConfig) -> Result<(), AppError> {
 /// handling before rendering output.
 pub fn run_calculation_checked(config: AppConfig) -> Result<AppResults, AppError> {
     validate_config(&config)?;
-    Ok(run_calculation(config))
+    let results = run_calculation(config);
+    if results.calculations.is_empty() {
+        return Err(AppError::AllBandsSkipped);
+    }
+    Ok(results)
 }
 
 /// Validate and execute a full app-layer request.
@@ -1942,6 +1958,25 @@ mod tests {
                 max_m: 12.0,
             }
         );
+    }
+
+    #[test]
+    fn validate_config_rejects_empty_band_selection() {
+        let mut config = AppConfig::default();
+        config.band_indices = vec![];
+
+        let err = validate_config(&config).expect_err("expected empty band selection error");
+        assert_eq!(err, AppError::EmptyBandSelection);
+    }
+
+    #[test]
+    fn run_calculation_checked_returns_all_bands_skipped_for_invalid_region_indices() {
+        let mut config = AppConfig::default();
+        // Use an index well beyond any real band to guarantee all calculations are skipped.
+        config.band_indices = vec![9999];
+
+        let err = run_calculation_checked(config).expect_err("expected all-bands-skipped error");
+        assert_eq!(err, AppError::AllBandsSkipped);
     }
 
     #[test]

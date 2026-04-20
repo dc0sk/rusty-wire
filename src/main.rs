@@ -5,7 +5,11 @@ mod cli;
 mod export;
 
 use std::env;
+use std::process;
 
 fn main() {
-    cli::run_from_args(&env::args().collect::<Vec<String>>());
+    let args: Vec<String> = env::args().collect();
+    if !cli::run_from_args(&args) {
+        process::exit(1);
+    }
 }

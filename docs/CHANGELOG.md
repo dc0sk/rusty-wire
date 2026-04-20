@@ -4,6 +4,11 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Structured error handling (Priority 1)**: extended `AppError` with `EmptyBandSelection` and `AllBandsSkipped` variants; added empty-band check to `validate_config` and post-calculation check to `run_calculation_checked`. Removed three duplicated `calculations.is_empty()` guards from `cli.rs` — all error paths now flow through the app layer.
+- **Proper CLI exit codes**: `run_from_args` now returns `bool`; `main.rs` propagates a non-zero exit code on any error, fixing the bug where invalid inputs silently exited 0.
+- **Regression coverage**: added unit tests for `EmptyBandSelection` and `AllBandsSkipped`; added integration tests for invalid wire window and out-of-range velocity including exit code assertions.
+
 ### Changed
 - **Documentation consolidation**: reduced redundancy across README, CLI guide, testing guide, and roadmap; tightened command references and moved deep details to their canonical docs.
 
