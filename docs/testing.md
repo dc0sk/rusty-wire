@@ -61,6 +61,14 @@ cargo check
 cargo test
 ```
 
+On version bump (before tagging):
+
+```bash
+cargo sbom
+cargo sbom-cdx
+git add sbom/
+```
+
 When changing region or band behavior:
 
 ```bash

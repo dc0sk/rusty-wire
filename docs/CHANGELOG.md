@@ -47,8 +47,7 @@ All notable changes to Rusty Wire are documented here.
 ## [2.0.0] - 2026-04-12
 
 ### Added
-- **SBOM generation via Cargo**: added Cargo aliases for SPDX and CycloneDX generation using `cargo-sbom`, with `cargo sbom` defaulting to SPDX and `cargo sbom-cdx` for CycloneDX JSON.
-- **Pre-push SPDX SBOM step**: added a repository pre-push hook that regenerates `sbom/rusty-wire.spdx.json` and blocks push when the tracked SBOM is outdated.
+- **SBOM generation via Cargo**: added Cargo aliases for SPDX and CycloneDX generation using `cargo-sbom`, with `cargo sbom` defaulting to SPDX and `cargo sbom-cdx` for CycloneDX JSON. SBOM regeneration is run on version bumps, not on every push.
 
 ### Changed
 - **Band selection syntax refactor (breaking)**: `--bands` now accepts real band names and name ranges such as `10m,40m,10m-15m,60m-80m` in both CLI and interactive mode.
