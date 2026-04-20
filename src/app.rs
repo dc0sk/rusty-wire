@@ -9,6 +9,7 @@ pub enum AppError {
     InvalidAntennaModel(String),
     InvalidBandSelection(String),
     InvalidSearchStep(f64),
+    InvalidFrequency(f64),
     EmptyBandSelection,
     AllBandsSkipped,
 }
@@ -45,6 +46,12 @@ impl fmt::Display for AppError {
                     "search step must be greater than 0 and less than the wire length window (got {step:.4} m)"
                 )
             }
+            AppError::InvalidFrequency(freq) => {
+                write!(
+                    f,
+                    "frequency must be greater than 0 and at most 1000 MHz (got {freq:.3} MHz)"
+                )
+            }
             AppError::EmptyBandSelection => {
                 write!(f, "empty selection; provide at least one band name.")
             }
@@ -60,7 +67,7 @@ impl std::error::Error for AppError {}
 ///
 /// This module is the primary API surface for both the CLI front-end and any
 /// future GUI (e.g. iced). It is deliberately free of I/O.
-use crate::bands::{get_band_by_index_for_region, ITURegion};
+use crate::bands::{get_band_by_index_for_region, Band, BandType, ITURegion};
 use crate::calculations::{
     calculate_average_max_distance, calculate_average_min_distance,
     calculate_best_non_resonant_length, calculate_for_band_with_velocity,
@@ -232,6 +239,8 @@ pub struct AppConfig {
     pub itu_region: ITURegion,
     pub transformer_ratio: TransformerRatio,
     pub antenna_model: Option<AntennaModel>,
+    /// Direct frequency input in MHz; when set, bypasses band selection entirely.
+    pub custom_freq_mhz: Option<f64>,
 }
 
 impl Default for AppConfig {
@@ -247,6 +256,7 @@ impl Default for AppConfig {
             itu_region: DEFAULT_ITU_REGION,
             transformer_ratio: DEFAULT_TRANSFORMER_RATIO,
             antenna_model: None,
+            custom_freq_mhz: None,
         }
     }
 }
@@ -485,12 +495,31 @@ pub struct ResolvedWireWindow {
 /// This is a pure, I/O-free function suitable for use from both the CLI and
 /// any future GUI front-end.
 pub fn run_calculation(config: AppConfig) -> AppResults {
-    let (calculations, skipped_band_indices) = build_calculations(
-        &config.band_indices,
-        config.velocity_factor,
-        config.itu_region,
-        config.transformer_ratio,
-    );
+    let (calculations, skipped_band_indices) = if let Some(freq_mhz) = config.custom_freq_mhz {
+        let custom_band = Band {
+            name: "custom",
+            band_type: BandType::HF,
+            freq_low_mhz: freq_mhz,
+            freq_high_mhz: freq_mhz,
+            freq_center_mhz: freq_mhz,
+            typical_skip_km: (0.0, 0.0),
+            regions: &[],
+        };
+        let mut calc = calculate_for_band_with_velocity(
+            &custom_band,
+            config.velocity_factor,
+            config.transformer_ratio,
+        );
+        calc.band_name = format!("{freq_mhz:.3} MHz");
+        (vec![calc], Vec::new())
+    } else {
+        build_calculations(
+            &config.band_indices,
+            config.velocity_factor,
+            config.itu_region,
+            config.transformer_ratio,
+        )
+    };
 
     // For resonant mode use the default search window; for non-resonant use the
     // user-supplied window.  Optima (tied candidates) are only relevant in
@@ -531,7 +560,11 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
 }
 
 pub fn validate_config(config: &AppConfig) -> Result<(), AppError> {
-    if config.band_indices.is_empty() {
+    if let Some(freq) = config.custom_freq_mhz {
+        if freq <= 0.0 || freq > 1000.0 {
+            return Err(AppError::InvalidFrequency(freq));
+        }
+    } else if config.band_indices.is_empty() {
         return Err(AppError::EmptyBandSelection);
     }
 

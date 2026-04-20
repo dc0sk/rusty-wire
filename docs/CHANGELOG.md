@@ -5,6 +5,10 @@ All notable changes to Rusty Wire are documented here.
 ## [Unreleased]
 
 ### Added
+- **`--quiet` flag**: suppresses the full results table. In non-resonant mode prints only the recommended wire length on a single line (respects `--units`); in resonant mode exits silently with code 0. Useful for scripting and automation.
+- **`--freq <MHz>` flag**: computes wire lengths for a single explicit frequency instead of scanning named bands. Accepts any positive value up to 1000 MHz; bypasses band selection entirely. Combines with `--mode`, `--antenna`, `--quiet`, and all other output flags. `AppConfig` gained a `custom_freq_mhz: Option<f64>` field; `AppError::InvalidFrequency` is returned for out-of-range values.
+- **`--velocity-sweep <v1,v2,...>` flag**: runs the same configuration at multiple velocity factors and prints a compact comparison table. Non-resonant mode shows recommended length and resonance clearance per VF; resonant mode shows per-band half-wave lengths per VF. Validates all VF values before executing any runs.
+- **8 new integration tests** covering all three flags: quiet resonant/non-resonant, `--freq` basic usage and error handling, `--freq` combined with `--quiet`, and velocity sweep resonant/non-resonant/error paths.
 - **Library entry point** (`src/lib.rs`): app, bands, and calculations modules are now exposed as a proper library crate; a thin `run_cli(args)` function bridges the binary entry-point to the CLI module. External front-ends (e.g. a future GUI) can depend on `rusty_wire::app::*` without pulling in CLI logic.
 - **Shadow CLI types complete**: added `CliAntennaModel` and applied `Copy` to all CLI shadow enums; all five domain-facing fields in the `Cli` struct (`region`, `mode`, `antenna`, `units`, `export`) now use dedicated `Cli*` shadow types instead of the domain types directly.
 - **App-layer contract tests**: six tests guard the stable `AppRequest → AppResponse` API boundary and assert that `ResultsDisplayDocument` is fully populated for both resonant and non-resonant defaults, and that all antenna models and calc modes execute without error.

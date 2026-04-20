@@ -93,6 +93,18 @@ struct Cli {
     /// Launch interactive mode
     #[arg(short = 'i', long)]
     interactive: bool,
+
+    /// Compute wire lengths for a single explicit frequency in MHz (bypasses band selection)
+    #[arg(long)]
+    freq: Option<f64>,
+
+    /// Suppress the full results table; print only the key recommendation
+    #[arg(long)]
+    quiet: bool,
+
+    /// Run a sweep over multiple velocity factors (comma-separated, e.g. 0.66,0.85,0.95)
+    #[arg(long, value_delimiter = ',')]
+    velocity_sweep: Option<Vec<f64>>,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -297,6 +309,14 @@ pub fn run_from_args(args: &[String]) -> bool {
         return true;
     }
 
+    // Validate --freq early with a clear message
+    if let Some(freq) = cli.freq {
+        if freq <= 0.0 {
+            eprintln!("Error: --freq must be a positive frequency in MHz (got {freq:.3})");
+            return false;
+        }
+    }
+
     let bands = match &cli.bands {
         Some(selection) => match parse_band_selection(selection, cli.region.into()) {
             Ok(parsed) => parsed,
@@ -356,7 +376,13 @@ pub fn run_from_args(args: &[String]) -> bool {
         itu_region: cli.region.into(),
         transformer_ratio,
         antenna_model,
+        custom_freq_mhz: cli.freq,
     };
+
+    // Velocity sweep overrides single-run output
+    if let Some(velocity_values) = cli.velocity_sweep {
+        return run_velocity_sweep(&velocity_values, config, units);
+    }
 
     let results = match execute_request_checked(AppRequest::new(config)) {
         Ok(response) => response.results,
@@ -366,7 +392,11 @@ pub fn run_from_args(args: &[String]) -> bool {
         }
     };
 
-    print_results(&results);
+    if cli.quiet {
+        print_quiet_summary(&results);
+    } else {
+        print_results(&results);
+    }
 
     let single_output = cli.output;
     let export_count = export_formats.len();
@@ -404,6 +434,129 @@ pub fn run_from_args(args: &[String]) -> bool {
         println!("Exported results to {output}");
     }
     true
+}
+
+// ---------------------------------------------------------------------------
+// Velocity sweep
+// ---------------------------------------------------------------------------
+
+fn run_velocity_sweep(velocities: &[f64], base_config: AppConfig, units: UnitSystem) -> bool {
+    for &vf in velocities {
+        if !(0.5..=1.0).contains(&vf) {
+            eprintln!("Error: velocity factor {vf:.2} is out of range (must be 0.50–1.00)");
+            return false;
+        }
+    }
+
+    let mut results_by_vf: Vec<(f64, AppResults)> = Vec::new();
+    for &vf in velocities {
+        let mut sweep_config = base_config.clone();
+        sweep_config.velocity_factor = vf;
+        match execute_request_checked(AppRequest::new(sweep_config)) {
+            Ok(response) => results_by_vf.push((vf, response.results)),
+            Err(err) => {
+                eprintln!("Error at VF {vf:.2}: {err}");
+                return false;
+            }
+        }
+    }
+
+    print_velocity_sweep_table(&results_by_vf, units);
+    true
+}
+
+fn print_velocity_sweep_table(results: &[(f64, AppResults)], units: UnitSystem) {
+    if results.is_empty() {
+        return;
+    }
+
+    let first = &results[0].1;
+    let mode = first.config.mode;
+
+    let bands_label: String = first
+        .calculations
+        .iter()
+        .map(|c| c.band_name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mode_label = match mode {
+        CalcMode::Resonant => "resonant",
+        CalcMode::NonResonant => "non-resonant",
+    };
+
+    println!(
+        "\nVelocity sweep — {mode_label} | {bands_label} | Region {}:",
+        first.config.itu_region
+    );
+
+    match mode {
+        CalcMode::NonResonant => {
+            println!("  {:<6}  {:<24}  {}", "VF", "Length", "Clearance");
+            println!("  {}", "─".repeat(46));
+            for (vf, res) in results {
+                let len_str = match &res.recommendation {
+                    Some(r) => match units {
+                        UnitSystem::Metric => format!("{:.2} m", r.length_m),
+                        UnitSystem::Imperial => format!("{:.1} ft", r.length_ft),
+                        UnitSystem::Both => {
+                            format!("{:.2} m / {:.1} ft", r.length_m, r.length_ft)
+                        }
+                    },
+                    None => "—".to_string(),
+                };
+                let clearance_str = match &res.recommendation {
+                    Some(r) => format!("{:.1}%", r.min_resonance_clearance_pct),
+                    None => "—".to_string(),
+                };
+                println!("  {:<6.2}  {:<24}  {}", vf, len_str, clearance_str);
+            }
+        }
+        CalcMode::Resonant => {
+            for (vf, res) in results {
+                let parts: Vec<String> = res
+                    .calculations
+                    .iter()
+                    .map(|calc| {
+                        let len_str = match units {
+                            UnitSystem::Metric => format!("{:.2} m", calc.half_wave_m),
+                            UnitSystem::Imperial => format!("{:.1} ft", calc.half_wave_ft),
+                            UnitSystem::Both => {
+                                format!("{:.2} m / {:.1} ft", calc.half_wave_m, calc.half_wave_ft)
+                            }
+                        };
+                        format!("{} = {}", calc.band_name, len_str)
+                    })
+                    .collect();
+                println!("  VF {vf:.2}:  {}", parts.join("  "));
+            }
+        }
+    }
+    println!();
+}
+
+// ---------------------------------------------------------------------------
+// Quiet summary
+// ---------------------------------------------------------------------------
+
+fn print_quiet_summary(results: &AppResults) {
+    match results.config.mode {
+        CalcMode::NonResonant => match &results.recommendation {
+            Some(rec) => {
+                let line = match results.config.units {
+                    UnitSystem::Metric => format!("{:.2} m", rec.length_m),
+                    UnitSystem::Imperial => format!("{:.1} ft", rec.length_ft),
+                    UnitSystem::Both => {
+                        format!("{:.2} m ({:.1} ft)", rec.length_m, rec.length_ft)
+                    }
+                };
+                println!("{line}");
+            }
+            None => eprintln!("No recommendation available."),
+        },
+        CalcMode::Resonant => {
+            // Quiet resonant: no output; success is indicated by exit 0
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -836,6 +989,7 @@ fn calculate_selected_bands_with_defaults(
         itu_region: region,
         transformer_ratio,
         antenna_model,
+        custom_freq_mhz: None,
     };
 
     let results = match execute_request_checked(AppRequest::new(config)) {
@@ -930,6 +1084,7 @@ fn quick_calculation_with_defaults(
         itu_region: region,
         transformer_ratio,
         antenna_model,
+        custom_freq_mhz: None,
     };
 
     let results = match execute_request_checked(AppRequest::new(config)) {
@@ -1377,6 +1532,7 @@ mod tests {
             itu_region: ITURegion::Region1,
             transformer_ratio: TransformerRatio::R1To1,
             antenna_model: None,
+            custom_freq_mhz: None,
         };
 
         // Assert the formatter input mapping separately since this function prints to stdout.

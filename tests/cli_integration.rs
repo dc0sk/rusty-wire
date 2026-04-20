@@ -376,3 +376,169 @@ fn step_flag_exceeding_window_shows_structured_error() {
     assert!(!output.status.success());
     assert!(stderr.contains("search step must be greater than 0"));
 }
+
+// ---------------------------------------------------------------------------
+// --quiet tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn quiet_non_resonant_prints_only_recommendation_length() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m,20m",
+            "--mode",
+            "non-resonant",
+            "--units",
+            "both",
+            "--quiet",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    // Should contain a metre reading and a feet reading on one line, nothing else
+    assert!(stdout.contains(" m ("));
+    assert!(stdout.contains(" ft)"));
+    // The full table header should NOT appear
+    assert!(!stdout.contains("Antenna model:"));
+    assert!(!stdout.contains("Half-wave:"));
+}
+
+#[test]
+fn quiet_resonant_produces_no_stdout() {
+    let output = binary()
+        .args(["--bands", "40m", "--quiet"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(
+        stdout.trim().is_empty(),
+        "expected no stdout in quiet resonant mode, got: {stdout}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// --freq tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn freq_flag_computes_single_frequency() {
+    let output = binary()
+        .args(["--freq", "7.1"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // Should show the custom frequency label
+    assert!(stdout.contains("7.100 MHz"));
+    assert!(stdout.contains("Half-wave:"));
+}
+
+#[test]
+fn freq_flag_zero_shows_error() {
+    let output = binary()
+        .args(["--freq", "0"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("--freq must be a positive frequency"));
+}
+
+#[test]
+fn freq_flag_with_quiet_prints_compact_line() {
+    let output = binary()
+        .args([
+            "--freq",
+            "14.2",
+            "--mode",
+            "non-resonant",
+            "--units",
+            "m",
+            "--quiet",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    // Should be a single line with just metres
+    assert!(stdout.contains(" m"));
+    assert!(!stdout.contains("Half-wave:"));
+}
+
+// ---------------------------------------------------------------------------
+// --velocity-sweep tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn velocity_sweep_non_resonant_prints_table() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m,20m",
+            "--mode",
+            "non-resonant",
+            "--velocity-sweep",
+            "0.66,0.85,0.95",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(stdout.contains("Velocity sweep"));
+    assert!(stdout.contains("non-resonant"));
+    // All three VFs should appear in the table
+    assert!(stdout.contains("0.66"));
+    assert!(stdout.contains("0.85"));
+    assert!(stdout.contains("0.95"));
+}
+
+#[test]
+fn velocity_sweep_resonant_prints_per_vf_lines() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m",
+            "--mode",
+            "resonant",
+            "--velocity-sweep",
+            "0.85,0.95",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Velocity sweep"));
+    assert!(stdout.contains("resonant"));
+    assert!(stdout.contains("VF 0.85"));
+    assert!(stdout.contains("VF 0.95"));
+}
+
+#[test]
+fn velocity_sweep_out_of_range_shows_error() {
+    let output = binary()
+        .args(["--bands", "40m", "--velocity-sweep", "0.95,1.5"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("out of range"));
+}
