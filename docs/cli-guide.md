@@ -1,6 +1,6 @@
 # CLI Guide
 
-**Version 2.2.0**
+**Version 2.3.0**
 
 Use this page as the command reference for Rusty Wire.
 
@@ -99,6 +99,10 @@ rusty-wire --interactive
 - `--antenna <dipole|inverted-v|efhw|loop|ocfd>` Filter output to one model (omit to show all)
 - `--transformer <recommended|1:1|1:2|1:4|1:5|1:6|1:9|1:16|1:49|1:56|1:64>`
 - `--units <m|ft|both>` Output unit filter
+- `--step <meters>` Non-resonant search resolution (default: `0.05`)
+- `--quiet` Suppress the results table; non-resonant prints one recommendation line, resonant exits silently. Useful for scripting.
+- `--freq <MHz>` Compute wire lengths for a single explicit frequency, bypassing band selection entirely (range: `0 < f ≤ 1000`)
+- `--velocity-sweep <v1,v2,...>` Run the same configuration at multiple velocity factors and print a side-by-side comparison table
 
 ## Non-Resonant Window Options
 
@@ -174,6 +178,31 @@ List regional bands:
 
 ```bash
 rusty-wire --list-bands --region 2
+```
+
+Single explicit frequency:
+
+```bash
+rusty-wire --freq 7.074 --antenna dipole
+```
+
+Velocity sweep comparison:
+
+```bash
+rusty-wire --mode non-resonant --bands 40m,20m --wire-min 10 --wire-max 35 \
+  --velocity-sweep 0.85,0.95,1.00
+```
+
+Script-friendly quiet output (non-resonant):
+
+```bash
+rusty-wire --mode non-resonant --bands 40m,20m --wire-min 10 --wire-max 35 --quiet
+```
+
+Finer search resolution:
+
+```bash
+rusty-wire --mode non-resonant --bands 80m --wire-min 6 --wire-max 30 --step 0.01
 ```
 
 Export multiple formats:

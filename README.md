@@ -1,179 +1,220 @@
 # Rusty Wire
 
-**Version 2.3.0**
+![Version](https://img.shields.io/badge/version-2.3.0-blue)
+![License](https://img.shields.io/badge/license-GPL--2.0--or--later-green)
+![Rust edition](https://img.shields.io/badge/rust-2021-orange)
 
-A Rust-based utility for wire-antenna planning across ham-radio and shortwave bands.
+> Wire-antenna planning for ham radio operators — fast, precise, and scriptable.
 
-See [docs/CHANGELOG.md](docs/CHANGELOG.md) for the full release history.
+Rusty Wire computes resonant and non-resonant wire lengths across ITU-region-aware
+amateur and shortwave bands. It covers five antenna models, recommends transformers
+automatically, and fits comfortably into shell scripts as well as interactive
+planning sessions.
+
+**2.x roadmap target: keyboard-driven TUI (`ratatui`) · 3.x: desktop GUI (`iced`)**
+
+---
 
 ## Features
 
-- **Resonant calculations**: Half-wave, full-wave, and quarter-wave dipole lengths
-- **Derived antenna variants**: Also shows end-fed half-wave, full-wave loop, inverted-V dipole geometry, and OCFD segment dimensions
-- **Antenna model filter**: Optional `--antenna dipole|inverted-v|efhw|loop|ocfd` to show one model at a time
-- **Resonant point analysis**: Shows resonant harmonics within the active search window
-- **Resonant shared compromises**: Shows closest combined compromise lengths to in-window resonant points
-- **Non-resonant optimization**: Find the best single wire length for multiple bands
-- **Non-resonant window optima**: Displays multiple local optimum candidates within the active search window
-- **Equal-tie optima support**: Displays all equally-optimal wire lengths when ties occur
-- **Velocity factor control**: Adjust for different wire types and insulation
-- **Transformer recommendation mode**: `--transformer recommended` is the default and resolves from calculation mode plus antenna model
-- **Multiple export formats**: CSV, JSON, Markdown, plain text
-- **Unit system flexibility**: Metric-only, imperial-only, or both
-- **ITU region support**: Region-aware amateur band ranges (default: Region 1)
-- **Band database**: Pre-configured ham and shortwave bands
+### Antenna models
+
+| Model | `--antenna` flag | Key output |
+|---|---|---|
+| Half-wave dipole | `dipole` | Half-wave length, per-leg |
+| Inverted-V | `inverted-v` | Total and per-leg, 90°/120° apex span |
+| End-fed half-wave | `efhw` | Total EFHW wire length |
+| Full-wave loop | `loop` | Circumference and square-side estimate |
+| Off-center-fed dipole | `ocfd` | 33/67 and 20/80 leg splits, optimised feedpoint |
+
+Omit `--antenna` to show all five models at once.
+
+### Calculation modes
+
+**Resonant** (default) — per-band resonant lengths, in-window harmonic analysis,
+shared compromise lengths across multiple bands.
+
+**Non-resonant** — finds the single best wire length that minimises proximity
+to resonance across all selected bands, with full local-optima listing and
+equal-tie support.
+
+### Output and scripting
+
+- `--quiet` — suppresses the results table; non-resonant mode prints one compact
+  recommendation line, resonant mode exits silently. Designed for shell scripting.
+- `--freq <MHz>` — compute wire lengths for any explicit frequency without
+  touching the band database.
+- `--velocity-sweep <v1,v2,...>` — run the same configuration at multiple
+  velocity factors and print a side-by-side comparison table.
+- `--step <meters>` — control non-resonant search resolution (default 0.05 m).
+- `--velocity <value>` — velocity factor from 0.50 to 1.00 (default 0.95).
+- `--transformer recommended|1:1|1:4|1:9|1:49|1:56|...` — auto-resolved per
+  mode and antenna model by default.
+- `--units m|ft|both` — metric, imperial, or both systems in one run.
+- `--export csv,json,markdown,txt` — export any combination of formats.
+
+### Bands and regions
+
+- ITU Region-aware band tables (Region 1 default; `--region 1|2|3`).
+- Named-band selection and ranges: `--bands 40m,20m,10m-15m`.
+- `--list-bands` to inspect the full band table for any region.
+
+---
 
 ## Quick Start
 
-Build:
-
 ```bash
+# Build a release binary
 cargo build --release
-```
 
-Show help:
+# Show all options
+./target/release/rusty-wire --help
 
-```bash
-./target/release/rusty-wire
-```
-
-Run interactive mode:
-
-```bash
+# Interactive planning session
 ./target/release/rusty-wire --interactive
-```
 
-Run from Cargo during development:
-
-```bash
+# During development
 cargo run -- [OPTIONS]
 ```
 
+---
+
+## Examples
+
+**Resonant lengths for 40 m and 20 m (all antenna models):**
+```bash
+rusty-wire --bands 40m,20m --velocity 0.95
+```
+
+**EFHW planning for 40 m / 20 m with transformer auto-selection:**
+```bash
+rusty-wire --mode resonant --bands 40m,20m --antenna efhw --transformer recommended
+```
+
+**OCFD resonant analysis:**
+```bash
+rusty-wire --mode resonant --bands 40m,20m --antenna ocfd
+```
+
+**Find the best non-resonant wire for a 10–35 m garden:**
+```bash
+rusty-wire --mode non-resonant --bands 40m,20m,15m,10m --wire-min 10 --wire-max 35
+```
+
+**Same run, imperial window, metric+imperial output:**
+```bash
+rusty-wire --mode non-resonant --bands 40m,20m,15m --wire-min-ft 30 --wire-max-ft 90 --units both
+```
+
+**Single explicit frequency (no band selection needed):**
+```bash
+rusty-wire --freq 7.074 --antenna dipole
+```
+
+**Compare three velocity factors side by side:**
+```bash
+rusty-wire --mode non-resonant --bands 40m,20m --wire-min 10 --wire-max 35 \
+  --velocity-sweep 0.85,0.95,1.00
+```
+
+**Script-friendly one-liner (non-resonant recommendation only):**
+```bash
+rusty-wire --mode non-resonant --bands 40m,20m --wire-min 10 --wire-max 35 --quiet
+# → e.g.:  20.35 m  (66.76 ft)
+```
+
+**Export to CSV and Markdown for a field notebook:**
+```bash
+rusty-wire --mode non-resonant --bands 20m,15m,10m --wire-min 8 --wire-max 25 \
+  --export csv,markdown --output my-antenna
+```
+
+**List all bands for ITU Region 2:**
+```bash
+rusty-wire --list-bands --region 2
+```
+
+For a complete option reference see [docs/cli-guide.md](docs/cli-guide.md).
+
+---
+
 ## Documentation
 
-- CLI usage and examples: [docs/cli-guide.md](docs/cli-guide.md)
-- Testing workflow: [docs/testing.md](docs/testing.md)
-- Module design and execution flow: [docs/architecture.md](docs/architecture.md)
-- Planned work: [docs/roadmap.md](docs/roadmap.md)
-- Release history: [docs/CHANGELOG.md](docs/CHANGELOG.md)
+| Document | Contents |
+|---|---|
+| [docs/cli-guide.md](docs/cli-guide.md) | Full option reference and worked examples |
+| [docs/architecture.md](docs/architecture.md) | Module design, execution flow, app-layer API |
+| [docs/roadmap.md](docs/roadmap.md) | Milestone plan (2.x TUI, 3.x GUI) |
+| [docs/backlog.md](docs/backlog.md) | Unconfirmed ideas under consideration |
+| [docs/testing.md](docs/testing.md) | Test strategy and regression scripts |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Full release history |
+
+---
 
 ## Testing
 
-Primary check:
-
 ```bash
+# Full unit + integration suite (148 tests)
 cargo test
-```
 
-Additional regression scripts:
-
-```bash
+# Regression scripts
 ./scripts/test-multi-optima.sh
 ./scripts/test-itu-region-bands.sh
 ```
 
-For full details, see [docs/testing.md](docs/testing.md).
+See [docs/testing.md](docs/testing.md) for the complete test strategy.
+
+---
+
+## Library Crate
+
+Rusty Wire is also a library crate. External front-ends (the future TUI and GUI)
+consume `rusty_wire::app::*` directly without pulling in CLI logic:
+
+```rust
+use rusty_wire::app::{AppRequest, AppResponse, execute_request_checked};
+```
+
+`AppConfig → AppResults` is the stable calculation boundary. `AppError` covers
+all validation paths with typed variants.
+
+---
 
 ## SBOM
 
-Rusty Wire supports Software Bill of Materials generation through Cargo.
-
-Install the SBOM cargo subcommand (recommended/default):
+Supply-chain transparency is tracked via committed SBOM files.
 
 ```bash
+# Install the Cargo SBOM tool (once)
 cargo install cargo-sbom
-```
 
-Generate an SPDX SBOM (JSON 2.3) via Cargo:
-
-```bash
+# Generate SPDX JSON 2.3 (default)
 cargo sbom
-```
 
-Generate CycloneDX JSON via Cargo alias:
-
-```bash
+# Generate CycloneDX JSON
 cargo sbom-cdx
-```
 
-Or run the helper script:
-
-```bash
-./scripts/generate-sbom.sh
-```
-
-The helper script defaults to SPDX and also supports CycloneDX:
-
-```bash
+# Or via the helper script
+./scripts/generate-sbom.sh          # SPDX
 ./scripts/generate-sbom.sh cyclonedx
 ```
 
-Default tracked outputs are:
+Committed outputs: `sbom/rusty-wire.spdx.json` and `sbom/rusty-wire.cdx.json`.
 
-- `sbom/rusty-wire.spdx.json` (SPDX)
-- `sbom/rusty-wire.cdx.json` (CycloneDX, when generated)
+### Pre-push hook
 
-### Pre-push enforcement
-
-This repository includes a pre-push hook at `.githooks/pre-push`.
-Enable repository hooks with:
+A pre-push hook at `.githooks/pre-push` runs `cargo fmt --check`, `cargo check`,
+`cargo test`, and SBOM regeneration before every push. Enable it with:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-It runs:
+Requires `jq` or `jaq` for deterministic SBOM normalisation. If the SBOM changes
+during the hook run it blocks the push until the updated file is committed.
 
-- `cargo fmt --check`
-- `cargo check`
-- `cargo test`
-- SPDX SBOM regeneration via `./scripts/generate-sbom.sh spdx`
-
-SPDX generation is normalized for deterministic output (requires `jq` or `jaq`).
-If `sbom/rusty-wire.spdx.json` changes during pre-push, the hook blocks push until the updated SBOM is committed.
-
-## Examples
-
-Resonant mode (default):
-```bash
-rusty-wire --bands 20m,10m,40m --velocity 0.95
-```
-
-Non-resonant optimization:
-```bash
-rusty-wire --mode non-resonant --bands 40m,20m,10m-15m --wire-min 10 --wire-max 35
-```
-
-Export to multiple formats:
-```bash
-rusty-wire --mode non-resonant --bands 20m,10m-15m --export csv,json,markdown --output results
-```
-
-Metric-only output:
-```bash
-rusty-wire --mode non-resonant --bands 80m --units m --wire-min 6 --wire-max 30
-```
-
-Filter to EFHW output only:
-```bash
-rusty-wire --mode resonant --bands 40m,20m --antenna efhw
-```
-
-Filter to inverted-V output only:
-```bash
-rusty-wire --mode resonant --bands 40m,20m --antenna inverted-v
-```
-
-Filter to OCFD output only:
-```bash
-rusty-wire --mode resonant --bands 40m,20m --antenna ocfd
-```
-
-For more examples, see [docs/cli-guide.md](docs/cli-guide.md).
+---
 
 ## License
 
-This project is licensed under the GNU General Public License, version 2 or later
-(GPL-2.0-or-later).
-
-See [LICENSE](LICENSE) for details.
+GPL-2.0-or-later — see [LICENSE](LICENSE).

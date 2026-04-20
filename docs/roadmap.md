@@ -67,17 +67,6 @@ Depends on TUI being stable and `AppState`/`AppAction` being settled.
 
 This remains one of the most substantial feature areas and likely requires changes in both `src/calculations.rs` and the user-facing configuration model.
 
-## Export Improvements
-
-- add richer machine-readable export formats such as YAML
-- consider HTML export for printable/shareable reports
-- improve the JSON schema for programmatic consumers if external integration becomes important
-
-## Logging and Automation Modes
-
-- add `--quiet` and/or `--verbose` flags
-- add a `--dry-run` mode for automation and script validation
-
 These would make the CLI easier to integrate into larger workflows.
 
 ## Suggested Priority Order
