@@ -31,7 +31,42 @@ Integration tests live in `tests/cli_integration.rs` and validate real binary be
 
 ## Regression Scripts
 
-### ITU region bands
+- no-argument invocation prints help
+- mixed meter/feet constraints return a validation error
+- invalid velocity values return a validation error
+- `--list-bands --region 2` shows region-specific output
+- recommended transformer defaults resolve correctly for non-resonant runs and EFHW mode
+- multiple export formats ignore a custom `--output` path and use default names
+- single-format export respects the requested `--output` path
+
+These tests are intentionally high-level so that clap parsing and the real CLI flow are both covered.
+
+## Script: Multi-Optima Sweep
+
+Run:
+
+```bash
+./scripts/test-multi-optima.sh
+```
+
+Purpose:
+
+- builds the project
+- sweeps band selections, velocity factors, and wire-length windows
+- stops at the first case where multiple non-resonant optima are found
+
+This is not a unit test. It is an empirical regression script used to confirm that the optimization logic still produces multiple-optima cases under realistic parameter sweeps.
+
+Environment variables:
+
+- `BIN`: path to the binary to execute, default `target/debug/rusty-wire`
+- `SWEEP_OUT`: path to the temporary sweep output file, default `/tmp/rw_sweep_result.txt`
+
+The sweep uses CLI band names/ranges (for example `40m`, `20m,17m`, `40m-10m`) to match the current `--bands` parser behavior.
+
+## Script: ITU Region Band Regression
+
+Run:
 
 ```bash
 ./scripts/test-itu-region-bands.sh

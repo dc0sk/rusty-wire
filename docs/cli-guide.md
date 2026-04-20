@@ -1,6 +1,6 @@
 # CLI Guide
 
-**Version 2.1.0**
+**Version 2.2.0**
 
 Use this page as the command reference for Rusty Wire.
 
@@ -8,7 +8,68 @@ For test procedures, see [testing.md](testing.md).
 For architecture details, see [architecture.md](architecture.md).
 For release history, see [CHANGELOG.md](CHANGELOG.md).
 
-## Basic Usage
+It supports:
+- Resonant wire length calculations (half-wave, full-wave, quarter-wave)
+- Derived antenna outputs for end-fed half-wave, full-wave loop, inverted-V dipole geometry, and off-center-fed dipole layouts
+- Non-resonant common wire optimization across selected bands with multi-optima support
+- Skip-distance summaries for selected bands
+- Interactive and non-interactive (CLI) workflows
+- ITU region-aware amateur band handling (Region 1/2/3)
+- Multiple export formats: CSV, JSON, Markdown, and plain text
+- Unit system filtering: metric-only, imperial-only, or both
+
+## Features
+
+- Band database with ham + shortwave bands
+- Default band selection for quick use: a built-in multi-band preset (shown in `--help` and used when `--bands` is omitted)
+- Calculation mode selection:
+  - Resonant (default)
+  - Non-resonant
+- Velocity factor input (default: 0.95)
+- Additional resonant-model guidance:
+  - End-fed half-wave total wire length
+  - Full-wave loop circumference
+  - Full-wave loop square-side estimate
+  - OCFD leg split estimates (33/67 and 20/80)
+- Non-resonant search constraints in either meters (default) or feet
+- Multiple local optima displayed for the active non-resonant search window
+- Multiple equally-optimal wire lengths displayed in ascending order when ties occur
+- Unit system awareness:
+  - `--units m`: metric output only
+  - `--units ft`: imperial output only
+  - `--units both`: both systems (default when mixing unit inputs)
+- Multiple export formats: CSV, JSON, Markdown, plain text
+- Comma-separated export format selection: `--export csv,json,markdown,txt`
+
+## Interactive Mode
+
+Interactive mode is available explicitly:
+
+```bash
+rusty-wire --interactive
+```
+
+It lets you:
+- List all available bands
+- Select one or multiple bands
+- Choose calculation mode
+- Set velocity factor
+- Choose transformer ratio
+- Configure non-resonant wire windows interactively
+- Export results and print an equivalent CLI command
+
+### Interactive Mode: Per-Session Defaults
+
+Starting with the next release, interactive mode remembers your last-used values for each prompt (bands, calculation mode, antenna model, velocity factor, transformer ratio, wire window, and units) during your session. When you repeat a calculation, prompts will pre-fill with your previous choices, making iterative planning much faster.
+
+- To accept the previous value, just press Enter at the prompt.
+- To change a value, type a new one as usual.
+- Defaults reset when you exit and restart the program.
+
+This feature applies to both multi-band and quick single-band calculations in interactive mode.
+
+## CLI Usage
+
 
 ```bash
 rusty-wire [OPTIONS]
@@ -127,3 +188,103 @@ SBOM commands:
 cargo sbom
 cargo sbom-cdx
 ```
+
+### 8) Imperial-only output and export
+
+```bash
+rusty-wire --mode non-resonant --bands 20m,10m --wire-min-ft 30 --wire-max-ft 60 --units ft --export markdown,txt
+```
+
+### 9) View multiple optima in non-resonant mode
+
+```bash
+rusty-wire --mode non-resonant --bands 80m --velocity 0.50 --wire-min 6 --wire-max 30
+```
+
+Non-resonant mode displays local optima for the active search window and, when present, equal-tie optima:
+```
+Best non-resonant wire length for selected bands:
+  15.00 m (49.21 ft), resonance clearance: 33.33%
+  Local optima in search window (ascending):
+     1. 10.35 m (33.96 ft, clearance: 3.95%)
+     2. 15.00 m (49.21 ft, clearance: 33.33%, recommended)
+     3. 19.65 m (64.47 ft, clearance: 18.32%)
+  Additional equal optima in range (ascending):
+     1. 15.00 m (49.21 ft, clearance: 33.33%)
+     2. 25.00 m (82.02 ft, clearance: 20.00%)
+```
+
+## Output Summary
+
+### Resonant mode includes:
+- Per-band resonant lengths (with optional unit system filtering)
+- Skip-distance summary
+- **Resonant points within the active search window** (quarter-wave harmonics for selected bands)
+- **Closest combined compromises to resonant points** (multiple near-best shared lengths across selected bands)
+- Multiple export format support (CSV, JSON, Markdown, plain text)
+
+### Non-resonant mode includes:
+- Band context overview
+- Skip-distance summary
+- **Best non-resonant wire length** with search window and resonance clearance
+- **Local optima in the active search window** in ascending order
+- **Multiple equally-optimal wire lengths** in ascending order (if ties exist)
+- Multiple export format support (CSV, JSON, Markdown, plain text)
+
+## Testing
+
+### Running the multi-optima test script
+
+Rusty Wire includes a comprehensive test script to verify that the multi-optima feature works correctly:
+
+```bash
+./scripts/test-multi-optima.sh
+```
+
+This script:
+- Builds the project
+- Performs an exhaustive parameter sweep across:
+  - Band combinations (1–10 + multi-band selections)
+  - Velocity factors (0.50–1.00 in 0.05 steps)
+  - Wire length windows (various metric ranges)
+- Exits on first non-resonant calculation that produces multiple optima
+- Prints the discovered case and example output
+- Returns exit code 0 on success, 1 if no multi-optima found
+
+**Environment variables:**
+- `BIN` — Path to the compiled binary (default: `target/debug/rusty-wire`)
+- `SWEEP_OUT` — Path for sweep results file (default: `/tmp/sweep_out.txt`)
+
+**Example output:**
+```
+FOUND_MULTIPLE
+bands=2 vf=0.50 min=6 max=30
+Best non-resonant wire length for selected bands:
+  15.00 m (49.21 ft), resonance clearance: 33.33%
+  Additional equal optima in range (ascending):
+     1. 15.00 m (49.21 ft, clearance: 33.33%)
+     2. 25.00 m (82.02 ft, clearance: 20.00%)
+
+PASS: multi-optima behavior is reachable.
+```
+
+### Running the ITU region regression script
+
+```bash
+./scripts/test-itu-region-bands.sh
+```
+
+This script:
+- Builds the project
+- Runs `--list-bands` for Regions 1, 2, and 3
+- Verifies all listed bands and ranges against expected values
+- Returns exit code 0 on success, non-zero on mismatch
+
+## Error Handling and Validation
+
+All user input and configuration validation is performed in the app layer and returns structured errors via the `AppError` enum. This ensures:
+- Consistent error messages for CLI and future UIs
+- Centralized validation logic for all user-facing input
+- Comprehensive test coverage for all error cases
+
+See the source and tests in `src/app.rs` for details.

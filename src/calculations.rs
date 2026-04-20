@@ -70,7 +70,11 @@ impl FromStr for TransformerRatio {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::parse(s).ok_or_else(|| format!("Invalid transformer ratio '{}'. Must be one of: 1:1, 1:2, 1:4, 1:5, 1:6, 1:9, 1:16, 1:49, 1:56, 1:64", s))
+        Self::parse(s).ok_or_else(|| {
+            format!(
+                "Invalid transformer ratio '{s}'. Must be one of: 1:1, 1:2, 1:4, 1:5, 1:6, 1:9, 1:16, 1:49, 1:56, 1:64"
+            )
+        })
     }
 }
 
