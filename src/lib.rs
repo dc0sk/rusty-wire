@@ -8,6 +8,7 @@ pub mod bands;
 pub mod calculations;
 pub(crate) mod cli;
 pub(crate) mod export;
+pub mod tui;
 
 /// Run the command-line interface with the given argument list.
 ///

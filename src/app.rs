@@ -2174,6 +2174,189 @@ pub fn band_display_view(
 }
 
 // ---------------------------------------------------------------------------
+// Shared state machine — AppState / AppAction / apply_action
+//
+// Framework-agnostic state machine shared by the TUI (ratatui), future GUI
+// (iced), and any other front-end.  The contract is simple:
+//
+//   new_state = apply_action(old_state, action)
+//
+// apply_action is a pure function: no I/O, no side-effects.  Front-ends are
+// responsible for calling it and re-rendering the result.
+// ---------------------------------------------------------------------------
+
+/// The complete application state that any front-end (TUI, GUI) renders.
+#[derive(Debug, Clone)]
+pub struct AppState {
+    /// Current configuration being shown or edited.
+    pub config: AppConfig,
+    /// Results of the last successful `RunCalculation` action, or `None`.
+    pub results: Option<AppResults>,
+    /// Last error produced by a failed `RunCalculation` or invalid action.
+    pub error: Option<AppError>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            config: AppConfig::default(),
+            results: None,
+            error: None,
+        }
+    }
+}
+
+/// All actions that can be dispatched to `apply_action`.
+///
+/// Each variant mutates exactly one field of `AppConfig`, or triggers a
+/// calculation / state reset.  The set intentionally mirrors the full
+/// `AppConfig` field set so a TUI or GUI only needs to know about
+/// `AppAction` — not `AppConfig` internals.
+#[derive(Debug, Clone)]
+pub enum AppAction {
+    // --- Configuration changes ---
+    SetBandIndices(Vec<usize>),
+    SetMode(CalcMode),
+    SetAntennaModel(Option<AntennaModel>),
+    SetVelocityFactor(f64),
+    SetTransformerRatio(TransformerRatio),
+    SetWireMin(f64),
+    SetWireMax(f64),
+    SetStep(f64),
+    SetUnits(UnitSystem),
+    SetItuRegion(ITURegion),
+    SetCustomFreq(Option<f64>),
+    // --- Lifecycle ---
+    /// Run `run_calculation_checked` against the current config.
+    /// On success: replaces `results` and clears `error`.
+    /// On failure: clears `results` and sets `error`.
+    RunCalculation,
+    /// Clear the last results without changing the config.
+    ClearResults,
+    /// Clear the last error without changing the config or results.
+    ClearError,
+}
+
+/// Pure state-transition function.
+///
+/// Takes ownership of `state`, applies `action`, and returns the new state.
+/// Never performs I/O.  Suitable as the single update function in a TUI event
+/// loop or an iced `update()` handler.
+pub fn apply_action(state: AppState, action: AppAction) -> AppState {
+    match action {
+        AppAction::SetBandIndices(indices) => AppState {
+            config: AppConfig {
+                band_indices: indices,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetMode(mode) => AppState {
+            config: AppConfig {
+                mode,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetAntennaModel(antenna_model) => AppState {
+            config: AppConfig {
+                antenna_model,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetVelocityFactor(vf) => AppState {
+            config: AppConfig {
+                velocity_factor: vf,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetTransformerRatio(ratio) => AppState {
+            config: AppConfig {
+                transformer_ratio: ratio,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetWireMin(min_m) => AppState {
+            config: AppConfig {
+                wire_min_m: min_m,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetWireMax(max_m) => AppState {
+            config: AppConfig {
+                wire_max_m: max_m,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetStep(step_m) => AppState {
+            config: AppConfig {
+                step_m,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetUnits(units) => AppState {
+            config: AppConfig {
+                units,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetItuRegion(region) => AppState {
+            config: AppConfig {
+                itu_region: region,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetCustomFreq(freq) => AppState {
+            config: AppConfig {
+                custom_freq_mhz: freq,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::RunCalculation => match run_calculation_checked(state.config.clone()) {
+            Ok(results) => AppState {
+                results: Some(results),
+                error: None,
+                ..state
+            },
+            Err(err) => AppState {
+                results: None,
+                error: Some(err),
+                ..state
+            },
+        },
+        AppAction::ClearResults => AppState {
+            results: None,
+            error: None,
+            ..state
+        },
+        AppAction::ClearError => AppState {
+            error: None,
+            ..state
+        },
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
 
@@ -3291,5 +3474,144 @@ mod app_error_tests {
         };
         let results = run_calculation(config);
         assert!(skipped_band_details(&results).is_empty());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// State machine tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod state_machine_tests {
+    use super::*;
+
+    fn default_state() -> AppState {
+        AppState::default()
+    }
+
+    #[test]
+    fn apply_action_set_mode_updates_config() {
+        let state = apply_action(default_state(), AppAction::SetMode(CalcMode::NonResonant));
+        assert_eq!(state.config.mode, CalcMode::NonResonant);
+        assert!(state.error.is_none());
+    }
+
+    #[test]
+    fn apply_action_set_band_indices_replaces_bands() {
+        let state = apply_action(default_state(), AppAction::SetBandIndices(vec![3, 5, 7]));
+        assert_eq!(state.config.band_indices, vec![3, 5, 7]);
+        assert!(state.error.is_none());
+    }
+
+    #[test]
+    fn apply_action_set_velocity_factor_updates_config() {
+        let state = apply_action(default_state(), AppAction::SetVelocityFactor(0.72));
+        assert!((state.config.velocity_factor - 0.72).abs() < 1e-9);
+    }
+
+    #[test]
+    fn apply_action_set_units_updates_config() {
+        let state = apply_action(default_state(), AppAction::SetUnits(UnitSystem::Imperial));
+        assert_eq!(state.config.units, UnitSystem::Imperial);
+    }
+
+    #[test]
+    fn apply_action_set_itu_region_updates_config() {
+        let state = apply_action(default_state(), AppAction::SetItuRegion(ITURegion::Region2));
+        assert_eq!(state.config.itu_region, ITURegion::Region2);
+    }
+
+    #[test]
+    fn apply_action_set_antenna_model_updates_config() {
+        let state = apply_action(
+            default_state(),
+            AppAction::SetAntennaModel(Some(AntennaModel::EndFedHalfWave)),
+        );
+        assert_eq!(
+            state.config.antenna_model,
+            Some(AntennaModel::EndFedHalfWave)
+        );
+    }
+
+    #[test]
+    fn apply_action_set_custom_freq_updates_config() {
+        let state = apply_action(default_state(), AppAction::SetCustomFreq(Some(14.225)));
+        assert_eq!(state.config.custom_freq_mhz, Some(14.225));
+    }
+
+    #[test]
+    fn apply_action_set_wire_min_max_updates_config() {
+        let state = apply_action(default_state(), AppAction::SetWireMin(12.0));
+        assert!((state.config.wire_min_m - 12.0).abs() < 1e-9);
+        let state = apply_action(state, AppAction::SetWireMax(50.0));
+        assert!((state.config.wire_max_m - 50.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn apply_action_run_calculation_populates_results_on_success() {
+        let state = apply_action(default_state(), AppAction::RunCalculation);
+        assert!(state.results.is_some());
+        assert!(state.error.is_none());
+    }
+
+    #[test]
+    fn apply_action_run_calculation_sets_error_on_invalid_config() {
+        // Velocity factor outside valid range → InvalidVelocityFactor
+        let bad_state = AppState {
+            config: AppConfig {
+                velocity_factor: 2.0,
+                ..AppConfig::default()
+            },
+            ..AppState::default()
+        };
+        let state = apply_action(bad_state, AppAction::RunCalculation);
+        assert!(state.results.is_none());
+        assert!(matches!(
+            state.error,
+            Some(AppError::InvalidVelocityFactor(_))
+        ));
+    }
+
+    #[test]
+    fn apply_action_clear_results_removes_results_and_error() {
+        let state = apply_action(default_state(), AppAction::RunCalculation);
+        assert!(state.results.is_some());
+        let state = apply_action(state, AppAction::ClearResults);
+        assert!(state.results.is_none());
+        assert!(state.error.is_none());
+    }
+
+    #[test]
+    fn apply_action_clear_error_removes_error_only() {
+        let bad_state = AppState {
+            config: AppConfig {
+                velocity_factor: 2.0,
+                ..AppConfig::default()
+            },
+            ..AppState::default()
+        };
+        let state = apply_action(bad_state, AppAction::RunCalculation);
+        assert!(state.error.is_some());
+        let state = apply_action(state, AppAction::ClearError);
+        assert!(state.error.is_none());
+        // Config is unchanged — velocity_factor is still 2.0
+        assert!((state.config.velocity_factor - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn apply_action_sequence_builds_correct_config() {
+        // Simulate a TUI user configuring from scratch
+        let state = default_state();
+        let state = apply_action(state, AppAction::SetMode(CalcMode::NonResonant));
+        let state = apply_action(state, AppAction::SetBandIndices(vec![4, 5, 7]));
+        let state = apply_action(state, AppAction::SetWireMin(10.0));
+        let state = apply_action(state, AppAction::SetWireMax(40.0));
+        let state = apply_action(state, AppAction::SetUnits(UnitSystem::Both));
+        let state = apply_action(state, AppAction::RunCalculation);
+
+        assert_eq!(state.config.mode, CalcMode::NonResonant);
+        assert_eq!(state.config.band_indices, vec![4, 5, 7]);
+        assert!(state.results.is_some());
+        assert!(state.error.is_none());
     }
 }
