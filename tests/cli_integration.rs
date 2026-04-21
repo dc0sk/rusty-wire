@@ -478,6 +478,97 @@ fn freq_flag_with_quiet_prints_compact_line() {
 }
 
 // ---------------------------------------------------------------------------
+// --freq-list tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn freq_list_computes_multiple_frequencies() {
+    let output = binary()
+        .args(["--freq-list", "7.074,14.074"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(stdout.contains("7.074 MHz"), "expected 7.074 MHz label");
+    assert!(stdout.contains("14.074 MHz"), "expected 14.074 MHz label");
+    assert!(stdout.contains("Half-wave:"));
+}
+
+#[test]
+fn freq_list_single_entry_behaves_like_freq() {
+    let output = binary()
+        .args(["--freq-list", "7.1"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("7.100 MHz"));
+}
+
+#[test]
+fn freq_list_and_freq_are_mutually_exclusive() {
+    let output = binary()
+        .args(["--freq", "7.1", "--freq-list", "14.2"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("mutually exclusive"));
+}
+
+#[test]
+fn freq_list_rejects_zero_frequency() {
+    let output = binary()
+        .args(["--freq-list", "0,14.074"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("out of range"));
+}
+
+#[test]
+fn freq_list_rejects_over_limit_frequency() {
+    let output = binary()
+        .args(["--freq-list", "7.074,1001.0"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("out of range"));
+}
+
+#[test]
+fn freq_list_quiet_non_resonant_prints_compact() {
+    let output = binary()
+        .args([
+            "--freq-list",
+            "7.074,14.074",
+            "--mode",
+            "non-resonant",
+            "--units",
+            "m",
+            "--quiet",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains(" m"));
+    assert!(!stdout.contains("Half-wave:"));
+}
+
+// ---------------------------------------------------------------------------
 // --velocity-sweep tests
 // ---------------------------------------------------------------------------
 

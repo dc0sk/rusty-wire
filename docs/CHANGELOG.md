@@ -4,6 +4,15 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-04-21
+
+### Added
+- **`--freq-list <f1,f2,...>` flag**: compute wire lengths for multiple explicit frequencies in a single invocation, bypassing band selection entirely. Each frequency produces its own labelled `WireCalculation` row (`X.XXX MHz`). Accepts any number of positive values up to 1000 MHz; combines freely with `--mode`, `--antenna`, `--quiet`, `--units`, and `--export`.
+- **`AppConfig.freq_list_mhz: Vec<f64>`**: new app-layer field (default empty); `run_calculation` processes `freq_list_mhz` first, before `custom_freq_mhz` and band selection.
+- **`AppAction::SetFreqList(Vec<f64>)`**: state-machine action for TUI and future GUI.
+- **Mutual exclusion guard**: `--freq` and `--freq-list` cannot be used together; a clear error is printed if both are provided.
+- **6 new integration tests**: `freq_list_computes_multiple_frequencies`, `freq_list_single_entry_behaves_like_freq`, `freq_list_and_freq_are_mutually_exclusive`, `freq_list_rejects_zero_frequency`, `freq_list_rejects_over_limit_frequency`, `freq_list_quiet_non_resonant_prints_compact`.
+
 ## [2.4.0] - 2026-04-21
 
 ### Added

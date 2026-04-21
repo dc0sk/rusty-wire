@@ -1,6 +1,6 @@
 # Rusty Wire
 
-![Version](https://img.shields.io/badge/version-2.4.0-blue)
+![Version](https://img.shields.io/badge/version-2.5.0-blue)
 ![License](https://img.shields.io/badge/license-GPL--2.0--or--later-green)
 ![Rust edition](https://img.shields.io/badge/rust-2021-orange)
 
@@ -154,7 +154,7 @@ For a complete option reference see [docs/cli-guide.md](docs/cli-guide.md).
 ## Testing
 
 ```bash
-# Full unit + integration suite (176 tests)
+# Full unit + integration suite (182 tests)
 cargo test
 
 # Regression scripts

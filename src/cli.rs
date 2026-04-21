@@ -100,6 +100,11 @@ struct Cli {
     #[arg(long)]
     freq: Option<f64>,
 
+    /// Compute wire lengths for multiple explicit frequencies in MHz (comma-separated, e.g. 7.074,14.074)
+    /// Bypasses band selection. Mutually exclusive with --freq.
+    #[arg(long, value_delimiter = ',')]
+    freq_list: Option<Vec<f64>>,
+
     /// Suppress the full results table; print only the key recommendation
     #[arg(long)]
     quiet: bool,
@@ -311,11 +316,31 @@ pub fn run_from_args(args: &[String]) -> bool {
         return true;
     }
 
+    // Validate --freq and --freq-list mutual exclusion
+    if cli.freq.is_some() && cli.freq_list.is_some() {
+        eprintln!("Error: --freq and --freq-list are mutually exclusive; use one or the other.");
+        return false;
+    }
+
     // Validate --freq early with a clear message
     if let Some(freq) = cli.freq {
         if freq <= 0.0 {
             eprintln!("Error: --freq must be a positive frequency in MHz (got {freq:.3})");
             return false;
+        }
+    }
+
+    // Validate --freq-list values early
+    if let Some(ref freqs) = cli.freq_list {
+        if freqs.is_empty() {
+            eprintln!("Error: --freq-list requires at least one frequency value.");
+            return false;
+        }
+        for &freq in freqs {
+            if freq <= 0.0 || freq > 1000.0 {
+                eprintln!("Error: --freq-list value {freq:.3} MHz is out of range (must be > 0 and ≤ 1000 MHz).");
+                return false;
+            }
         }
     }
 
@@ -379,6 +404,7 @@ pub fn run_from_args(args: &[String]) -> bool {
         transformer_ratio,
         antenna_model,
         custom_freq_mhz: cli.freq,
+        freq_list_mhz: cli.freq_list.unwrap_or_default(),
     };
 
     // Velocity sweep overrides single-run output
@@ -913,6 +939,7 @@ fn calculate_selected_bands_with_defaults(
         transformer_ratio,
         antenna_model,
         custom_freq_mhz: None,
+        freq_list_mhz: vec![],
     };
 
     let results = match execute_request_checked(AppRequest::new(config)) {
@@ -1008,6 +1035,7 @@ fn quick_calculation_with_defaults(
         transformer_ratio,
         antenna_model,
         custom_freq_mhz: None,
+        freq_list_mhz: vec![],
     };
 
     let results = match execute_request_checked(AppRequest::new(config)) {
@@ -1442,6 +1470,7 @@ mod tests {
             transformer_ratio: TransformerRatio::R1To1,
             antenna_model: None,
             custom_freq_mhz: None,
+            freq_list_mhz: vec![],
         };
 
         // Assert the formatter input mapping separately since this function prints to stdout.
