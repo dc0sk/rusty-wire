@@ -1,6 +1,6 @@
 # Rusty Wire
 
-![Version](https://img.shields.io/badge/version-2.3.0-blue)
+![Version](https://img.shields.io/badge/version-2.4.0-blue)
 ![License](https://img.shields.io/badge/license-GPL--2.0--or--later-green)
 ![Rust edition](https://img.shields.io/badge/rust-2021-orange)
 
@@ -11,7 +11,7 @@ amateur and shortwave bands. It covers five antenna models, recommends transform
 automatically, and fits comfortably into shell scripts as well as interactive
 planning sessions.
 
-**2.x roadmap target: keyboard-driven TUI (`ratatui`) · 3.x: desktop GUI (`iced`)**
+**2.4.0: keyboard-driven TUI shipped (`rusty-wire-tui`) · 3.x roadmap: desktop GUI (`iced`)**
 
 ---
 
@@ -154,7 +154,7 @@ For a complete option reference see [docs/cli-guide.md](docs/cli-guide.md).
 ## Testing
 
 ```bash
-# Full unit + integration suite (148 tests)
+# Full unit + integration suite (176 tests)
 cargo test
 
 # Regression scripts
@@ -166,9 +166,34 @@ See [docs/testing.md](docs/testing.md) for the complete test strategy.
 
 ---
 
+## TUI
+
+```bash
+# Launch the keyboard-driven terminal UI
+cargo run --bin tui
+# or, after cargo build --release:
+./target/release/rusty-wire-tui
+```
+
+The TUI provides a two-panel layout — configuration on the left, results on the
+right — and requires no command-line flags. All nine settings cycle through
+presets with ←/→; results scroll with ↑↓ or PgUp/PgDn. Press `r` to
+recalculate, `q` to quit.
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` or `j` / `k` | Select config field / scroll results |
+| `←` / `→` or `h` / `l` | Change selected value |
+| `r` / `Enter` | Run calculation |
+| `Tab` | Toggle focus (config ↔ results) |
+| `PgUp` / `PgDn` | Scroll results by 10 lines |
+| `q` / `Esc` / `Ctrl-C` | Quit |
+
+---
+
 ## Library Crate
 
-Rusty Wire is also a library crate. External front-ends (the future TUI and GUI)
+Rusty Wire is also a library crate. External front-ends (TUI, future GUI)
 consume `rusty_wire::app::*` directly without pulling in CLI logic:
 
 ```rust
@@ -176,7 +201,8 @@ use rusty_wire::app::{AppRequest, AppResponse, execute_request_checked};
 ```
 
 `AppConfig → AppResults` is the stable calculation boundary. `AppError` covers
-all validation paths with typed variants.
+all validation paths with typed variants. `AppState` / `AppAction` /
+`apply_action` form the pure state machine used by the TUI and any future GUI.
 
 ---
 
