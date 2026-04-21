@@ -15,6 +15,9 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## TUI (2.x, `ratatui`)
 
+- **Band selection refinement**: the current preset list omits 60m and other region-specific bands. Two improvements to consider together:
+  - Add 60m to relevant presets (or keep presets lean and note the gap)
+  - "Custom" preset that opens a band-checklist panel where the user can tick individual bands — similar to a multi-select dialog. This would replace the fixed preset table for advanced users.
 - Live recalculation as inputs change (with debounce for non-resonant search)
 - Collapsible result panels per antenna model
 - Visual highlighting of recommended transformer ratio and skipped bands

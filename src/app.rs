@@ -296,6 +296,9 @@ pub struct AppConfig {
     pub antenna_model: Option<AntennaModel>,
     /// Direct frequency input in MHz; when set, bypasses band selection entirely.
     pub custom_freq_mhz: Option<f64>,
+    /// Multiple explicit frequencies in MHz; when non-empty, bypasses band selection.
+    /// Takes precedence over `custom_freq_mhz` if both are set.
+    pub freq_list_mhz: Vec<f64>,
 }
 
 impl Default for AppConfig {
@@ -312,6 +315,7 @@ impl Default for AppConfig {
             transformer_ratio: DEFAULT_TRANSFORMER_RATIO,
             antenna_model: None,
             custom_freq_mhz: None,
+            freq_list_mhz: vec![],
         }
     }
 }
@@ -578,7 +582,31 @@ pub struct SkippedBandDetail {
 /// This is a pure, I/O-free function suitable for use from both the CLI and
 /// any future GUI front-end.
 pub fn run_calculation(config: AppConfig) -> AppResults {
-    let (calculations, skipped_band_indices) = if let Some(freq_mhz) = config.custom_freq_mhz {
+    let (calculations, skipped_band_indices) = if !config.freq_list_mhz.is_empty() {
+        let calcs = config
+            .freq_list_mhz
+            .iter()
+            .map(|&freq_mhz| {
+                let custom_band = Band {
+                    name: "custom",
+                    band_type: BandType::HF,
+                    freq_low_mhz: freq_mhz,
+                    freq_high_mhz: freq_mhz,
+                    freq_center_mhz: freq_mhz,
+                    typical_skip_km: (0.0, 0.0),
+                    regions: &[],
+                };
+                let mut calc = calculate_for_band_with_velocity(
+                    &custom_band,
+                    config.velocity_factor,
+                    config.transformer_ratio,
+                );
+                calc.band_name = format!("{freq_mhz:.3} MHz");
+                calc
+            })
+            .collect();
+        (calcs, Vec::new())
+    } else if let Some(freq_mhz) = config.custom_freq_mhz {
         let custom_band = Band {
             name: "custom",
             band_type: BandType::HF,
@@ -643,7 +671,13 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
 }
 
 pub fn validate_config(config: &AppConfig) -> Result<(), AppError> {
-    if let Some(freq) = config.custom_freq_mhz {
+    if !config.freq_list_mhz.is_empty() {
+        for &freq in &config.freq_list_mhz {
+            if freq <= 0.0 || freq > 1000.0 {
+                return Err(AppError::InvalidFrequency(freq));
+            }
+        }
+    } else if let Some(freq) = config.custom_freq_mhz {
         if freq <= 0.0 || freq > 1000.0 {
             return Err(AppError::InvalidFrequency(freq));
         }
@@ -2226,6 +2260,7 @@ pub enum AppAction {
     SetUnits(UnitSystem),
     SetItuRegion(ITURegion),
     SetCustomFreq(Option<f64>),
+    SetFreqList(Vec<f64>),
     // --- Lifecycle ---
     /// Run `run_calculation_checked` against the current config.
     /// On success: replaces `results` and clears `error`.
@@ -2327,6 +2362,14 @@ pub fn apply_action(state: AppState, action: AppAction) -> AppState {
         AppAction::SetCustomFreq(freq) => AppState {
             config: AppConfig {
                 custom_freq_mhz: freq,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetFreqList(freqs) => AppState {
+            config: AppConfig {
+                freq_list_mhz: freqs,
                 ..state.config
             },
             error: None,
