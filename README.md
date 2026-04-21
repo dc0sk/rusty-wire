@@ -1,17 +1,17 @@
 # Rusty Wire
 
-![Version](https://img.shields.io/badge/version-2.5.0-blue)
+![Version](https://img.shields.io/badge/version-2.5.1-blue)
 ![License](https://img.shields.io/badge/license-GPL--2.0--or--later-green)
 ![Rust edition](https://img.shields.io/badge/rust-2021-orange)
 
 > Wire-antenna planning for ham radio operators — fast, precise, and scriptable.
 
 Rusty Wire computes resonant and non-resonant wire lengths across ITU-region-aware
-amateur and shortwave bands. It covers five antenna models, recommends transformers
+amateur and shortwave bands. It covers six antenna models, recommends transformers
 automatically, and fits comfortably into shell scripts as well as interactive
 planning sessions.
 
-**2.4.0: keyboard-driven TUI shipped (`rusty-wire-tui`) · 3.x roadmap: desktop GUI (`iced`)**
+**2.5.1: trap dipole model + restored TUI/CLI info surfaces · 3.x roadmap: desktop GUI (`iced`)**
 
 ---
 
@@ -26,8 +26,9 @@ planning sessions.
 | End-fed half-wave | `efhw` | Total EFHW wire length |
 | Full-wave loop | `loop` | Circumference and square-side estimate |
 | Off-center-fed dipole | `ocfd` | 33/67 and 20/80 leg splits, optimised feedpoint |
+| Trap dipole | `trap-dipole` | Trap total and per-element guidance |
 
-Omit `--antenna` to show all five models at once.
+Omit `--antenna` to show all six models at once.
 
 ### Calculation modes
 
@@ -146,6 +147,7 @@ For a complete option reference see [docs/cli-guide.md](docs/cli-guide.md).
 | [docs/architecture.md](docs/architecture.md) | Module design, execution flow, app-layer API |
 | [docs/roadmap.md](docs/roadmap.md) | Milestone plan (2.x TUI, 3.x GUI) |
 | [docs/backlog.md](docs/backlog.md) | Unconfirmed ideas under consideration |
+| [docs/tui-screenshots.md](docs/tui-screenshots.md) | Canonical TUI screenshot capture and placement checklist |
 | [docs/testing.md](docs/testing.md) | Test strategy and regression scripts |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Full release history |
 
@@ -179,6 +181,12 @@ The TUI provides a two-panel layout — configuration on the left, results on th
 right — and requires no command-line flags. All nine settings cycle through
 presets with ←/→; results scroll with ↑↓ or PgUp/PgDn. Press `r` to
 recalculate, `q` to quit.
+
+Screenshot capture and placement checklist: [docs/tui-screenshots.md](docs/tui-screenshots.md).
+
+![TUI default layout placeholder](docs/images/tui/01-default-layout.png)
+
+![TUI about popup placeholder](docs/images/tui/04-about-popup.png)
 
 | Key | Action |
 |-----|--------|

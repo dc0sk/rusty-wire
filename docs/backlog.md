@@ -10,6 +10,7 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 - `--transformer-sweep <r1,r2,...>` — like `--velocity-sweep` but over transformer ratios
 - `--freq-list <f1,f2,...>` — multiple explicit frequencies in one run
 - `--verbose` / `--dry-run` flags
+- Expand `--info` metadata output with optional runtime/build details
 - YAML and HTML export targets
 - Persistent user preferences file (default units, region, mode)
 
@@ -18,6 +19,8 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 - **Band selection refinement**: the current preset list omits 60m and other region-specific bands. Two improvements to consider together:
   - Add 60m to relevant presets (or keep presets lean and note the gap)
   - "Custom" preset that opens a band-checklist panel where the user can tick individual bands — similar to a multi-select dialog. This would replace the fixed preset table for advanced users.
+- Refresh and publish TUI screenshots in docs (defaults, model-specific result view, export flow)
+- Keep info popup parity-complete: author, version, GitHub URL, and license
 - Live recalculation as inputs change (with debounce for non-resonant search)
 - Collapsible result panels per antenna model
 - Visual highlighting of recommended transformer ratio and skipped bands
