@@ -5,14 +5,15 @@
 /// The computation itself is delegated to `app::run_calculation`; the only
 /// imports from the core modules that this file needs are for display helpers.
 use crate::app::{
-    band_label_for_index, execute_request_checked, format_quiet_summary, parse_band_selection,
-    parse_single_band_token, recommended_transformer_ratio,
-    recommended_transformer_ratio_fallback_message, resolve_wire_window_inputs,
-    results_display_document, validate_velocity_sweep, velocity_sweep_display_lines,
-    velocity_sweep_view, AntennaModel, AppConfig, AppRequest, AppResults, CalcMode, ExportFormat,
-    UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION, FEET_TO_METERS,
+    band_label_for_index, band_listing_display_lines, band_listing_view, execute_request_checked,
+    format_quiet_summary, parse_band_selection, parse_single_band_token,
+    recommended_transformer_ratio, recommended_transformer_ratio_fallback_message,
+    resolve_wire_window_inputs, results_display_document, validate_velocity_sweep,
+    velocity_sweep_display_lines, velocity_sweep_view, AntennaModel, AppConfig, AppRequest,
+    AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION,
+    FEET_TO_METERS,
 };
-use crate::bands::{get_bands_for_region, ITURegion, ALL_REGIONS};
+use crate::bands::{ITURegion, ALL_REGIONS};
 use crate::calculations::{TransformerRatio, DEFAULT_NON_RESONANT_CONFIG};
 use crate::export::{default_output_name, export_results, validate_export_path};
 use clap::Parser;
@@ -1276,24 +1277,10 @@ fn show_all_bands_for_region(region: ITURegion) {
 }
 
 fn show_all_bands_for_region_to_writer(output: &mut dyn Write, region: ITURegion) {
-    let bands = get_bands_for_region(region);
-    writeln!(
-        output,
-        "\nAvailable bands in Region {} ({} total):",
-        region.short_name(),
-        bands.len()
-    )
-    .expect("failed to write band listing header");
-    writeln!(output, "  ({})", region.long_name()).expect("failed to write band listing");
-    writeln!(
-        output,
-        "------------------------------------------------------------"
-    )
-    .expect("failed to write band listing separator");
-    for (idx, band) in bands {
-        writeln!(output, "{:2}. {}", idx + 1, band).expect("failed to write band line");
+    let view = band_listing_view(region);
+    for line in band_listing_display_lines(&view) {
+        writeln!(output, "{line}").expect("failed to write band listing");
     }
-    writeln!(output).expect("failed to write band listing trailing newline");
 }
 // ---------------------------------------------------------------------------
 // Terminal display

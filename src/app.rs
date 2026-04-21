@@ -117,11 +117,55 @@ pub fn recommended_transformer_ratio_fallback_message(
     mode: CalcMode,
     antenna_model: Option<AntennaModel>,
 ) -> String {
-    let recommended = recommended_transformer_ratio(mode, antenna_model);
+    let explanation = transformer_ratio_explanation(mode, antenna_model);
     format!(
         "Unknown ratio. Using recommended {}.",
-        recommended.as_label()
+        explanation.ratio.as_label()
     )
+}
+
+/// Structured explanation for the recommended transformer ratio.
+///
+/// Provides both the ratio value and a human-readable `reason` string
+/// suitable for TUI help text, tooltips, or verbose CLI output.
+#[derive(Debug, Clone)]
+pub struct TransformerRatioExplanation {
+    pub ratio: TransformerRatio,
+    pub reason: &'static str,
+}
+
+/// Return the recommended transformer ratio and a one-sentence explanation
+/// of why it is recommended for the given mode and antenna model.
+///
+/// Pure function; performs no I/O.
+pub fn transformer_ratio_explanation(
+    mode: CalcMode,
+    antenna_model: Option<AntennaModel>,
+) -> TransformerRatioExplanation {
+    let ratio = recommended_transformer_ratio(mode, antenna_model);
+    let reason = match antenna_model {
+        Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) => {
+            "Center-fed dipoles present ~50 \u{03a9} at resonance; a 1:1 balun is typical."
+        }
+        Some(AntennaModel::FullWaveLoop) => {
+            "Full-wave loops present ~100 \u{03a9} at resonance; a 1:1 choke balun is common."
+        }
+        Some(AntennaModel::EndFedHalfWave) => {
+            "EFHW antennas present ~2500\u{2013}3000 \u{03a9}; a 1:49 or 1:56 transformer matches to 50 \u{03a9}."
+        }
+        Some(AntennaModel::OffCenterFedDipole) => {
+            "OCFDs fed at the 1/3 point present ~200 \u{03a9}; a 1:4 balun is standard."
+        }
+        None => match mode {
+            CalcMode::Resonant => {
+                "Resonant mode, no antenna model; 1:1 is used as a neutral starting point."
+            }
+            CalcMode::NonResonant => {
+                "Non-resonant random-wire mode; 1:9 is a common matching ratio."
+            }
+        },
+    };
+    TransformerRatioExplanation { ratio, reason }
 }
 
 // ---------------------------------------------------------------------------
@@ -497,6 +541,34 @@ pub struct ResolvedWireWindow {
     pub inferred_display_units: UnitSystem,
 }
 
+/// One row in the band-listing view (used by `band_listing_view`).
+#[derive(Debug, Clone)]
+pub struct BandListingRow {
+    /// 1-based display index.
+    pub index: usize,
+    /// Full formatted band description (e.g. "40m [HF] (7.0-7.2 MHz)").
+    pub display: String,
+}
+
+/// Structured data for a region's band listing.
+///
+/// Pure view model — no I/O. Use `band_listing_display_lines` to render it.
+#[derive(Debug, Clone)]
+pub struct BandListingView {
+    pub region_short_name: String,
+    pub region_long_name: String,
+    pub rows: Vec<BandListingRow>,
+}
+
+/// Per-band skip detail attached to a calculation result.
+#[derive(Debug, Clone)]
+pub struct SkippedBandDetail {
+    /// 1-based band index that was excluded from the run.
+    pub band_index: usize,
+    /// Human-readable reason the band was skipped.
+    pub reason: &'static str,
+}
+
 // ---------------------------------------------------------------------------
 // Public computation API
 // ---------------------------------------------------------------------------
@@ -760,6 +832,42 @@ fn band_alias_to_index(region: ITURegion) -> HashMap<String, usize> {
     aliases
 }
 
+/// Build a pure view model for the band listing of a given ITU region.
+///
+/// Pure function; performs no I/O.
+pub fn band_listing_view(region: ITURegion) -> BandListingView {
+    let rows = crate::bands::get_bands_for_region(region)
+        .into_iter()
+        .map(|(idx, band)| BandListingRow {
+            index: idx + 1,
+            display: format!("{band}"),
+        })
+        .collect();
+    BandListingView {
+        region_short_name: region.short_name().to_string(),
+        region_long_name: region.long_name().to_string(),
+        rows,
+    }
+}
+
+/// Render a `BandListingView` to display lines (no I/O).
+pub fn band_listing_display_lines(view: &BandListingView) -> Vec<String> {
+    let mut lines = Vec::new();
+    lines.push(String::new());
+    lines.push(format!(
+        "Available bands in Region {} ({} total):",
+        view.region_short_name,
+        view.rows.len()
+    ));
+    lines.push(format!("  ({})", view.region_long_name));
+    lines.push("------------------------------------------------------------".to_string());
+    for row in &view.rows {
+        lines.push(format!("{:2}. {}", row.index, row.display));
+    }
+    lines.push(String::new());
+    lines
+}
+
 /// Validate and execute a calculation run.
 ///
 /// This is the preferred API for front-ends that need structured error
@@ -882,15 +990,29 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
     }
 }
 
+/// Return per-band skip details for all bands excluded from this run.
+///
+/// Pure function; performs no I/O.
+pub fn skipped_band_details(results: &AppResults) -> Vec<SkippedBandDetail> {
+    results
+        .skipped_band_indices
+        .iter()
+        .map(|&idx| SkippedBandDetail {
+            band_index: idx,
+            reason: "not available in the selected ITU region",
+        })
+        .collect()
+}
+
 pub fn skipped_band_warning(results: &AppResults) -> Option<String> {
-    if results.skipped_band_indices.is_empty() {
+    let details = skipped_band_details(results);
+    if details.is_empty() {
         return None;
     }
 
-    let skipped = results
-        .skipped_band_indices
+    let skipped = details
         .iter()
-        .map(|value| value.to_string())
+        .map(|d| d.band_index.to_string())
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -3088,5 +3210,86 @@ mod app_error_tests {
         assert!(combined.contains("0.85"), "expected 0.85 in output");
         assert!(combined.contains("0.95"), "expected 0.95 in output");
         assert!(combined.contains("resonant"));
+    }
+
+    #[test]
+    fn transformer_ratio_explanation_efhw_returns_correct_ratio_and_reason() {
+        let expl =
+            transformer_ratio_explanation(CalcMode::Resonant, Some(AntennaModel::EndFedHalfWave));
+        assert_eq!(expl.ratio, TransformerRatio::R1To56);
+        assert!(expl.reason.contains("49") || expl.reason.contains("56"));
+    }
+
+    #[test]
+    fn transformer_ratio_explanation_resonant_no_model_uses_1to1() {
+        let expl = transformer_ratio_explanation(CalcMode::Resonant, None);
+        assert_eq!(expl.ratio, TransformerRatio::R1To1);
+        assert!(!expl.reason.is_empty());
+    }
+
+    #[test]
+    fn transformer_ratio_explanation_non_resonant_no_model_uses_1to9() {
+        let expl = transformer_ratio_explanation(CalcMode::NonResonant, None);
+        assert_eq!(expl.ratio, TransformerRatio::R1To9);
+        assert!(expl.reason.contains("1:9"));
+    }
+
+    #[test]
+    fn band_listing_view_region1_has_rows() {
+        let view = band_listing_view(ITURegion::Region1);
+        assert!(!view.rows.is_empty());
+        assert_eq!(view.region_short_name, "1");
+        assert!(view.region_long_name.contains("Europe"));
+    }
+
+    #[test]
+    fn band_listing_display_lines_contains_band_name() {
+        let view = band_listing_view(ITURegion::Region1);
+        let lines = band_listing_display_lines(&view);
+        let combined = lines.join("\n");
+        assert!(combined.contains("40m"), "expected 40m in band listing");
+        assert!(combined.contains("Region 1"), "expected region header");
+    }
+
+    #[test]
+    fn band_listing_row_indices_are_one_based() {
+        let view = band_listing_view(ITURegion::Region1);
+        // First row should have index 1
+        assert_eq!(view.rows[0].index, 1);
+        // Indices should be consecutive and start at 1
+        for (i, row) in view.rows.iter().enumerate() {
+            assert_eq!(row.index, i + 1);
+        }
+    }
+
+    #[test]
+    fn skipped_band_details_returns_reason_for_each_skipped() {
+        // Build a config that requests a band not in Region 3 (e.g. 60m is region-limited)
+        // The easiest way is to directly construct AppResults with known skipped indices.
+        let results = AppResults {
+            calculations: Vec::new(),
+            recommendation: None,
+            optima: Vec::new(),
+            window_optima: Vec::new(),
+            resonant_compromises: Vec::new(),
+            config: AppConfig::default(),
+            skipped_band_indices: vec![3, 7],
+        };
+        let details = skipped_band_details(&results);
+        assert_eq!(details.len(), 2);
+        assert_eq!(details[0].band_index, 3);
+        assert_eq!(details[1].band_index, 7);
+        assert!(details[0].reason.contains("ITU region"));
+        assert!(details[1].reason.contains("ITU region"));
+    }
+
+    #[test]
+    fn skipped_band_details_empty_when_no_skipped_bands() {
+        let config = AppConfig {
+            band_indices: vec![5],
+            ..AppConfig::default()
+        };
+        let results = run_calculation(config);
+        assert!(skipped_band_details(&results).is_empty());
     }
 }
