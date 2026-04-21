@@ -4,6 +4,17 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-04-21
+
+### Added
+- **Trap dipole antenna model**: added `--antenna trap-dipole` (aliases: `trap`, `trapdipole`) with dedicated output in calculations, app display views, CLI interactive selection, TUI model cycling, and all export formats (CSV/JSON/Markdown/TXT).
+- **Project info surfaces**: restored TUI About popup metadata and added CLI/interactive parity output for version, author, GitHub URL, and license (`--info` plus interactive menu item).
+- **TUI screenshot checklist + assets**: added canonical screenshot plan and image placeholders/paths for docs updates.
+
+### Changed
+- **Documentation refresh**: README, CLI guide, backlog, and screenshot documentation updated for trap dipole support, info surfaces, and screenshot placement guidance.
+- **Version bump**: release version advanced from `2.5.0` to `2.5.1`.
+
 ## [2.5.0] - 2026-04-21
 
 ### Added

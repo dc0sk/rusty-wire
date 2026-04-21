@@ -1,6 +1,6 @@
 # CLI Guide
 
-**Version 2.3.0**
+**Version 2.5.1**
 
 Use this page as the command reference for Rusty Wire.
 
@@ -31,6 +31,7 @@ It supports:
   - Full-wave loop circumference
   - Full-wave loop square-side estimate
   - OCFD leg split estimates (33/67 and 20/80)
+  - Trap dipole total and per-element estimates
 - Non-resonant search constraints in either meters (default) or feet
 - Multiple local optima displayed for the active non-resonant search window
 - Multiple equally-optimal wire lengths displayed in ascending order when ties occur
@@ -57,6 +58,14 @@ It lets you:
 - Choose transformer ratio
 - Configure non-resonant wire windows interactively
 - Export results and print an equivalent CLI command
+
+For TUI documentation screenshots (exact capture list and where to place each image), see [tui-screenshots.md](tui-screenshots.md).
+
+![TUI trap dipole results placeholder](images/tui/02-trap-dipole-results.png)
+
+![TUI non-resonant window placeholder](images/tui/03-non-resonant-window.png)
+
+![TUI results scroll placeholder](images/tui/05-results-scroll.png)
 
 ### Interactive Mode: Per-Session Defaults
 
@@ -90,13 +99,14 @@ rusty-wire --interactive
 ## Core Options
 
 - `--help` Show help
+- `--info` Print project metadata (version, author, GitHub URL, license)
 - `--interactive` Start interactive mode
 - `--list-bands` List bands for selected region
 - `--region <1|2|3>` ITU region (default: `1`)
 - `--bands <csv>` Band names/ranges, for example `40m,20m,10m-15m`
 - `--mode <resonant|non-resonant>` Calculation mode (default: `resonant`)
 - `--velocity <value>` Velocity factor, valid range `0.50..=1.00` (default: `0.95`)
-- `--antenna <dipole|inverted-v|efhw|loop|ocfd>` Filter output to one model (omit to show all)
+- `--antenna <dipole|inverted-v|efhw|loop|ocfd|trap-dipole>` Filter output to one model (omit to show all)
 - `--transformer <recommended|1:1|1:2|1:4|1:5|1:6|1:9|1:16|1:49|1:56|1:64>`
 - `--units <m|ft|both>` Output unit filter
 - `--step <meters>` Non-resonant search resolution (default: `0.05`)

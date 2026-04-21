@@ -19,17 +19,21 @@ use crate::export::{default_output_name, export_results, validate_export_path};
 use clap::Parser;
 use std::io::{self, BufRead, Write};
 
+const PROJECT_URL: &str = env!("CARGO_PKG_REPOSITORY");
+
 // ---------------------------------------------------------------------------
 // CLI argument parsing with clap
 // ---------------------------------------------------------------------------
 
 #[derive(Parser)]
 #[command(name = "rusty-wire")]
+#[command(author = env!("CARGO_PKG_AUTHORS"))]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(
     about = "A Rust-based utility for wire-antenna planning across ham-radio and shortwave bands."
 )]
 #[command(long_about = None)]
+#[command(after_help = "Project: https://github.com/dc0sk/rusty-wire\nLicense: GPL-2.0-or-later")]
 #[command(arg_required_else_help = true)]
 struct Cli {
     /// ITU Region (1=Europe/Africa/Middle East, 2=Americas, 3=Asia-Pacific)
@@ -95,6 +99,10 @@ struct Cli {
     /// Launch interactive mode
     #[arg(short = 'i', long)]
     interactive: bool,
+
+    /// Print project metadata (author, version, GitHub URL, license)
+    #[arg(long)]
+    info: bool,
 
     /// Compute wire lengths for a single explicit frequency in MHz (bypasses band selection)
     #[arg(long)]
@@ -305,6 +313,12 @@ impl From<CliITURegion> for ITURegion {
 /// Returns `true` on success, `false` if an error prevented completion.
 pub fn run_from_args(args: &[String]) -> bool {
     let cli = Cli::parse_from(args.iter().map(|s| s.as_str()));
+
+    if cli.info {
+        let mut stdout = io::stdout();
+        print_project_info(&mut stdout);
+        return true;
+    }
 
     if cli.interactive {
         run_interactive();
@@ -808,6 +822,8 @@ fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
         "============================================================\n"
     )
     .expect("failed to write interactive banner");
+    print_project_info(output);
+    writeln!(output).expect("failed to write interactive info spacing");
 
     let mut itu_region = prompt_itu_region(input, output);
     let mut defaults = InteractiveDefaults::new();
@@ -823,8 +839,9 @@ fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
         writeln!(output, "  2) Calculate selected bands").expect("failed to write menu");
         writeln!(output, "  3) Quick single-band calculation").expect("failed to write menu");
         writeln!(output, "  4) Change ITU Region").expect("failed to write menu");
-        writeln!(output, "  5) Exit").expect("failed to write menu");
-        prompt(output, "\nSelect option (1-5): ");
+        writeln!(output, "  5) About / project info").expect("failed to write menu");
+        writeln!(output, "  6) Exit").expect("failed to write menu");
+        prompt(output, "\nSelect option (1-6): ");
 
         let choice = read_line(input, "failed to read choice");
         if choice.is_empty() {
@@ -846,6 +863,10 @@ fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
                 .expect("failed to write region update");
             }
             "5" => {
+                print_project_info(output);
+                writeln!(output).expect("failed to write interactive info spacing");
+            }
+            "6" => {
                 writeln!(output, "Exiting Rusty Wire.").expect("failed to write exit message");
                 break;
             }
@@ -853,6 +874,17 @@ fn run_interactive_with_io(input: &mut dyn BufRead, output: &mut dyn Write) {
                 .expect("failed to write invalid option message"),
         }
     }
+}
+
+fn print_project_info(output: &mut dyn Write) {
+    writeln!(output, "Project info:").expect("failed to write project info heading");
+    writeln!(output, "  Version: {}", env!("CARGO_PKG_VERSION"))
+        .expect("failed to write project info version");
+    writeln!(output, "  Author: {}", env!("CARGO_PKG_AUTHORS"))
+        .expect("failed to write project info author");
+    writeln!(output, "  GitHub: {PROJECT_URL}").expect("failed to write project info url");
+    writeln!(output, "  License: {}", env!("CARGO_PKG_LICENSE"))
+        .expect("failed to write project info license");
 }
 
 fn calculate_selected_bands_with_defaults(
@@ -1353,14 +1385,29 @@ mod tests {
 
     #[test]
     fn run_interactive_with_io_exits_cleanly() {
-        let mut input = Cursor::new(b"\n5\n".to_vec());
+        let mut input = Cursor::new(b"\n6\n".to_vec());
         let mut output = Vec::new();
 
         run_interactive_with_io(&mut input, &mut output);
 
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
-        assert!(rendered.contains("Select option (1-5): "));
+        assert!(rendered.contains("Select option (1-6): "));
         assert!(rendered.contains("Exiting Rusty Wire."));
+    }
+
+    #[test]
+    fn run_interactive_with_io_about_menu_shows_project_info() {
+        let mut input = Cursor::new(b"\n5\n6\n".to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Project info:"));
+        assert!(rendered.contains("Version:"));
+        assert!(rendered.contains("Author:"));
+        assert!(rendered.contains("GitHub:"));
+        assert!(rendered.contains("License:"));
     }
 
     #[test]
@@ -1506,7 +1553,7 @@ mod tests {
 
     #[test]
     fn run_interactive_with_io_can_switch_region() {
-        let mut input = Cursor::new(b"\n4\n2\n5\n".to_vec());
+        let mut input = Cursor::new(b"\n4\n2\n6\n".to_vec());
         let mut output = Vec::new();
 
         run_interactive_with_io(&mut input, &mut output);
@@ -1518,7 +1565,7 @@ mod tests {
 
     #[test]
     fn run_interactive_with_io_quick_calculation_invalid_number() {
-        let mut input = Cursor::new(b"\n3\nabc\n5\n".to_vec());
+        let mut input = Cursor::new(b"\n3\nabc\n6\n".to_vec());
         let mut output = Vec::new();
 
         run_interactive_with_io(&mut input, &mut output);
@@ -1530,7 +1577,7 @@ mod tests {
 
     #[test]
     fn run_interactive_with_io_lists_bands_to_writer_output() {
-        let mut input = Cursor::new(b"\n1\n5\n".to_vec());
+        let mut input = Cursor::new(b"\n1\n6\n".to_vec());
         let mut output = Vec::new();
 
         run_interactive_with_io(&mut input, &mut output);

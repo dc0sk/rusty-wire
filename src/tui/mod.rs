@@ -28,6 +28,7 @@
 //! | `←` / `h` | Decrease selected field value |
 //! | `→` / `l` | Increase selected field value |
 //! | `r` / `Enter` | Run calculation |
+//! | `i` / `?` | Toggle project info popup |
 //! | `Tab` | Toggle focus between config and results panels |
 //! | `q` / `Esc` | Quit |
 //! | `Ctrl-C` | Quit |
@@ -45,7 +46,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use ratatui::Terminal;
 
 use crate::app::{
@@ -61,6 +62,7 @@ use crate::calculations::TransformerRatio;
 const VF_PRESETS: &[f64] = &[0.50, 0.60, 0.66, 0.70, 0.80, 0.85, 0.90, 0.95, 0.97, 1.00];
 const WIRE_MIN_PRESETS: &[f64] = &[5.0, 8.0, 10.0, 12.0, 15.0, 20.0];
 const WIRE_MAX_PRESETS: &[f64] = &[20.0, 25.0, 30.0, 35.0, 40.0, 50.0, 60.0, 80.0, 100.0];
+const PROJECT_URL: &str = env!("CARGO_PKG_REPOSITORY");
 const TRANSFORMER_RATIOS: &[TransformerRatio] = &[
     TransformerRatio::R1To1,
     TransformerRatio::R1To2,
@@ -157,6 +159,8 @@ struct TuiState {
     wire_max_idx: usize,
     /// Vertical scroll offset for the results panel.
     results_scroll: u16,
+    /// Whether the project-info popup is visible.
+    show_info_popup: bool,
     /// Set to `true` to exit the event loop.
     quit: bool,
 }
@@ -194,6 +198,7 @@ impl TuiState {
             wire_min_idx,
             wire_max_idx,
             results_scroll: 0,
+            show_info_popup: false,
             quit: false,
         }
     }
@@ -368,12 +373,24 @@ impl TuiState {
 
         // Global shortcuts — active regardless of focused panel.
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => {
+            KeyCode::Char('q') => {
                 self.quit = true;
+                return;
+            }
+            KeyCode::Esc => {
+                if self.show_info_popup {
+                    self.show_info_popup = false;
+                } else {
+                    self.quit = true;
+                }
                 return;
             }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.quit = true;
+                return;
+            }
+            KeyCode::Char('i') | KeyCode::Char('?') => {
+                self.show_info_popup = !self.show_info_popup;
                 return;
             }
             KeyCode::Char('r') | KeyCode::Enter => {
@@ -388,6 +405,10 @@ impl TuiState {
                 return;
             }
             _ => {}
+        }
+
+        if self.show_info_popup {
+            return;
         }
 
         // Panel-specific shortcuts.
@@ -467,6 +488,10 @@ fn render(f: &mut ratatui::Frame, state: &TuiState) {
     render_config_panel(f, panels[0], state);
     render_results_panel(f, panels[1], state);
     render_hints(f, outer[2], state);
+
+    if state.show_info_popup {
+        render_info_popup(f, area);
+    }
 }
 
 fn render_title(f: &mut ratatui::Frame, area: Rect) {
@@ -635,11 +660,59 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
 
 fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let text = match state.focus {
-        Focus::Config => " ↑↓/jk:select  ←→/hl:change  r:run  Tab:→results  q:quit",
-        Focus::Results => " ↑↓/jk:scroll  PgUp/Dn:page  r:run  Tab:→config   q:quit",
+        Focus::Config => " ↑↓/jk:select  ←→/hl:change  r:run  i:info  Tab:→results  q:quit",
+        Focus::Results => " ↑↓/jk:scroll  PgUp/Dn:page  r:run  i:info  Tab:→config   q:quit",
     };
     let para = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
     f.render_widget(para, area);
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    let vertical = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(area);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(vertical[1])[1]
+}
+
+fn render_info_popup(f: &mut ratatui::Frame, area: Rect) {
+    let popup_area = centered_rect(64, 42, area);
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title(" About Rusty Wire ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let lines = vec![
+        Line::from(format!("Version: {}", env!("CARGO_PKG_VERSION"))),
+        Line::from(format!("Author: {}", env!("CARGO_PKG_AUTHORS"))),
+        Line::from(format!("GitHub: {PROJECT_URL}")),
+        Line::from(format!("License: {}", env!("CARGO_PKG_LICENSE"))),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Press i, ?, or Esc to close.",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ];
+
+    let para = Paragraph::new(lines)
+        .block(block)
+        .style(Style::default().fg(Color::White).bg(Color::Black))
+        .wrap(Wrap { trim: true });
+    f.render_widget(para, popup_area);
 }
 
 // ---------------------------------------------------------------------------
