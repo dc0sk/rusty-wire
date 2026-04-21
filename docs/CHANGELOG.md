@@ -4,6 +4,24 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-04-21
+
+### Added
+- **Keyboard-driven TUI (`rusty-wire-tui`)**: a full ratatui 0.29 + crossterm 0.28 terminal UI with a two-panel layout (configuration left, results right). All nine config fields are editable with ←/→ from curated preset tables; results display the full `ResultsDisplayDocument` output with colour-coded headings, band titles, and warnings. Scrollable with ↑↓/jk/PgUp/PgDn.
+- **`AppState` / `AppAction` / `apply_action`**: a pure, I/O-free state machine that bridges TUI (and future GUI) inputs to app-layer calculations. `apply_action(AppState, AppAction) → AppState` is the single update function; no side effects.
+- **`AppState` / `AppAction` state-machine tests**: 13 dedicated unit tests in `src/app.rs` covering every `AppAction` variant and round-trip state transitions.
+- **TUI band presets**: five named presets (40m–10m, 80m–10m, 160m–10m, 20m–10m, Contest 80/40/20/15/10) usable across all three ITU regions.
+- **TUI velocity-factor and transformer presets**: ten VF presets (0.50–1.00) and all ten supported transformer ratios, cycled with ←/→.
+- **Panic-safe terminal restore**: a `panic` hook guarantees crossterm raw mode and alternate screen are always restored before printing a panic message.
+- **`BandListingView`**, **`TransformerRatioExplanation`**, **`SkippedBandDetail`**: new app-layer view types that expose band listing, transformer recommendation reasoning, and per-band skip reasons to any front-end without I/O.
+- **`velocity_sweep_view` / `velocity_sweep_display_lines`**: velocity-sweep rendering extracted to the app layer; `cli.rs` delegates to these instead of formatting inline.
+- **`format_quiet_summary`**: quiet-mode one-liner formatting extracted to the app layer.
+- **`AppError::InvalidVelocitySweep(f64)`**: typed error for out-of-range velocity-factor values inside a sweep.
+
+### Changed
+- `cli.rs`: `show_all_bands_for_region_to_writer`, `run_velocity_sweep`, and `print_quiet_summary` all delegate to their new app-layer counterparts instead of formatting inline.
+- `ratatui = "0.29"` and `crossterm = "0.28"` added to `[dependencies]`.
+
 ## [2.3.0] - 2026-04-20
 
 ### Added
