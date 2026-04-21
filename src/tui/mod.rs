@@ -50,7 +50,8 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use ratatui::Terminal;
 
 use crate::app::{
-    apply_action, results_display_document, AntennaModel, AppAction, AppState, CalcMode, UnitSystem,
+    apply_action, band_listing_view, results_display_document, AntennaModel, AppAction, AppState,
+    CalcMode, UnitSystem,
 };
 use crate::bands::ITURegion;
 use crate::calculations::TransformerRatio;
@@ -86,6 +87,7 @@ const BAND_PRESETS: &[(&str, &[usize])] = &[
     ("160m–10m (9 bands)", &[1, 2, 4, 5, 6, 7, 8, 9, 10]),
     ("20m–10m (5 bands)", &[6, 7, 8, 9, 10]),
     ("Contest 80/40/20/15/10", &[2, 4, 6, 8, 10]),
+    ("Custom…", &[] as &[usize]), // sentinel — opens band-checklist overlay
 ];
 
 // ---------------------------------------------------------------------------
@@ -163,6 +165,14 @@ struct TuiState {
     show_info_popup: bool,
     /// Set to `true` to exit the event loop.
     quit: bool,
+    /// Whether the band-checklist overlay is open.
+    show_band_checklist: bool,
+    /// Items in the checklist: (1-based band index, display label, checked).
+    band_checklist_items: Vec<(usize, String, bool)>,
+    /// Cursor row in the band checklist.
+    band_checklist_cursor: usize,
+    /// Last confirmed custom band selection (empty until user confirms once).
+    custom_band_indices: Vec<usize>,
 }
 
 impl TuiState {
@@ -200,6 +210,10 @@ impl TuiState {
             results_scroll: 0,
             show_info_popup: false,
             quit: false,
+            show_band_checklist: false,
+            band_checklist_items: Vec::new(),
+            band_checklist_cursor: 0,
+            custom_band_indices: Vec::new(),
         }
     }
 
@@ -233,7 +247,18 @@ impl TuiState {
                         ITURegion::Region2 => "2 (Americas)".into(),
                         ITURegion::Region3 => "3 (Asia-Pac)".into(),
                     },
-                    ConfigField::Bands => BAND_PRESETS[self.band_preset_idx].0.into(),
+                    ConfigField::Bands => {
+                        if self.band_preset_idx == BAND_PRESETS.len() - 1 {
+                            // Custom sentinel
+                            if self.custom_band_indices.is_empty() {
+                                "Custom…".into()
+                            } else {
+                                format!("Custom ({} bands)", self.custom_band_indices.len())
+                            }
+                        } else {
+                            BAND_PRESETS[self.band_preset_idx].0.into()
+                        }
+                    }
                     ConfigField::VelocityFactor => format!("{:.2}", VF_PRESETS[self.vf_idx]),
                     ConfigField::TransformerRatio => {
                         TRANSFORMER_RATIOS[self.ratio_idx].as_label().into()
@@ -264,6 +289,7 @@ impl TuiState {
         let antenna = self.app.config.antenna_model;
         let region = self.app.config.itu_region;
         let units = self.app.config.units;
+        let current_band_indices = self.app.config.band_indices.clone();
 
         match self.current_field() {
             ConfigField::Mode => AppAction::SetMode(match mode {
@@ -308,7 +334,18 @@ impl TuiState {
                         .checked_sub(1)
                         .unwrap_or(BAND_PRESETS.len() - 1);
                 }
-                AppAction::SetBandIndices(BAND_PRESETS[self.band_preset_idx].1.to_vec())
+                // Custom sentinel (last entry) has an empty slice — use the
+                // confirmed custom selection, or fall back to the current bands.
+                let indices = if self.band_preset_idx == BAND_PRESETS.len() - 1 {
+                    if !self.custom_band_indices.is_empty() {
+                        self.custom_band_indices.clone()
+                    } else {
+                        current_band_indices
+                    }
+                } else {
+                    BAND_PRESETS[self.band_preset_idx].1.to_vec()
+                };
+                AppAction::SetBandIndices(indices)
             }
             ConfigField::VelocityFactor => {
                 if forward {
@@ -368,8 +405,74 @@ impl TuiState {
         self.dispatch(AppAction::RunCalculation);
     }
 
+    /// Open the band-checklist overlay, initialising items from the current
+    /// custom selection (or the active band indices when no custom exists yet).
+    fn open_band_checklist(&mut self) {
+        let region = self.app.config.itu_region;
+        let active: std::collections::HashSet<usize> = if !self.custom_band_indices.is_empty() {
+            self.custom_band_indices.iter().copied().collect()
+        } else {
+            self.app.config.band_indices.iter().copied().collect()
+        };
+        self.band_checklist_items = band_listing_view(region)
+            .rows
+            .into_iter()
+            .map(|row| {
+                let checked = active.contains(&row.index);
+                (row.index, row.display, checked)
+            })
+            .collect();
+        self.band_checklist_cursor = 0;
+        self.show_band_checklist = true;
+    }
+
     fn handle_key(&mut self, key: KeyEvent) {
         if key.kind != KeyEventKind::Press {
+            return;
+        }
+
+        // Band-checklist overlay intercepts all keys.
+        if self.show_band_checklist {
+            match key.code {
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quit = true;
+                }
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    self.show_band_checklist = false;
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if self.band_checklist_cursor > 0 {
+                        self.band_checklist_cursor -= 1;
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if self.band_checklist_cursor + 1 < self.band_checklist_items.len() {
+                        self.band_checklist_cursor += 1;
+                    }
+                }
+                KeyCode::Char(' ') => {
+                    if let Some(item) = self
+                        .band_checklist_items
+                        .get_mut(self.band_checklist_cursor)
+                    {
+                        item.2 = !item.2;
+                    }
+                }
+                KeyCode::Enter => {
+                    let indices: Vec<usize> = self
+                        .band_checklist_items
+                        .iter()
+                        .filter(|(_, _, checked)| *checked)
+                        .map(|(idx, _, _)| *idx)
+                        .collect();
+                    if !indices.is_empty() {
+                        self.custom_band_indices = indices.clone();
+                        self.dispatch(AppAction::SetBandIndices(indices));
+                    }
+                    self.show_band_checklist = false;
+                }
+                _ => {}
+            }
             return;
         }
 
@@ -395,8 +498,21 @@ impl TuiState {
                 self.show_info_popup = !self.show_info_popup;
                 return;
             }
-            KeyCode::Char('r') | KeyCode::Enter => {
+            KeyCode::Char('r') => {
                 self.run_calculation();
+                return;
+            }
+            KeyCode::Enter => {
+                // When the Bands field is on the Custom sentinel, Enter opens
+                // the band-checklist instead of running a calculation.
+                if self.focus == Focus::Config
+                    && self.current_field() == ConfigField::Bands
+                    && self.band_preset_idx == BAND_PRESETS.len() - 1
+                {
+                    self.open_band_checklist();
+                } else {
+                    self.run_calculation();
+                }
                 return;
             }
             KeyCode::Tab => {
@@ -493,6 +609,10 @@ fn render(f: &mut ratatui::Frame, state: &TuiState) {
 
     if state.show_info_popup {
         render_info_popup(f, area);
+    }
+
+    if state.show_band_checklist {
+        render_band_checklist(f, area, state);
     }
 }
 
@@ -661,9 +781,13 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
 }
 
 fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
-    let text = match state.focus {
-        Focus::Config => " ↑↓/jk:select  ←→/hl:change  r:run  i:info  Tab:→results  q:quit",
-        Focus::Results => " ↑↓/jk:scroll  PgUp/Dn:page  r:run  i:info  Tab:→config   q:quit",
+    let text = if state.show_band_checklist {
+        " ↑↓/jk:move  Space:toggle  Enter:confirm  Esc/q:cancel"
+    } else {
+        match state.focus {
+            Focus::Config => " ↑↓/jk:select  ←→/hl:change  r:run  i:info  Tab:→results  q:quit",
+            Focus::Results => " ↑↓/jk:scroll  PgUp/Dn:page  r:run  i:info  Tab:→config   q:quit",
+        }
     };
     let para = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
     f.render_widget(para, area);
@@ -715,6 +839,52 @@ fn render_info_popup(f: &mut ratatui::Frame, area: Rect) {
         .style(Style::default().fg(Color::White).bg(Color::Black))
         .wrap(Wrap { trim: true });
     f.render_widget(para, popup_area);
+}
+
+// ---------------------------------------------------------------------------
+// Band-checklist overlay
+// ---------------------------------------------------------------------------
+
+fn render_band_checklist(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
+    let popup_area = centered_rect(72, 80, area);
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title(" Custom Band Selection  (Space:toggle  Enter:confirm  Esc/q:cancel) ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let items: Vec<ListItem> = state
+        .band_checklist_items
+        .iter()
+        .enumerate()
+        .map(|(i, (_, display, checked))| {
+            let checkbox = if *checked { "[x]" } else { "[ ]" };
+            let is_cursor = i == state.band_checklist_cursor;
+            let (prefix, style) = if is_cursor {
+                (
+                    "► ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                ("  ", Style::default().fg(Color::White))
+            };
+            let line = Line::from(vec![
+                Span::styled(prefix.to_string(), style),
+                Span::styled(format!("{checkbox} "), style),
+                Span::styled(display.clone(), style),
+            ]);
+            ListItem::new(line)
+        })
+        .collect();
+
+    let list = List::new(items);
+    f.render_widget(list, inner);
 }
 
 // ---------------------------------------------------------------------------
