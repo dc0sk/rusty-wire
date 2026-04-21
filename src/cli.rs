@@ -5,11 +5,12 @@
 /// The computation itself is delegated to `app::run_calculation`; the only
 /// imports from the core modules that this file needs are for display helpers.
 use crate::app::{
-    band_label_for_index, execute_request_checked, parse_band_selection, parse_single_band_token,
-    recommended_transformer_ratio, recommended_transformer_ratio_fallback_message,
-    resolve_wire_window_inputs, results_display_document, AntennaModel, AppConfig, AppRequest,
-    AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION,
-    FEET_TO_METERS,
+    band_label_for_index, execute_request_checked, format_quiet_summary, parse_band_selection,
+    parse_single_band_token, recommended_transformer_ratio,
+    recommended_transformer_ratio_fallback_message, resolve_wire_window_inputs,
+    results_display_document, validate_velocity_sweep, velocity_sweep_display_lines,
+    velocity_sweep_view, AntennaModel, AppConfig, AppRequest, AppResults, CalcMode, ExportFormat,
+    UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
 use crate::bands::{get_bands_for_region, ITURegion, ALL_REGIONS};
 use crate::calculations::{TransformerRatio, DEFAULT_NON_RESONANT_CONFIG};
@@ -441,11 +442,9 @@ pub fn run_from_args(args: &[String]) -> bool {
 // ---------------------------------------------------------------------------
 
 fn run_velocity_sweep(velocities: &[f64], base_config: AppConfig, units: UnitSystem) -> bool {
-    for &vf in velocities {
-        if !(0.5..=1.0).contains(&vf) {
-            eprintln!("Error: velocity factor {vf:.2} is out of range (must be 0.50–1.00)");
-            return false;
-        }
+    if let Err(err) = validate_velocity_sweep(velocities) {
+        eprintln!("Error: {err}");
+        return false;
     }
 
     let mut results_by_vf: Vec<(f64, AppResults)> = Vec::new();
@@ -461,77 +460,12 @@ fn run_velocity_sweep(velocities: &[f64], base_config: AppConfig, units: UnitSys
         }
     }
 
-    print_velocity_sweep_table(&results_by_vf, units);
+    if let Some(view) = velocity_sweep_view(&results_by_vf) {
+        for line in velocity_sweep_display_lines(&view, units) {
+            println!("{line}");
+        }
+    }
     true
-}
-
-fn print_velocity_sweep_table(results: &[(f64, AppResults)], units: UnitSystem) {
-    if results.is_empty() {
-        return;
-    }
-
-    let first = &results[0].1;
-    let mode = first.config.mode;
-
-    let bands_label: String = first
-        .calculations
-        .iter()
-        .map(|c| c.band_name.as_str())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let mode_label = match mode {
-        CalcMode::Resonant => "resonant",
-        CalcMode::NonResonant => "non-resonant",
-    };
-
-    println!(
-        "\nVelocity sweep — {mode_label} | {bands_label} | Region {}:",
-        first.config.itu_region
-    );
-
-    match mode {
-        CalcMode::NonResonant => {
-            println!("  {:<6}  {:<24}  {}", "VF", "Length", "Clearance");
-            println!("  {}", "─".repeat(46));
-            for (vf, res) in results {
-                let len_str = match &res.recommendation {
-                    Some(r) => match units {
-                        UnitSystem::Metric => format!("{:.2} m", r.length_m),
-                        UnitSystem::Imperial => format!("{:.1} ft", r.length_ft),
-                        UnitSystem::Both => {
-                            format!("{:.2} m / {:.1} ft", r.length_m, r.length_ft)
-                        }
-                    },
-                    None => "—".to_string(),
-                };
-                let clearance_str = match &res.recommendation {
-                    Some(r) => format!("{:.1}%", r.min_resonance_clearance_pct),
-                    None => "—".to_string(),
-                };
-                println!("  {:<6.2}  {:<24}  {}", vf, len_str, clearance_str);
-            }
-        }
-        CalcMode::Resonant => {
-            for (vf, res) in results {
-                let parts: Vec<String> = res
-                    .calculations
-                    .iter()
-                    .map(|calc| {
-                        let len_str = match units {
-                            UnitSystem::Metric => format!("{:.2} m", calc.half_wave_m),
-                            UnitSystem::Imperial => format!("{:.1} ft", calc.half_wave_ft),
-                            UnitSystem::Both => {
-                                format!("{:.2} m / {:.1} ft", calc.half_wave_m, calc.half_wave_ft)
-                            }
-                        };
-                        format!("{} = {}", calc.band_name, len_str)
-                    })
-                    .collect();
-                println!("  VF {vf:.2}:  {}", parts.join("  "));
-            }
-        }
-    }
-    println!();
 }
 
 // ---------------------------------------------------------------------------
@@ -539,22 +473,10 @@ fn print_velocity_sweep_table(results: &[(f64, AppResults)], units: UnitSystem) 
 // ---------------------------------------------------------------------------
 
 fn print_quiet_summary(results: &AppResults) {
-    match results.config.mode {
-        CalcMode::NonResonant => match &results.recommendation {
-            Some(rec) => {
-                let line = match results.config.units {
-                    UnitSystem::Metric => format!("{:.2} m", rec.length_m),
-                    UnitSystem::Imperial => format!("{:.1} ft", rec.length_ft),
-                    UnitSystem::Both => {
-                        format!("{:.2} m ({:.1} ft)", rec.length_m, rec.length_ft)
-                    }
-                };
-                println!("{line}");
-            }
-            None => eprintln!("No recommendation available."),
-        },
-        CalcMode::Resonant => {
-            // Quiet resonant: no output; success is indicated by exit 0
+    match format_quiet_summary(results) {
+        Some(line) => println!("{line}"),
+        None => {
+            // Quiet resonant mode: no output; exit 0 indicates success.
         }
     }
 }

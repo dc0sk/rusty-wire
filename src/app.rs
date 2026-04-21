@@ -1,7 +1,10 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppError {
     InvalidVelocityFactor(f64),
-    InvalidWireLengthWindow { min_m: f64, max_m: f64 },
+    InvalidWireLengthWindow {
+        min_m: f64,
+        max_m: f64,
+    },
     MixedWireWindowUnits,
     InvalidCalcMode(String),
     InvalidExportFormat(String),
@@ -10,6 +13,8 @@ pub enum AppError {
     InvalidBandSelection(String),
     InvalidSearchStep(f64),
     InvalidFrequency(f64),
+    /// A velocity factor in a `--velocity-sweep` list is out of the 0.50–1.00 range.
+    InvalidVelocitySweep(f64),
     EmptyBandSelection,
     AllBandsSkipped,
 }
@@ -50,6 +55,12 @@ impl fmt::Display for AppError {
                 write!(
                     f,
                     "frequency must be greater than 0 and at most 1000 MHz (got {freq:.3} MHz)"
+                )
+            }
+            AppError::InvalidVelocitySweep(vf) => {
+                write!(
+                    f,
+                    "velocity factor {vf:.2} is out of range (must be 0.50\u{2013}1.00)"
                 )
             }
             AppError::EmptyBandSelection => {
@@ -1467,6 +1478,178 @@ pub fn resonant_points_view(results: &AppResults) -> ResonantPointsView {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Velocity sweep views
+// ---------------------------------------------------------------------------
+
+/// One row in a velocity-sweep comparison table.
+#[derive(Debug, Clone)]
+pub struct VelocitySweepRow {
+    pub velocity_factor: f64,
+    /// Non-resonant mode: the recommended wire length (None when no recommendation exists).
+    pub non_resonant_length_m: Option<f64>,
+    pub non_resonant_length_ft: Option<f64>,
+    pub non_resonant_clearance_pct: Option<f64>,
+    /// Resonant mode: per-band (band_name, half_wave_m, half_wave_ft).
+    pub resonant_band_lengths: Vec<(String, f64, f64)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VelocitySweepView {
+    pub mode: CalcMode,
+    /// Human-readable comma-joined band list from the first result set.
+    pub bands_label: String,
+    pub itu_region_label: String,
+    pub rows: Vec<VelocitySweepRow>,
+}
+
+/// Build a pure view model for a velocity sweep.
+///
+/// `results_by_vf` is a slice of `(velocity_factor, AppResults)` pairs in
+/// sweep order. The order is preserved in the returned view.
+pub fn velocity_sweep_view(results_by_vf: &[(f64, AppResults)]) -> Option<VelocitySweepView> {
+    let (_, first) = results_by_vf.first()?;
+    let mode = first.config.mode;
+    let bands_label = first
+        .calculations
+        .iter()
+        .map(|c| c.band_name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let itu_region_label = first.config.itu_region.short_name().to_string();
+
+    let rows = results_by_vf
+        .iter()
+        .map(|(vf, res)| match mode {
+            CalcMode::NonResonant => VelocitySweepRow {
+                velocity_factor: *vf,
+                non_resonant_length_m: res.recommendation.as_ref().map(|r| r.length_m),
+                non_resonant_length_ft: res.recommendation.as_ref().map(|r| r.length_ft),
+                non_resonant_clearance_pct: res
+                    .recommendation
+                    .as_ref()
+                    .map(|r| r.min_resonance_clearance_pct),
+                resonant_band_lengths: Vec::new(),
+            },
+            CalcMode::Resonant => VelocitySweepRow {
+                velocity_factor: *vf,
+                non_resonant_length_m: None,
+                non_resonant_length_ft: None,
+                non_resonant_clearance_pct: None,
+                resonant_band_lengths: res
+                    .calculations
+                    .iter()
+                    .map(|c| (c.band_name.clone(), c.half_wave_m, c.half_wave_ft))
+                    .collect(),
+            },
+        })
+        .collect();
+
+    Some(VelocitySweepView {
+        mode,
+        bands_label,
+        itu_region_label,
+        rows,
+    })
+}
+
+/// Render a `VelocitySweepView` to display lines (no I/O).
+pub fn velocity_sweep_display_lines(view: &VelocitySweepView, units: UnitSystem) -> Vec<String> {
+    let mode_label = match view.mode {
+        CalcMode::Resonant => "resonant",
+        CalcMode::NonResonant => "non-resonant",
+    };
+    let mut lines = vec![
+        String::new(),
+        format!(
+            "Velocity sweep \u{2014} {mode_label} | {} | Region {}:",
+            view.bands_label, view.itu_region_label
+        ),
+    ];
+
+    match view.mode {
+        CalcMode::NonResonant => {
+            lines.push(format!("  {:<6}  {:<24}  {}", "VF", "Length", "Clearance"));
+            lines.push(format!("  {}", "\u{2500}".repeat(46)));
+            for row in &view.rows {
+                let len_str = match (row.non_resonant_length_m, row.non_resonant_length_ft) {
+                    (Some(m), Some(ft)) => match units {
+                        UnitSystem::Metric => format!("{:.2} m", m),
+                        UnitSystem::Imperial => format!("{:.1} ft", ft),
+                        UnitSystem::Both => format!("{:.2} m / {:.1} ft", m, ft),
+                    },
+                    _ => "\u{2014}".to_string(),
+                };
+                let clearance_str = row
+                    .non_resonant_clearance_pct
+                    .map(|p| format!("{:.1}%", p))
+                    .unwrap_or_else(|| "\u{2014}".to_string());
+                lines.push(format!(
+                    "  {:<6.2}  {:<24}  {}",
+                    row.velocity_factor, len_str, clearance_str
+                ));
+            }
+        }
+        CalcMode::Resonant => {
+            for row in &view.rows {
+                let parts: Vec<String> = row
+                    .resonant_band_lengths
+                    .iter()
+                    .map(|(name, m, ft)| {
+                        let len_str = match units {
+                            UnitSystem::Metric => format!("{:.2} m", m),
+                            UnitSystem::Imperial => format!("{:.1} ft", ft),
+                            UnitSystem::Both => format!("{:.2} m / {:.1} ft", m, ft),
+                        };
+                        format!("{} = {}", name, len_str)
+                    })
+                    .collect();
+                lines.push(format!(
+                    "  VF {:.2}:  {}",
+                    row.velocity_factor,
+                    parts.join("  ")
+                ));
+            }
+        }
+    }
+
+    lines.push(String::new());
+    lines
+}
+
+/// Validate that every velocity factor in a sweep is within 0.50–1.00.
+pub fn validate_velocity_sweep(velocities: &[f64]) -> Result<(), AppError> {
+    for &vf in velocities {
+        if !(0.5..=1.0).contains(&vf) {
+            return Err(AppError::InvalidVelocitySweep(vf));
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Quiet summary
+// ---------------------------------------------------------------------------
+
+/// Return the single-line quiet summary string for non-resonant mode, or
+/// `None` when resonant mode (quiet resonant = no output).
+///
+/// This is a pure function; the caller is responsible for printing.
+pub fn format_quiet_summary(results: &AppResults) -> Option<String> {
+    match results.config.mode {
+        CalcMode::NonResonant => {
+            let rec = results.recommendation.as_ref()?;
+            let line = match results.config.units {
+                UnitSystem::Metric => format!("{:.2} m", rec.length_m),
+                UnitSystem::Imperial => format!("{:.1} ft", rec.length_ft),
+                UnitSystem::Both => format!("{:.2} m ({:.1} ft)", rec.length_m, rec.length_ft),
+            };
+            Some(line)
+        }
+        CalcMode::Resonant => None,
+    }
+}
+
 pub fn resonant_points_display_lines(results: &AppResults) -> Vec<String> {
     let view = resonant_points_view(results);
     let mut lines = vec![view.heading.to_string(), view.window_line];
@@ -2794,5 +2977,116 @@ mod app_error_tests {
         let err = parse_band_selection("", ITURegion::Region1).unwrap_err();
         assert!(matches!(err, AppError::EmptyBandSelection));
         assert!(err.to_string().contains("empty selection"));
+    }
+
+    #[test]
+    fn validate_velocity_sweep_accepts_valid_range() {
+        assert!(validate_velocity_sweep(&[0.5, 0.85, 0.95, 1.0]).is_ok());
+    }
+
+    #[test]
+    fn validate_velocity_sweep_rejects_out_of_range() {
+        let err = validate_velocity_sweep(&[0.85, 1.5]).unwrap_err();
+        assert!(matches!(err, AppError::InvalidVelocitySweep(v) if (v - 1.5).abs() < 1e-9));
+        assert!(err.to_string().contains("out of range"));
+    }
+
+    #[test]
+    fn format_quiet_summary_resonant_returns_none() {
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            band_indices: vec![5],
+            ..AppConfig::default()
+        };
+        let results = run_calculation(config);
+        assert!(format_quiet_summary(&results).is_none());
+    }
+
+    #[test]
+    fn format_quiet_summary_non_resonant_metric() {
+        let config = AppConfig {
+            mode: CalcMode::NonResonant,
+            band_indices: vec![5, 7],
+            units: UnitSystem::Metric,
+            wire_min_m: 8.0,
+            wire_max_m: 35.0,
+            ..AppConfig::default()
+        };
+        let results = run_calculation(config);
+        let line = format_quiet_summary(&results).expect("non-resonant should produce a summary");
+        assert!(line.ends_with(" m"), "expected metric suffix, got: {line}");
+        assert!(!line.contains("ft"), "should not contain ft in metric mode");
+    }
+
+    #[test]
+    fn velocity_sweep_view_non_resonant_has_clearance() {
+        let config = AppConfig {
+            mode: CalcMode::NonResonant,
+            band_indices: vec![5, 7],
+            wire_min_m: 8.0,
+            wire_max_m: 35.0,
+            ..AppConfig::default()
+        };
+        let mut r85 = config.clone();
+        r85.velocity_factor = 0.85;
+        let mut r95 = config.clone();
+        r95.velocity_factor = 0.95;
+
+        let results_by_vf = vec![
+            (0.85_f64, run_calculation(r85)),
+            (0.95_f64, run_calculation(r95)),
+        ];
+        let view = velocity_sweep_view(&results_by_vf).expect("view should be produced");
+        assert_eq!(view.mode, CalcMode::NonResonant);
+        assert_eq!(view.rows.len(), 2);
+        assert!(view.rows[0].non_resonant_clearance_pct.is_some());
+        assert!(view.rows[1].non_resonant_clearance_pct.is_some());
+    }
+
+    #[test]
+    fn velocity_sweep_view_resonant_has_band_lengths() {
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            band_indices: vec![5, 7],
+            ..AppConfig::default()
+        };
+        let mut r85 = config.clone();
+        r85.velocity_factor = 0.85;
+        let mut r95 = config.clone();
+        r95.velocity_factor = 0.95;
+
+        let results_by_vf = vec![
+            (0.85_f64, run_calculation(r85)),
+            (0.95_f64, run_calculation(r95)),
+        ];
+        let view = velocity_sweep_view(&results_by_vf).expect("view should be produced");
+        assert_eq!(view.mode, CalcMode::Resonant);
+        for row in &view.rows {
+            assert_eq!(row.resonant_band_lengths.len(), 2);
+        }
+    }
+
+    #[test]
+    fn velocity_sweep_display_lines_contains_vf_values() {
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            band_indices: vec![7],
+            ..AppConfig::default()
+        };
+        let mut r85 = config.clone();
+        r85.velocity_factor = 0.85;
+        let mut r95 = config.clone();
+        r95.velocity_factor = 0.95;
+
+        let results_by_vf = vec![
+            (0.85_f64, run_calculation(r85)),
+            (0.95_f64, run_calculation(r95)),
+        ];
+        let view = velocity_sweep_view(&results_by_vf).unwrap();
+        let lines = velocity_sweep_display_lines(&view, UnitSystem::Metric);
+        let combined = lines.join("\n");
+        assert!(combined.contains("0.85"), "expected 0.85 in output");
+        assert!(combined.contains("0.95"), "expected 0.95 in output");
+        assert!(combined.contains("resonant"));
     }
 }
