@@ -39,7 +39,11 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## Antenna Models
 
-- Trap dipole
+- **Trap dipole guidance**: For trap dipole mode, provide detailed information on:
+  - Which trap frequencies / components to use (Q-factor, impedance guidance)
+  - Physical installation positions along the wire
+  - Leg length calculations for optimal multi-band resonance
+  - Common trap configurations (40m/20m, 80m/40m, etc.)
 - Hybrid / multi-section models
 - Ranked transformer recommendation for EFHW (compare 1:49, 1:56, 1:64)
 

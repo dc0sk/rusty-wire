@@ -226,6 +226,7 @@ impl TuiState {
                         Some(AntennaModel::EndFedHalfWave) => "EFHW".into(),
                         Some(AntennaModel::FullWaveLoop) => "Loop".into(),
                         Some(AntennaModel::OffCenterFedDipole) => "OCFD".into(),
+                        Some(AntennaModel::TrapDipole) => "Trap Dipole".into(),
                     },
                     ConfigField::ItuRegion => match c.itu_region {
                         ITURegion::Region1 => "1 (EU/AF/ME)".into(),
@@ -277,6 +278,7 @@ impl TuiState {
                     Some(AntennaModel::EndFedHalfWave),
                     Some(AntennaModel::FullWaveLoop),
                     Some(AntennaModel::OffCenterFedDipole),
+                    Some(AntennaModel::TrapDipole),
                 ];
                 let pos = MODELS.iter().position(|m| *m == antenna).unwrap_or(0);
                 let next = if forward {

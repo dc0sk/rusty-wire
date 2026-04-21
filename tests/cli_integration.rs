@@ -633,3 +633,88 @@ fn velocity_sweep_out_of_range_shows_error() {
     assert!(!output.status.success());
     assert!(stderr.contains("out of range"));
 }
+
+#[test]
+fn trap_dipole_antenna_mode_shows_trap_length() {
+    let output = binary()
+        .args(["--bands", "40m", "--antenna", "trap-dipole"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Antenna model: trap dipole"));
+    assert!(stdout.contains("Trap dipole total:"));
+    assert!(stdout.contains("Trap dipole each element:"));
+    assert!(!stdout.contains("Half-wave:"));
+    assert!(!stdout.contains("End-fed half-wave:"));
+}
+
+#[test]
+fn trap_dipole_aliases_accepted() {
+    // Clap supports the canonical name "trap-dipole"
+    let output = binary()
+        .args(["--bands", "40m", "--antenna", "trap-dipole"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Antenna model: trap dipole"));
+}
+
+#[test]
+fn trap_dipole_export_includes_trap_fields() {
+    let dir = temp_test_dir("trap-dipole-export");
+    let output = binary()
+        .current_dir(&dir)
+        .args([
+            "--bands",
+            "40m",
+            "--antenna",
+            "trap-dipole",
+            "--units",
+            "both",
+            "--export",
+            "csv,json",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+
+    assert!(output.status.success());
+
+    let csv =
+        fs::read_to_string(dir.join("rusty-wire-results.csv")).expect("failed to read csv export");
+    let json = fs::read_to_string(dir.join("rusty-wire-results.json"))
+        .expect("failed to read json export");
+
+    assert!(csv.contains("trap_dipole_total_m"));
+    assert!(csv.contains("trap_dipole_leg_m"));
+    assert!(csv.contains("trap_dipole_total_ft"));
+    assert!(csv.contains("trap_dipole_leg_ft"));
+    assert!(json.contains("\"trap_dipole_total_m\""));
+    assert!(json.contains("\"trap_dipole_leg_m\""));
+    assert!(json.contains("\"trap_dipole_total_ft\""));
+    assert!(json.contains("\"trap_dipole_leg_ft\""));
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn trap_dipole_recommended_transformer_is_1_1() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m",
+            "--antenna",
+            "trap-dipole",
+            "--transformer",
+            "recommended",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Using transformer ratio: 1:1"));
+}

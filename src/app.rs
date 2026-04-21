@@ -103,6 +103,7 @@ pub fn recommended_transformer_ratio(
     match antenna_model {
         Some(AntennaModel::Dipole)
         | Some(AntennaModel::InvertedVDipole)
+        | Some(AntennaModel::TrapDipole)
         | Some(AntennaModel::FullWaveLoop) => TransformerRatio::R1To1,
         Some(AntennaModel::EndFedHalfWave) => TransformerRatio::R1To56,
         Some(AntennaModel::OffCenterFedDipole) => TransformerRatio::R1To4,
@@ -146,6 +147,9 @@ pub fn transformer_ratio_explanation(
     let reason = match antenna_model {
         Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) => {
             "Center-fed dipoles present ~50 \u{03a9} at resonance; a 1:1 balun is typical."
+        }
+        Some(AntennaModel::TrapDipole) => {
+            "Trap dipoles present ~50\u{2013}75 \u{03a9} at resonance; a 1:1 balun is typical."
         }
         Some(AntennaModel::FullWaveLoop) => {
             "Full-wave loops present ~100 \u{03a9} at resonance; a 1:1 choke balun is common."
@@ -257,6 +261,7 @@ pub enum AntennaModel {
     EndFedHalfWave,
     FullWaveLoop,
     OffCenterFedDipole,
+    TrapDipole,
 }
 
 impl FromStr for AntennaModel {
@@ -271,8 +276,9 @@ impl FromStr for AntennaModel {
             "ocfd" | "off-center-fed" | "off-center-fed-dipole" => {
                 Ok(AntennaModel::OffCenterFedDipole)
             }
+            "trap-dipole" | "trap" | "trapdipole" => Ok(AntennaModel::TrapDipole),
             _ => Err(AppError::InvalidAntennaModel(format!(
-                "'{s}' (must be 'dipole', 'inverted-v', 'efhw', 'loop', or 'ocfd')"
+                "'{s}' (must be 'dipole', 'inverted-v', 'efhw', 'loop', 'ocfd', or 'trap-dipole')"
             ))),
         }
     }
@@ -935,6 +941,7 @@ pub fn summarize_results(results: &AppResults) -> RunSummary {
             Some(AntennaModel::EndFedHalfWave) => "end-fed half-wave",
             Some(AntennaModel::FullWaveLoop) => "full-wave loop",
             Some(AntennaModel::OffCenterFedDipole) => "off-center-fed dipole",
+            Some(AntennaModel::TrapDipole) => "trap dipole",
         },
         band_count: results.calculations.len(),
         average_min_skip_km: calculate_average_min_distance(&results.calculations),
@@ -1896,6 +1903,16 @@ pub fn band_display_view(
                     c.ocfd_20_short_leg_m, c.ocfd_20_long_leg_m
                 ));
             }
+            Some(AntennaModel::TrapDipole) => {
+                lines.push(format!(
+                    "  Trap dipole total: {:.2} m",
+                    c.trap_dipole_total_m
+                ));
+                lines.push(format!(
+                    "  Trap dipole each element: {:.2} m",
+                    c.trap_dipole_leg_m
+                ));
+            }
             None => {
                 lines.push(format!(
                     "  Half-wave: {:.2} m (base: {:.2} m)",
@@ -1941,6 +1958,14 @@ pub fn band_display_view(
                 lines.push(format!(
                     "  OCFD 20/80 legs: {:.2} m / {:.2} m",
                     c.ocfd_20_short_leg_m, c.ocfd_20_long_leg_m
+                ));
+                lines.push(format!(
+                    "  Trap dipole total: {:.2} m",
+                    c.trap_dipole_total_m
+                ));
+                lines.push(format!(
+                    "  Trap dipole each element: {:.2} m",
+                    c.trap_dipole_leg_m
                 ));
             }
         },
@@ -2003,6 +2028,16 @@ pub fn band_display_view(
                     c.ocfd_20_short_leg_ft, c.ocfd_20_long_leg_ft
                 ));
             }
+            Some(AntennaModel::TrapDipole) => {
+                lines.push(format!(
+                    "  Trap dipole total: {:.2} ft",
+                    c.trap_dipole_total_ft
+                ));
+                lines.push(format!(
+                    "  Trap dipole each element: {:.2} ft",
+                    c.trap_dipole_leg_ft
+                ));
+            }
             None => {
                 lines.push(format!(
                     "  Half-wave: {:.2} ft (base: {:.2} ft)",
@@ -2051,6 +2086,14 @@ pub fn band_display_view(
                 lines.push(format!(
                     "  OCFD 20/80 legs: {:.2} ft / {:.2} ft",
                     c.ocfd_20_short_leg_ft, c.ocfd_20_long_leg_ft
+                ));
+                lines.push(format!(
+                    "  Trap dipole total: {:.2} ft",
+                    c.trap_dipole_total_ft
+                ));
+                lines.push(format!(
+                    "  Trap dipole each element: {:.2} ft",
+                    c.trap_dipole_leg_ft
                 ));
             }
         },
@@ -2128,6 +2171,16 @@ pub fn band_display_view(
                     c.ocfd_20_long_leg_ft
                 ));
             }
+            Some(AntennaModel::TrapDipole) => {
+                lines.push(format!(
+                    "  Trap dipole total: {:.2} m ({:.2} ft)",
+                    c.trap_dipole_total_m, c.trap_dipole_total_ft
+                ));
+                lines.push(format!(
+                    "  Trap dipole each element: {:.2} m ({:.2} ft)",
+                    c.trap_dipole_leg_m, c.trap_dipole_leg_ft
+                ));
+            }
             None => {
                 lines.push(format!(
                     "  Half-wave: {:.2} m ({:.2} ft, base: {:.2} m/{:.2} ft)",
@@ -2191,6 +2244,14 @@ pub fn band_display_view(
                     c.ocfd_20_long_leg_m,
                     c.ocfd_20_short_leg_ft,
                     c.ocfd_20_long_leg_ft
+                ));
+                lines.push(format!(
+                    "  Trap dipole total: {:.2} m ({:.2} ft)",
+                    c.trap_dipole_total_m, c.trap_dipole_total_ft
+                ));
+                lines.push(format!(
+                    "  Trap dipole each element: {:.2} m ({:.2} ft)",
+                    c.trap_dipole_leg_m, c.trap_dipole_leg_ft
                 ));
             }
         },

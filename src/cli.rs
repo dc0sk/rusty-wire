@@ -134,6 +134,8 @@ enum CliAntennaModel {
     FullWaveLoop,
     #[clap(name = "ocfd", help = "Off-center-fed dipole (OCFD) model")]
     OffCenterFedDipole,
+    #[clap(name = "trap-dipole", help = "Trap dipole model")]
+    TrapDipole,
 }
 
 impl From<CliAntennaModel> for AntennaModel {
@@ -144,6 +146,7 @@ impl From<CliAntennaModel> for AntennaModel {
             CliAntennaModel::EndFedHalfWave => AntennaModel::EndFedHalfWave,
             CliAntennaModel::FullWaveLoop => AntennaModel::FullWaveLoop,
             CliAntennaModel::OffCenterFedDipole => AntennaModel::OffCenterFedDipole,
+            CliAntennaModel::TrapDipole => AntennaModel::TrapDipole,
         }
     }
 }
@@ -594,12 +597,14 @@ fn prompt_antenna_model_with_default(
     writeln!(output, "  l) Full-wave loop").ok();
     writeln!(output, "  v) Inverted-V").ok();
     writeln!(output, "  o) Off-center-fed dipole (OCFD)").ok();
+    writeln!(output, "  t) Trap dipole").ok();
     let prompt_str = match default {
-        Some(AntennaModel::EndFedHalfWave) => "Select antenna model (d/e/l/v/o) [e]: ",
-        Some(AntennaModel::FullWaveLoop) => "Select antenna model (d/e/l/v/o) [l]: ",
-        Some(AntennaModel::InvertedVDipole) => "Select antenna model (d/e/l/v/o) [v]: ",
-        Some(AntennaModel::OffCenterFedDipole) => "Select antenna model (d/e/l/v/o) [o]: ",
-        _ => "Select antenna model (d/e/l/v/o) [d]: ",
+        Some(AntennaModel::EndFedHalfWave) => "Select antenna model (d/e/l/v/o/t) [e]: ",
+        Some(AntennaModel::FullWaveLoop) => "Select antenna model (d/e/l/v/o/t) [l]: ",
+        Some(AntennaModel::InvertedVDipole) => "Select antenna model (d/e/l/v/o/t) [v]: ",
+        Some(AntennaModel::OffCenterFedDipole) => "Select antenna model (d/e/l/v/o/t) [o]: ",
+        Some(AntennaModel::TrapDipole) => "Select antenna model (d/e/l/v/o/t) [t]: ",
+        _ => "Select antenna model (d/e/l/v/o/t) [d]: ",
     };
     prompt(output, prompt_str);
     let line = read_line(input, "failed to read antenna model");
@@ -617,6 +622,7 @@ fn prompt_antenna_model_with_default(
         "o" | "ocfd" | "off-center-fed" | "off-center-fed-dipole" => {
             Some(AntennaModel::OffCenterFedDipole)
         }
+        "t" | "trap" | "trap-dipole" | "trapdipole" => Some(AntennaModel::TrapDipole),
         _ => default,
     }
 }
@@ -1288,6 +1294,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
             AntennaModel::EndFedHalfWave => "efhw",
             AntennaModel::FullWaveLoop => "loop",
             AntennaModel::OffCenterFedDipole => "ocfd",
+            AntennaModel::TrapDipole => "trap-dipole",
         };
         cmd.push_str(&format!(" --antenna {}", shell_quote(antenna)));
     }

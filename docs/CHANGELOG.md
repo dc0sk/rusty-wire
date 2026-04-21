@@ -4,6 +4,14 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+## [2.5.2] - 2026-04-21
+
+### Fixed
+- **Trap dipole implementation restored**: `--antenna trap-dipole` (aliases `trap`, `trapdipole`) was documented in 2.5.1 but absent from the binary. Restored full implementation across calculations, app display views, CLI interactive selection, TUI model cycling, and all export formats (CSV/JSON/Markdown/TXT). Added 4 integration tests: `trap_dipole_antenna_mode_shows_trap_length`, `trap_dipole_aliases_accepted`, `trap_dipole_export_includes_trap_fields`, `trap_dipole_recommended_transformer_is_1_1`.
+
+### Changed
+- **Backlog**: added trap dipole guidance item (trap type selection, component specs, installation positions).
+
 ## [2.5.1] - 2026-04-21
 
 ### Added
