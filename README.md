@@ -6,6 +6,14 @@
 
 > Wire-antenna planning for ham radio operators — fast, precise, and scriptable.
 
+---
+
+If Rusty Wire is useful to you, consider supporting its development:
+
+[![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal)](https://www.paypal.com/donate/?hosted_button_id=WY9U4MQ3ZAQWC)
+
+---
+
 Rusty Wire computes resonant and non-resonant wire lengths across ITU-region-aware
 amateur and shortwave bands. It covers six antenna models, recommends transformers
 automatically, and fits comfortably into shell scripts as well as interactive
