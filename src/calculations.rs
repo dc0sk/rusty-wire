@@ -253,6 +253,11 @@ impl fmt::Display for WireCalculation {
 }
 
 const METERS_TO_FEET: f64 = 3.28084;
+const HALF_WAVE_COEFF_M: f64 = 142.646_544_192;
+const FULL_WAVE_COEFF_M: f64 = 285.293_088_384;
+const QUARTER_WAVE_COEFF_M: f64 = 71.323_272_096;
+const FULL_LOOP_COEFF_M: f64 = 306.324_462_672;
+const TRAP_DIPOLE_COEFF_M: f64 = 137.16;
 
 /// Calculate resonant dipole wire lengths for a given frequency
 ///
@@ -260,9 +265,9 @@ const METERS_TO_FEET: f64 = 3.28084;
 /// for imperial output fields.
 ///
 /// Using standard practical formulas in meters:
-/// - Half-wave dipole (m): (468 / 3.28084) / frequency_MHz
-/// - Full-wave dipole (m): (936 / 3.28084) / frequency_MHz
-/// - Quarter-wave (m): (234 / 3.28084) / frequency_MHz
+/// - Half-wave dipole (m): 142.6465 / frequency_MHz
+/// - Full-wave dipole (m): 285.2931 / frequency_MHz
+/// - Quarter-wave (m): 71.3233 / frequency_MHz
 pub fn calculate_for_band_with_velocity(
     band: &Band,
     velocity_factor: f64,
@@ -271,9 +276,9 @@ pub fn calculate_for_band_with_velocity(
     let freq = band.freq_center_mhz;
 
     // Metric-first core calculations.
-    let half_wave_m = ((468.0 / METERS_TO_FEET) / freq) * velocity_factor;
-    let full_wave_m = ((936.0 / METERS_TO_FEET) / freq) * velocity_factor;
-    let quarter_wave_m = ((234.0 / METERS_TO_FEET) / freq) * velocity_factor;
+    let half_wave_m = (HALF_WAVE_COEFF_M / freq) * velocity_factor;
+    let full_wave_m = (FULL_WAVE_COEFF_M / freq) * velocity_factor;
+    let quarter_wave_m = (QUARTER_WAVE_COEFF_M / freq) * velocity_factor;
 
     // Imperial output fields are derived from metric values.
     let half_wave_ft = half_wave_m * METERS_TO_FEET;
@@ -315,7 +320,7 @@ pub fn calculate_for_band_with_velocity(
     // Full-wave loop: ARRL Antenna Book standard formula is 1005/f (feet).
     // This is ~7 % longer than 2 × half-wave dipole (936/f) because the "end effect"
     // for a closed resonant loop differs from that of open-ended dipole elements.
-    let full_wave_loop_circumference_m = ((1005.0 / METERS_TO_FEET) / freq) * velocity_factor;
+    let full_wave_loop_circumference_m = (FULL_LOOP_COEFF_M / freq) * velocity_factor;
     let full_wave_loop_circumference_ft = full_wave_loop_circumference_m * METERS_TO_FEET;
     let full_wave_loop_square_side_m = full_wave_loop_circumference_m / 4.0;
     let full_wave_loop_square_side_ft = full_wave_loop_square_side_m * METERS_TO_FEET;
@@ -330,7 +335,7 @@ pub fn calculate_for_band_with_velocity(
     let ocfd_20_long_leg_m = ocfd_total_m * 0.8;
     let ocfd_20_long_leg_ft = ocfd_20_long_leg_m * METERS_TO_FEET;
 
-    let trap_dipole_total_m = ((450.0 / METERS_TO_FEET) / freq) * velocity_factor;
+    let trap_dipole_total_m = (TRAP_DIPOLE_COEFF_M / freq) * velocity_factor;
     let trap_dipole_total_ft = trap_dipole_total_m * METERS_TO_FEET;
     let trap_dipole_leg_m = trap_dipole_total_m / 2.0;
     let trap_dipole_leg_ft = trap_dipole_leg_m * METERS_TO_FEET;
@@ -948,11 +953,8 @@ mod tests {
         assert!(result.inverted_v_span_120_m > result.inverted_v_span_90_m);
         let expected_span_120_ft = (result.corrected_half_wave_ft * 0.985 / 2.0) * 3.0_f64.sqrt();
         assert!((result.inverted_v_span_120_ft - expected_span_120_ft).abs() < 1e-9);
-        assert!(
-            (result.full_wave_loop_circumference_ft - ((1005.0 / band.freq_center_mhz) * 0.95))
-                .abs()
-                < 1e-9
-        );
+        let expected_loop_m = (FULL_LOOP_COEFF_M / band.freq_center_mhz) * 0.95;
+        assert!((result.full_wave_loop_circumference_m - expected_loop_m).abs() < 1e-9);
         assert!(
             (result.full_wave_loop_circumference_m
                 - result.full_wave_loop_circumference_ft / m_to_ft)

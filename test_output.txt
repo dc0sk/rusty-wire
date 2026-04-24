@@ -1,0 +1,231 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (target/debug/deps/rusty_wire-ba492500a79dd326)
+
+running 157 tests
+test app::app_error_tests::band_listing_row_indices_are_one_based ... ok
+test app::app_error_tests::band_listing_display_lines_contains_band_name ... ok
+test app::app_error_tests::format_quiet_summary_resonant_returns_none ... ok
+test app::app_error_tests::band_listing_view_region1_has_rows ... ok
+test app::app_error_tests::skipped_band_details_returns_reason_for_each_skipped ... ok
+test app::app_error_tests::test_empty_band_selection ... ok
+test app::app_error_tests::test_invalid_antenna_model ... ok
+test app::app_error_tests::skipped_band_details_empty_when_no_skipped_bands ... ok
+test app::app_error_tests::test_invalid_calc_mode ... ok
+test app::app_error_tests::test_invalid_export_format ... ok
+test app::app_error_tests::test_invalid_unit_system ... ok
+test app::app_error_tests::test_invalid_band_selection ... ok
+test app::app_error_tests::test_invalid_velocity_factor ... ok
+test app::app_error_tests::format_quiet_summary_non_resonant_metric ... ok
+test app::app_error_tests::test_invalid_wire_length_window ... ok
+test app::app_error_tests::test_mixed_wire_window_units ... ok
+test app::app_error_tests::transformer_ratio_explanation_efhw_returns_correct_ratio_and_reason ... ok
+test app::app_error_tests::transformer_ratio_explanation_non_resonant_no_model_uses_1to9 ... ok
+test app::app_error_tests::transformer_ratio_explanation_resonant_no_model_uses_1to1 ... ok
+test app::app_error_tests::validate_velocity_sweep_accepts_valid_range ... ok
+test app::app_error_tests::validate_velocity_sweep_rejects_out_of_range ... ok
+test app::state_machine_tests::apply_action_clear_error_removes_error_only ... ok
+test app::state_machine_tests::apply_action_run_calculation_sets_error_on_invalid_config ... ok
+test app::state_machine_tests::apply_action_set_antenna_model_updates_config ... ok
+test app::state_machine_tests::apply_action_set_band_indices_replaces_bands ... ok
+test app::state_machine_tests::apply_action_set_custom_freq_updates_config ... ok
+test app::state_machine_tests::apply_action_set_itu_region_updates_config ... ok
+test app::state_machine_tests::apply_action_set_mode_updates_config ... ok
+test app::app_error_tests::velocity_sweep_view_non_resonant_has_clearance ... ok
+test app::state_machine_tests::apply_action_set_units_updates_config ... ok
+test app::state_machine_tests::apply_action_set_velocity_factor_updates_config ... ok
+test app::app_error_tests::velocity_sweep_display_lines_contains_vf_values ... ok
+test app::state_machine_tests::apply_action_set_wire_min_max_updates_config ... ok
+test app::tests::app_config_default ... ok
+test app::tests::app_request_from_config_round_trips ... ok
+test app::state_machine_tests::apply_action_sequence_builds_correct_config ... ok
+test app::app_error_tests::velocity_sweep_view_resonant_has_band_lengths ... ok
+test app::tests::band_label_for_index_returns_short_name ... ok
+test app::tests::calc_mode_enum_values ... ok
+test app::tests::export_format_as_str ... ok
+test app::tests::non_resonant_recommendation_messages_are_stable ... ok
+test app::tests::parse_band_selection_rejects_unknown_names ... ok
+test app::tests::parse_single_band_token_rejects_empty_input ... ok
+test app::tests::recommended_transformer_ratio_defaults_by_mode ... ok
+test app::tests::recommended_transformer_ratio_fallback_message_is_stable ... ok
+test app::tests::recommended_transformer_ratio_matches_antenna_model ... ok
+test app::tests::resolve_wire_window_inputs_converts_feet_to_meters ... ok
+test app::state_machine_tests::apply_action_clear_results_removes_results_and_error ... ok
+test app::tests::resolve_wire_window_inputs_rejects_invalid_range ... ok
+test app::tests::build_advise_candidates_returns_ranked_wire_and_ratio_matches ... ok
+test app::tests::resolve_wire_window_inputs_rejects_mixed_units ... ok
+test app::state_machine_tests::apply_action_run_calculation_populates_results_on_success ... ok
+test app::tests::band_display_view_splits_title_and_lines ... ok
+test app::tests::parse_band_selection_supports_names_and_ranges ... ok
+test app::tests::resolve_wire_window_inputs_uses_metric_defaults ... ok
+test app::tests::execute_request_checked_response_contains_results ... ok
+test app::tests::resonant_points_display_lines_include_empty_message ... ok
+test app::tests::non_resonant_recommendation_view_marks_recommended_rows_in_both_units_text ... ok
+test app::tests::non_resonant_recommendation_view_marks_recommended_rows ... ok
+test app::tests::non_resonant_recommendation_display_lines_handles_missing_recommendation ... ok
+test app::tests::non_resonant_recommendation_view_handles_missing_recommendation ... ok
+test app::tests::resonant_points_view_can_render_empty_message ... ok
+test app::tests::resonant_points_in_window_can_be_empty ... ok
+test app::tests::resonant_points_in_window_returns_sorted_points ... ok
+test app::tests::band_display_rows_match_calculation_count ... ok
+test app::tests::resonant_compromise_narrative_reflects_antenna_model ... ok
+test app::tests::all_calc_modes_execute_without_error ... ok
+test app::tests::execute_request_checked_returns_response_wrapper ... ok
+test app::tests::resonant_points_view_formats_search_window ... ok
+test app::tests::resonant_compromise_display_view_formats_lines ... ok
+test app::tests::results_display_document_has_no_warning_lines_by_default ... ok
+test app::tests::results_display_document_includes_skipped_band_warning_lines ... ok
+test app::tests::run_calculation_checked_returns_all_bands_skipped_for_invalid_region_indices ... ok
+test app::tests::run_calculation_all_transformer_ratios ... ok
+test app::tests::run_calculation_checked_validates_before_execution ... ok
+test app::tests::results_display_document_is_fully_populated_for_resonant_default ... ok
+test app::tests::resonant_compromise_view_contains_inverted_v_details ... ok
+test app::tests::run_calculation_resonant_mode ... ok
+test app::tests::transformer_optimizer_prefers_efhw_match ... ok
+test app::tests::run_calculation_skips_invalid_band_indices ... ok
+test app::tests::run_calculation_multiple_regions ... ok
+test app::tests::results_display_document_is_fully_populated_for_non_resonant ... ok
+test app::tests::results_display_document_includes_resonant_sections ... ok
+test app::tests::resonant_compromise_view_contains_ocfd_details ... ok
+test app::tests::run_calculation_stores_config ... ok
+test app::tests::transformer_optimizer_prefers_ocfd_match ... ok
+test app::tests::transformer_optimizer_prefers_non_resonant_random_wire_default ... ok
+test app::tests::run_calculation_non_resonant_mode ... ok
+test app::tests::results_section_layout_reflects_non_resonant_mode ... ok
+test app::tests::unit_system_enum_values ... ok
+test app::tests::validate_config_rejects_invalid_velocity ... ok
+test app::tests::skipped_band_warning_formats_values ... ok
+test app::tests::summarize_results_includes_core_overview_metrics ... ok
+test app::tests::validate_config_rejects_invalid_window ... ok
+test app::tests::validate_config_accepts_custom_step_within_window ... ok
+test app::tests::validate_config_rejects_empty_band_selection ... ok
+test app::tests::validate_config_rejects_step_exceeding_window ... ok
+test app::tests::validate_config_rejects_zero_step ... ok
+test bands::tests::all_regions_constant ... ok
+test bands::tests::band_40m_region_adjustment ... ok
+test bands::tests::band_60m_harmonized ... ok
+test band_presets::tests::load_preset_selection_reads_known_preset ... ok
+test band_presets::tests::load_preset_selection_rejects_unknown_preset ... ok
+test bands::tests::band_80m_region_adjustment ... ok
+test bands::tests::band_display ... ok
+test band_presets::tests::load_preset_selection_supports_case_insensitive_lookup ... ok
+test bands::tests::band_type_display ... ok
+test bands::tests::get_band_by_index_invalid ... ok
+test bands::tests::get_band_by_index_valid ... ok
+test bands::tests::get_bands_for_region1 ... ok
+test bands::tests::get_bands_for_region2 ... ok
+test bands::tests::get_bands_for_region3 ... ok
+test bands::tests::itu_region_display ... ok
+test calculations::tests::calculate_average_distances_empty ... ok
+test calculations::tests::calculate_average_distances_multiple ... ok
+test calculations::tests::calculate_average_distances_single ... ok
+test calculations::tests::calculate_best_non_resonant_length_empty ... ok
+test calculations::tests::calculate_for_band_basic_lengths ... ok
+test calculations::tests::calculate_best_non_resonant_length_from_optima ... ok
+test calculations::tests::calculate_for_band_derived_antenna_models ... ok
+test calculations::tests::calculate_for_band_unit_conversion ... ok
+test calculations::tests::calculate_for_band_velocity_factor_effect ... ok
+test app::tests::results_display_document_includes_non_resonant_section ... ok
+test calculations::tests::calculate_non_resonant_optima_empty ... ok
+test calculations::tests::calculate_non_resonant_optima_invalid_config ... ok
+test calculations::tests::calculate_resonant_compromises_empty ... ok
+test calculations::tests::calculate_non_resonant_optima_result_structure ... ok
+test calculations::tests::calculate_resonant_compromises_result_structure ... ok
+test calculations::tests::optimize_ocfd_split_for_length_returns_valid_recommendation ... ok
+test calculations::tests::transformer_ratio_impedance_values ... ok
+test calculations::tests::transformer_ratio_labels ... ok
+test calculations::tests::transformer_ratio_parse_colon_format ... ok
+test app::tests::results_overview_view_formats_expected_lines ... ok
+test app::tests::results_section_layout_reflects_resonant_default_mode ... ok
+test calculations::tests::transformer_ratio_parse_invalid ... ok
+test calculations::tests::transformer_ratio_parse_numeric_format ... ok
+test cli::tests::cli_transformer_selection_recommended_resolves_by_mode_and_antenna ... ok
+test cli::tests::calculate_selected_bands_with_defaults_rejects_invalid_csv_input ... ok
+test cli::tests::interactive_export_prompt_rejects_unknown_format ... ok
+test cli::tests::parse_band_selection_rejects_numeric_indices ... ok
+test cli::tests::parse_band_selection_rejects_unknown_band_name ... ok
+test cli::tests::print_equivalent_cli_call_uses_band_labels ... ok
+test cli::tests::prompt_transformer_ratio_accepts_recommended_keyword ... ok
+test cli::tests::prompt_antenna_model_accepts_inverted_v_alias ... ok
+test cli::tests::prompt_wire_length_window_supports_feet_input ... ok
+test cli::tests::run_interactive_with_io_about_menu_shows_project_info ... ok
+test cli::tests::parse_band_selection_supports_band_names_and_ranges ... ok
+test cli::tests::run_interactive_with_io_exits_cleanly ... ok
+test cli::tests::run_interactive_with_io_can_switch_region ... ok
+test export::tests::export_results_rejects_invalid_output_path ... ok
+test export::tests::validate_export_path_accepts_relative_paths ... ok
+test cli::tests::run_interactive_with_io_lists_bands_to_writer_output ... ok
+test export::tests::validate_export_path_rejects_absolute_paths ... ok
+test cli::tests::run_interactive_with_io_quick_calculation_invalid_number ... ok
+test export::tests::validate_export_path_rejects_parent_directory_references ... ok
+test app::tests::run_calculation_velocity_factor_range ... ok
+test app::tests::all_antenna_models_execute_without_error ... ok
+
+test result: ok. 157 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/main.rs (target/debug/deps/rusty_wire-21f5914e19dfc9b8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/tui.rs (target/debug/deps/tui-d4e42b4cca2505f6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cli_integration.rs (target/debug/deps/cli_integration-0b2f442c93fe3244)
+
+running 43 tests
+test bands_and_bands_preset_are_mutually_exclusive ... ok
+test freq_list_and_freq_are_mutually_exclusive ... ok
+test advise_outputs_ranked_candidates_for_efhw ... ok
+test advise_markdown_export_writes_md_file ... ok
+test freq_list_computes_multiple_frequencies ... ok
+test freq_flag_computes_single_frequency ... ok
+test freq_list_rejects_over_limit_frequency ... ok
+test efhw_recommended_transformer_resolves_to_1_56 ... ok
+test freq_list_rejects_zero_frequency ... ok
+test default_antenna_mode_shows_all_models_per_band ... ok
+test bands_preset_loads_from_config_file ... ok
+test freq_flag_with_quiet_prints_compact_line ... ok
+test exports_include_inverted_v_fields ... ok
+test freq_flag_zero_shows_error ... ok
+test freq_list_quiet_non_resonant_prints_compact ... ok
+test freq_list_single_entry_behaves_like_freq ... ok
+test inverted_v_antenna_mode_shows_inverted_v_guidance_compromises ... ok
+test advise_with_preset_uses_band_selection_and_succeeds ... ok
+test mixed_meter_and_feet_constraints_show_error ... ok
+test invalid_velocity_shows_error ... ok
+test multiple_exports_ignore_custom_output_name ... ok
+test non_resonant_mode_defaults_to_recommended_transformer ... ok
+test invalid_wire_window_inverted_shows_structured_error ... ok
+test ocfd_antenna_mode_shows_ocfd_guidance_compromises ... ok
+test no_args_prints_help ... ok
+test quiet_resonant_produces_no_stdout ... ok
+test single_export_uses_requested_output_name ... ok
+test selected_antenna_model_filters_output_and_resonant_summary ... ok
+test quiet_non_resonant_prints_only_recommendation_length ... ok
+test step_flag_exceeding_window_shows_structured_error ... ok
+test list_bands_respects_selected_region ... ok
+test loop_antenna_mode_shows_loop_guidance_compromises ... ok
+test trap_dipole_aliases_accepted ... ok
+test trap_dipole_antenna_mode_shows_trap_length ... ok
+test velocity_out_of_range_shows_structured_error ... ok
+test trap_dipole_recommended_transformer_is_1_1 ... ok
+test step_flag_zero_shows_structured_error ... ok
+test trap_dipole_export_includes_trap_fields ... ok
+test unknown_bands_preset_shows_available_presets ... ok
+test velocity_sweep_out_of_range_shows_error ... ok
+test velocity_sweep_resonant_prints_per_vf_lines ... ok
+test step_flag_accepted_and_non_resonant_succeeds ... ok
+test velocity_sweep_non_resonant_prints_table ... ok
+
+test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests rusty_wire
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
