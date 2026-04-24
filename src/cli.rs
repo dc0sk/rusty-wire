@@ -11,11 +11,11 @@ use crate::app::{
     resolve_wire_window_inputs, results_display_document, validate_velocity_sweep,
     velocity_sweep_display_lines, velocity_sweep_view, AntennaModel, AppConfig, AppRequest,
     AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_ANTENNA_HEIGHT_M,
-    DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION, FEET_TO_METERS,
+    DEFAULT_BAND_SELECTION, DEFAULT_GROUND_CLASS, DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
 use crate::band_presets::load_preset_selection;
 use crate::bands::{ITURegion, ALL_REGIONS};
-use crate::calculations::{TransformerRatio, DEFAULT_NON_RESONANT_CONFIG};
+use crate::calculations::{GroundClass, TransformerRatio, DEFAULT_NON_RESONANT_CONFIG};
 use crate::export::{default_advise_output_name, export_advise};
 use crate::export::{default_output_name, export_results, validate_export_path};
 use clap::Parser;
@@ -65,6 +65,10 @@ struct Cli {
     /// Antenna height in meters (standard presets: 7, 10, 12)
     #[arg(long, value_enum, default_value = "10")]
     height: CliAntennaHeight,
+
+    /// Ground class model for skip-distance estimates
+    #[arg(long, value_enum, default_value = "average")]
+    ground: CliGroundClass,
 
     /// Transformer ratio (default: recommended for the selected mode/antenna)
     #[arg(short, long, value_enum, default_value = "recommended")]
@@ -172,6 +176,23 @@ impl From<CliAntennaHeight> for f64 {
             CliAntennaHeight::H7 => 7.0,
             CliAntennaHeight::H10 => 10.0,
             CliAntennaHeight::H12 => 12.0,
+        }
+    }
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+enum CliGroundClass {
+    Poor,
+    Average,
+    Good,
+}
+
+impl From<CliGroundClass> for GroundClass {
+    fn from(value: CliGroundClass) -> Self {
+        match value {
+            CliGroundClass::Poor => GroundClass::Poor,
+            CliGroundClass::Average => GroundClass::Average,
+            CliGroundClass::Good => GroundClass::Good,
         }
     }
 }
@@ -487,6 +508,7 @@ pub fn run_from_args(args: &[String]) -> bool {
         transformer_ratio,
         antenna_model,
         antenna_height_m: cli.height.into(),
+        ground_class: cli.ground.into(),
         custom_freq_mhz: cli.freq,
         freq_list_mhz: cli.freq_list.unwrap_or_default(),
     };
@@ -690,6 +712,7 @@ struct InteractiveDefaults {
     antenna_model: Option<AntennaModel>,
     velocity: Option<f64>,
     antenna_height_m: Option<f64>,
+    ground_class: Option<GroundClass>,
     transformer_ratio: Option<String>,
     wire_min_m: Option<f64>,
     wire_max_m: Option<f64>,
@@ -704,6 +727,7 @@ impl InteractiveDefaults {
             antenna_model: None,
             velocity: None,
             antenna_height_m: None,
+            ground_class: None,
             transformer_ratio: None,
             wire_min_m: None,
             wire_max_m: None,
@@ -816,6 +840,27 @@ fn prompt_antenna_height_with_default(
         "10" => 10.0,
         "12" => 12.0,
         _ => default.unwrap_or(DEFAULT_ANTENNA_HEIGHT_M),
+    }
+}
+
+fn prompt_ground_class_with_default(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    default: Option<GroundClass>,
+) -> GroundClass {
+    let default_label = default.unwrap_or(DEFAULT_GROUND_CLASS).as_label();
+    let prompt_str = format!("Ground class (poor/average/good) [{default_label}]: ");
+    prompt(output, &prompt_str);
+    let line = read_line(input, "failed to read ground class");
+    let trimmed = line.trim().to_ascii_lowercase();
+    if trimmed.is_empty() {
+        return default.unwrap_or(DEFAULT_GROUND_CLASS);
+    }
+    match trimmed.as_str() {
+        "poor" => GroundClass::Poor,
+        "average" => GroundClass::Average,
+        "good" => GroundClass::Good,
+        _ => default.unwrap_or(DEFAULT_GROUND_CLASS),
     }
 }
 
@@ -1112,6 +1157,8 @@ fn calculate_selected_bands_with_defaults(
     let antenna_height_m =
         prompt_antenna_height_with_default(input, output, defaults.antenna_height_m);
     defaults.antenna_height_m = Some(antenna_height_m);
+    let ground_class = prompt_ground_class_with_default(input, output, defaults.ground_class);
+    defaults.ground_class = Some(ground_class);
     let transformer_ratio = prompt_transformer_ratio_with_default(
         input,
         output,
@@ -1151,6 +1198,7 @@ fn calculate_selected_bands_with_defaults(
         transformer_ratio,
         antenna_model,
         antenna_height_m,
+        ground_class,
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
     };
@@ -1212,6 +1260,8 @@ fn quick_calculation_with_defaults(
     let antenna_height_m =
         prompt_antenna_height_with_default(input, output, defaults.antenna_height_m);
     defaults.antenna_height_m = Some(antenna_height_m);
+    let ground_class = prompt_ground_class_with_default(input, output, defaults.ground_class);
+    defaults.ground_class = Some(ground_class);
     let transformer_ratio = prompt_transformer_ratio_with_default(
         input,
         output,
@@ -1251,6 +1301,7 @@ fn quick_calculation_with_defaults(
         transformer_ratio,
         antenna_model,
         antenna_height_m,
+        ground_class,
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
     };
@@ -1447,7 +1498,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
         UnitSystem::Both => "both",
     };
     let mut cmd = format!(
-        "rusty-wire --region {} --mode {} --bands {} --velocity {:.2} --height {:.0} --transformer {} --units {}",
+        "rusty-wire --region {} --mode {} --bands {} --velocity {:.2} --height {:.0} --ground {} --transformer {} --units {}",
         shell_quote(config.itu_region.short_name()),
         shell_quote(match config.mode {
             CalcMode::Resonant => "resonant",
@@ -1456,6 +1507,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
         shell_quote(&bands_csv),
         config.velocity_factor,
         config.antenna_height_m,
+        shell_quote(config.ground_class.as_label()),
         shell_quote(config.transformer_ratio.as_label()),
         shell_quote(units_str),
     );
@@ -1704,6 +1756,7 @@ mod tests {
             transformer_ratio: TransformerRatio::R1To1,
             antenna_model: None,
             antenna_height_m: DEFAULT_ANTENNA_HEIGHT_M,
+            ground_class: DEFAULT_GROUND_CLASS,
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
         };

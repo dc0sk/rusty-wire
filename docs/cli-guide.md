@@ -27,6 +27,8 @@ It supports:
   - Resonant (default)
   - Non-resonant
 - Velocity factor input (default: 0.95)
+- Standardized antenna height presets (7 m, 10 m, 12 m)
+- Ground-class modeling for skip estimates (poor, average, good)
 - Additional resonant-model guidance:
   - End-fed half-wave total wire length
   - Full-wave loop circumference
@@ -112,6 +114,7 @@ rusty-wire --interactive
 - `--mode <resonant|non-resonant>` Calculation mode (default: `resonant`)
 - `--velocity <value>` Velocity factor, valid range `0.50..=1.00` (default: `0.95`)
 - `--height <7|10|12>` Standard antenna height in meters used for height-aware skip estimates (default: `10`)
+- `--ground <poor|average|good>` Ground class used in skip-distance scaling (default: `average`)
 - `--antenna <dipole|inverted-v|efhw|loop|ocfd|trap-dipole>` Filter output to one model (omit to show all)
 - `--transformer <recommended|1:1|1:2|1:4|1:5|1:6|1:9|1:16|1:49|1:56|1:64>`
 - `--units <m|ft|both>` Output unit filter

@@ -90,9 +90,9 @@ use crate::calculations::{
     calculate_average_max_distance, calculate_average_min_distance,
     calculate_best_non_resonant_length, calculate_for_band_with_velocity,
     calculate_non_resonant_optima, calculate_non_resonant_window_optima,
-    calculate_resonant_compromises, optimize_ocfd_split_for_length, NonResonantRecommendation,
-    NonResonantSearchConfig, ResonantCompromise, TransformerRatio, WireCalculation,
-    DEFAULT_NON_RESONANT_CONFIG,
+    calculate_resonant_compromises, optimize_ocfd_split_for_length, GroundClass,
+    NonResonantRecommendation, NonResonantSearchConfig, ResonantCompromise, TransformerRatio,
+    WireCalculation, DEFAULT_NON_RESONANT_CONFIG,
 };
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -104,6 +104,7 @@ pub const DEFAULT_ITU_REGION: ITURegion = ITURegion::Region1;
 pub const DEFAULT_TRANSFORMER_RATIO: TransformerRatio = TransformerRatio::R1To1;
 pub const STANDARD_ANTENNA_HEIGHTS_M: [f64; 3] = [7.0, 10.0, 12.0];
 pub const DEFAULT_ANTENNA_HEIGHT_M: f64 = 10.0;
+pub const DEFAULT_GROUND_CLASS: GroundClass = GroundClass::Average;
 
 pub fn recommended_transformer_ratio(
     mode: CalcMode,
@@ -316,6 +317,7 @@ fn build_optimizer_calculations(
                     config.velocity_factor,
                     ratio,
                     config.antenna_height_m,
+                    config.ground_class,
                 )
             })
             .collect();
@@ -336,6 +338,7 @@ fn build_optimizer_calculations(
             config.velocity_factor,
             ratio,
             config.antenna_height_m,
+            config.ground_class,
         )];
     }
 
@@ -345,6 +348,7 @@ fn build_optimizer_calculations(
         config.itu_region,
         ratio,
         config.antenna_height_m,
+        config.ground_class,
     );
     calculations
 }
@@ -533,6 +537,7 @@ pub struct AppConfig {
     pub transformer_ratio: TransformerRatio,
     pub antenna_model: Option<AntennaModel>,
     pub antenna_height_m: f64,
+    pub ground_class: GroundClass,
     /// Direct frequency input in MHz; when set, bypasses band selection entirely.
     pub custom_freq_mhz: Option<f64>,
     /// Multiple explicit frequencies in MHz; when non-empty, bypasses band selection.
@@ -554,6 +559,7 @@ impl Default for AppConfig {
             transformer_ratio: DEFAULT_TRANSFORMER_RATIO,
             antenna_model: None,
             antenna_height_m: DEFAULT_ANTENNA_HEIGHT_M,
+            ground_class: DEFAULT_GROUND_CLASS,
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
         }
@@ -841,6 +847,7 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
                     config.velocity_factor,
                     config.transformer_ratio,
                     config.antenna_height_m,
+                    config.ground_class,
                 );
                 calc.band_name = format!("{freq_mhz:.3} MHz");
                 calc
@@ -862,6 +869,7 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
             config.velocity_factor,
             config.transformer_ratio,
             config.antenna_height_m,
+            config.ground_class,
         );
         calc.band_name = format!("{freq_mhz:.3} MHz");
         (vec![calc], Vec::new())
@@ -872,6 +880,7 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
             config.itu_region,
             config.transformer_ratio,
             config.antenna_height_m,
+            config.ground_class,
         )
     };
 
@@ -1206,6 +1215,7 @@ pub fn results_overview_view(results: &AppResults) -> ResultsOverviewView {
             ),
             format!("Antenna model: {}", summary.antenna_model_label),
             format!("Antenna height: {:.0} m", results.config.antenna_height_m),
+            format!("Ground class: {}", results.config.ground_class.as_label()),
             "------------------------------------------------------------".to_string(),
         ],
         summary_lines: vec![
@@ -2715,6 +2725,7 @@ fn build_calculations(
     region: ITURegion,
     transformer_ratio: TransformerRatio,
     antenna_height_m: f64,
+    ground_class: GroundClass,
 ) -> (Vec<WireCalculation>, Vec<usize>) {
     let mut calculations = Vec::new();
     let mut skipped_band_indices = Vec::new();
@@ -2732,6 +2743,7 @@ fn build_calculations(
                 velocity,
                 transformer_ratio,
                 antenna_height_m,
+                ground_class,
             ));
         } else {
             skipped_band_indices.push(idx);
@@ -2818,6 +2830,7 @@ mod tests {
         assert_eq!(config.transformer_ratio, TransformerRatio::R1To1);
         assert_eq!(config.antenna_model, None);
         assert_eq!(config.antenna_height_m, DEFAULT_ANTENNA_HEIGHT_M);
+        assert_eq!(config.ground_class, DEFAULT_GROUND_CLASS);
         assert_eq!(config.band_indices, vec![4, 5, 6, 7, 8, 9, 10]);
     }
 
