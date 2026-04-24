@@ -45,6 +45,14 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 - Trap dipole and other multi-section models
 - Evaluate antenna-specific feed recommendations at the app layer
 
+### 3a) Balun optimizer foundation (prerequisite for advise mode)
+- Add an app-layer optimizer that ranks balun/unun ratios for the selected band set and antenna assumptions
+- Surface optimizer output as structured view data usable by CLI/TUI/GUI
+
+### 3b) `advise` candidate ranking mode
+- Add a user-facing flow where a named/explicit band set produces ranked wire-length + balun/unun candidates
+- Include compact scoring metadata (efficiency estimate and tradeoff notes) per candidate
+
 ### 4) Interactive-mode testability
 - Refactor interactive prompts to accept injected I/O (already partially done)
 - Add automated test coverage for all interactive prompt paths

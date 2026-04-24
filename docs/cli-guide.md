@@ -1,10 +1,11 @@
 # CLI Guide
 
-**Version 2.5.1**
+**Version 2.5.2**
 
 Use this page as the command reference for Rusty Wire.
 
 For test procedures, see [testing.md](testing.md).
+For formulas and optimizer scoring details, see [math.md](math.md).
 For architecture details, see [architecture.md](architecture.md).
 For release history, see [CHANGELOG.md](CHANGELOG.md).
 
@@ -104,6 +105,9 @@ rusty-wire --interactive
 - `--list-bands` List bands for selected region
 - `--region <1|2|3>` ITU region (default: `1`)
 - `--bands <csv>` Band names/ranges, for example `40m,20m,10m-15m`
+- `--bands-preset <name>` Named band preset loaded from TOML
+- `--bands-config <path>` Preset config path (default: `bands.toml`)
+- `--advise` Print ranked wire + balun/unun candidates with efficiency-style metrics
 - `--mode <resonant|non-resonant>` Calculation mode (default: `resonant`)
 - `--velocity <value>` Velocity factor, valid range `0.50..=1.00` (default: `0.95`)
 - `--antenna <dipole|inverted-v|efhw|loop|ocfd|trap-dipole>` Filter output to one model (omit to show all)
@@ -129,6 +133,15 @@ Imperial:
 Rules:
 - Do not mix metric and imperial window flags in the same command.
 - If `--bands` is omitted, Rusty Wire uses the built-in default band set.
+- `--bands` and `--bands-preset` are mutually exclusive.
+
+Preset file format:
+
+```toml
+[presets]
+portable = ["40m", "20m", "15m", "10m"]
+fieldday = ["80m", "40m", "20m", "15m", "10m"]
+```
 
 ## Transformer Recommendation Defaults
 
@@ -201,6 +214,22 @@ Velocity sweep comparison:
 ```bash
 rusty-wire --mode non-resonant --bands 40m,20m --wire-min 10 --wire-max 35 \
   --velocity-sweep 0.85,0.95,1.00
+```
+
+Named band preset from config:
+
+```bash
+rusty-wire --bands-preset portable
+rusty-wire --bands-preset fieldday --bands-config ./profiles/bands.toml
+```
+
+Advise mode (ranked wire + balun/unun candidates):
+
+```bash
+rusty-wire --advise --bands 40m,20m,15m --antenna efhw
+rusty-wire --advise --bands-preset portable --bands-config ./profiles/bands.toml
+# Export advise report as Markdown
+rusty-wire --advise --bands 40m,20m --antenna efhw --export markdown --output advise.md
 ```
 
 Script-friendly quiet output (non-resonant):

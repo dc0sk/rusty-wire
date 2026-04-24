@@ -51,6 +51,9 @@ equal-tie support.
 
 - `--quiet` — suppresses the results table; non-resonant mode prints one compact
   recommendation line, resonant mode exits silently. Designed for shell scripting.
+- `--bands-preset <name>` — load a named band set from a TOML config file.
+- `--bands-config <path>` — override preset file path (default: `bands.toml`).
+- `--advise` — print ranked wire + balun/unun candidates with efficiency-style metrics.
 - `--freq <MHz>` — compute wire lengths for any explicit frequency without
   touching the band database.
 - `--velocity-sweep <v1,v2,...>` — run the same configuration at multiple
@@ -126,6 +129,26 @@ rusty-wire --mode non-resonant --bands 40m,20m --wire-min 10 --wire-max 35 \
   --velocity-sweep 0.85,0.95,1.00
 ```
 
+**Use a named custom band preset from `bands.toml`:**
+```toml
+[presets]
+portable = ["40m", "20m", "15m", "10m"]
+fieldday = ["80m", "40m", "20m", "15m", "10m"]
+```
+
+```bash
+rusty-wire --bands-preset portable
+rusty-wire --bands-preset fieldday --bands-config ./profiles/bands.toml
+```
+
+**Get ranked advise candidates (wire + balun/unun):**
+```bash
+rusty-wire --advise --bands 40m,20m,15m --antenna efhw
+rusty-wire --advise --bands-preset portable --bands-config ./profiles/bands.toml
+# Export advise report as Markdown
+rusty-wire --advise --bands 40m,20m --antenna efhw --export markdown --output advise.md
+```
+
 **Script-friendly one-liner (non-resonant recommendation only):**
 ```bash
 rusty-wire --mode non-resonant --bands 40m,20m --wire-min 10 --wire-max 35 --quiet
@@ -144,6 +167,7 @@ rusty-wire --list-bands --region 2
 ```
 
 For a complete option reference see [docs/cli-guide.md](docs/cli-guide.md).
+For formulas and optimizer objective functions see [docs/math.md](docs/math.md).
 
 ---
 
@@ -152,6 +176,7 @@ For a complete option reference see [docs/cli-guide.md](docs/cli-guide.md).
 | Document | Contents |
 |---|---|
 | [docs/cli-guide.md](docs/cli-guide.md) | Full option reference and worked examples |
+| [docs/math.md](docs/math.md) | Formula definitions and optimizer objective functions (KaTeX) |
 | [docs/architecture.md](docs/architecture.md) | Module design, execution flow, app-layer API |
 | [docs/roadmap.md](docs/roadmap.md) | Milestone plan (2.x TUI, 3.x GUI) |
 | [docs/backlog.md](docs/backlog.md) | Unconfirmed ideas under consideration |
@@ -218,7 +243,9 @@ use rusty_wire::app::{AppRequest, AppResponse, execute_request_checked};
 
 `AppConfig → AppResults` is the stable calculation boundary. `AppError` covers
 all validation paths with typed variants. `AppState` / `AppAction` /
-`apply_action` form the pure state machine used by the TUI and any future GUI.
+`apply_action` power the pure UI state machine. The app layer now also exposes
+`optimize_transformer_candidates(&AppConfig)` as the balun/unun optimizer
+foundation for upcoming `advise` candidate ranking.
 
 ---
 

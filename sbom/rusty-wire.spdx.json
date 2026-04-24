@@ -14,7 +14,7 @@
       "checksums": [
         {
           "algorithm": "SHA1",
-          "checksumValue": "63fd14f3a4def5cdea124dc20c8bf47bee311d5d"
+          "checksumValue": "99e459f5a368cf4ceb1d2f48962874f70e197a2f"
         }
       ],
       "fileName": "./Cargo.lock",
@@ -28,7 +28,7 @@
       "checksums": [
         {
           "algorithm": "SHA1",
-          "checksumValue": "63fd14f3a4def5cdea124dc20c8bf47bee311d5d"
+          "checksumValue": "99e459f5a368cf4ceb1d2f48962874f70e197a2f"
         }
       ],
       "fileName": "./Cargo.lock",
@@ -42,7 +42,7 @@
       "checksums": [
         {
           "algorithm": "SHA1",
-          "checksumValue": "63fd14f3a4def5cdea124dc20c8bf47bee311d5d"
+          "checksumValue": "99e459f5a368cf4ceb1d2f48962874f70e197a2f"
         }
       ],
       "fileName": "./Cargo.lock",
@@ -475,6 +475,22 @@
       "versionInfo": "0.15.5"
     },
     {
+      "SPDXID": "SPDXRef-Package-hashbrown-0.17.0",
+      "description": "A Rust port of Google's SwissTable hash map",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/hashbrown@0.17.0",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "hashbrown",
+      "versionInfo": "0.17.0"
+    },
+    {
       "SPDXID": "SPDXRef-Package-heck-0.5.0",
       "description": "heck is a case conversion library.",
       "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
@@ -505,6 +521,22 @@
       "licenseDeclared": "MIT OR Apache-2.0",
       "name": "ident_case",
       "versionInfo": "1.0.1"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-indexmap-2.14.0",
+      "description": "A hash table with consistent order and fast iteration.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/indexmap@2.14.0",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "Apache-2.0 OR MIT",
+      "licenseDeclared": "Apache-2.0 OR MIT",
+      "name": "indexmap",
+      "versionInfo": "2.14.0"
     },
     {
       "SPDXID": "SPDXRef-Package-indoc-2.0.7",
@@ -666,6 +698,23 @@
       "licenseDeclared": "MIT",
       "name": "lru",
       "versionInfo": "0.12.5"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-memchr-2.8.0",
+      "description": "Provides extremely fast (uses SIMD on x86_64, aarch64 and wasm32) routines for\n1, 2 or 3 byte search and single substring search.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/memchr@2.8.0",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://github.com/BurntSushi/memchr",
+      "licenseConcluded": "Unlicense OR MIT",
+      "licenseDeclared": "Unlicense OR MIT",
+      "name": "memchr",
+      "versionInfo": "2.8.0"
     },
     {
       "SPDXID": "SPDXRef-Package-mio-1.2.0",
@@ -886,6 +935,73 @@
       "versionInfo": "1.2.0"
     },
     {
+      "SPDXID": "SPDXRef-Package-serde-1.0.228",
+      "description": "A generic serialization/deserialization framework",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/serde@1.0.228",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://serde.rs",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "serde",
+      "versionInfo": "1.0.228"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-serde--core-1.0.228",
+      "description": "Serde traits only, with no support for derive -- use the `serde` crate instead",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/serde_core@1.0.228",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://serde.rs",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "serde_core",
+      "versionInfo": "1.0.228"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-serde--derive-1.0.228",
+      "description": "Macros 1.1 implementation of #[derive(Serialize, Deserialize)]",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/serde_derive@1.0.228",
+          "referenceType": "purl"
+        }
+      ],
+      "homepage": "https://serde.rs",
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "serde_derive",
+      "versionInfo": "1.0.228"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-serde--spanned-0.6.9",
+      "description": "Serde-compatible spanned Value",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/serde_spanned@0.6.9",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "serde_spanned",
+      "versionInfo": "0.6.9"
+    },
+    {
       "SPDXID": "SPDXRef-Package-signal-hook-0.3.18",
       "description": "Unix signal handling",
       "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
@@ -1032,6 +1148,70 @@
       "licenseDeclared": "MIT OR Apache-2.0",
       "name": "syn",
       "versionInfo": "2.0.117"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-toml-0.8.23",
+      "description": "A native Rust encoder and decoder of TOML-formatted files and streams. Provides\nimplementations of the standard Serialize/Deserialize traits for TOML data to\nfacilitate deserializing and serializing Rust structures.\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/toml@0.8.23",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "toml",
+      "versionInfo": "0.8.23"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-toml--datetime-0.6.11",
+      "description": "A TOML-compatible datetime type",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/toml_datetime@0.6.11",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "toml_datetime",
+      "versionInfo": "0.6.11"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-toml--edit-0.22.27",
+      "description": "Yet another format-preserving TOML parser.",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/toml_edit@0.22.27",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "toml_edit",
+      "versionInfo": "0.22.27"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-toml--write-0.1.2",
+      "description": "A low-level interface for writing out TOML\n",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/toml_write@0.1.2",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT OR Apache-2.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "name": "toml_write",
+      "versionInfo": "0.1.2"
     },
     {
       "SPDXID": "SPDXRef-Package-unicode-ident-1.0.24",
@@ -1388,6 +1568,22 @@
       "licenseDeclared": "MIT OR Apache-2.0",
       "name": "windows_x86_64_msvc",
       "versionInfo": "0.52.6"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-winnow-0.7.15",
+      "description": "A byte-oriented, zero-copy, parser combinators library",
+      "downloadLocation": "registry+https://github.com/rust-lang/crates.io-index",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:cargo/winnow@0.7.15",
+          "referenceType": "purl"
+        }
+      ],
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "name": "winnow",
+      "versionInfo": "0.7.15"
     }
   ],
   "relationships": [
@@ -1687,6 +1883,16 @@
       "spdxElementId": "SPDXRef-Package-hashbrown-0.15.5"
     },
     {
+      "relatedSpdxElement": "SPDXRef-Package-equivalent-1.0.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-indexmap-2.14.0"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-hashbrown-0.17.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-indexmap-2.14.0"
+    },
+    {
       "relatedSpdxElement": "SPDXRef-Package-darling-0.23.0",
       "relationshipType": "DEPENDS_ON",
       "spdxElementId": "SPDXRef-Package-instability-0.3.12"
@@ -1902,6 +2108,51 @@
       "spdxElementId": "SPDXRef-Package-rusty-wire-2.5.2"
     },
     {
+      "relatedSpdxElement": "SPDXRef-Package-serde-1.0.228",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-rusty-wire-2.5.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-toml-0.8.23",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-rusty-wire-2.5.2"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-serde--derive-1.0.228",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-serde--core-1.0.228"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-proc-macro2-1.0.106",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-serde--derive-1.0.228"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-quote-1.0.45",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-serde--derive-1.0.228"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-syn-2.0.117",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-serde--derive-1.0.228"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-serde-1.0.228",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-serde--spanned-0.6.9"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-serde--core-1.0.228",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-serde-1.0.228"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-serde--derive-1.0.228",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-serde-1.0.228"
+    },
+    {
       "relatedSpdxElement": "SPDXRef-Package-libc-0.2.185",
       "relationshipType": "DEPENDS_ON",
       "spdxElementId": "SPDXRef-Package-signal-hook-0.3.18"
@@ -1982,6 +2233,61 @@
       "spdxElementId": "SPDXRef-Package-syn-2.0.117"
     },
     {
+      "relatedSpdxElement": "SPDXRef-Package-serde-1.0.228",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-toml--datetime-0.6.11"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-indexmap-2.14.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-toml--edit-0.22.27"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-serde--spanned-0.6.9",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-toml--edit-0.22.27"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-serde-1.0.228",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-toml--edit-0.22.27"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-toml--datetime-0.6.11",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-toml--edit-0.22.27"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-toml--write-0.1.2",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-toml--edit-0.22.27"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-winnow-0.7.15",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-toml--edit-0.22.27"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-serde--spanned-0.6.9",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-toml-0.8.23"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-serde-1.0.228",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-toml-0.8.23"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-toml--datetime-0.6.11",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-toml-0.8.23"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-toml--edit-0.22.27",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-toml-0.8.23"
+    },
+    {
       "relatedSpdxElement": "SPDXRef-Package-itertools-0.13.0",
       "relationshipType": "DEPENDS_ON",
       "spdxElementId": "SPDXRef-Package-unicode-truncate-1.1.0"
@@ -2055,6 +2361,11 @@
       "relatedSpdxElement": "SPDXRef-Package-windows--x86--64--msvc-0.52.6",
       "relationshipType": "DEPENDS_ON",
       "spdxElementId": "SPDXRef-Package-windows-targets-0.52.6"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-memchr-2.8.0",
+      "relationshipType": "DEPENDS_ON",
+      "spdxElementId": "SPDXRef-Package-winnow-0.7.15"
     }
   ],
   "spdxVersion": "SPDX-2.3"

@@ -68,6 +68,78 @@ fn list_bands_respects_selected_region() {
 }
 
 #[test]
+fn bands_preset_loads_from_config_file() {
+    let dir = temp_test_dir("bands-preset-load");
+    let config_path = dir.join("bands.toml");
+    fs::write(
+        &config_path,
+        "[presets]\nportable = [\"40m\", \"20m\", \"15m\", \"10m\"]\n",
+    )
+    .expect("failed to write bands.toml");
+
+    let output = binary()
+        .current_dir(&dir)
+        .args([
+            "--bands-preset",
+            "portable",
+            "--bands-config",
+            "bands.toml",
+            "--mode",
+            "resonant",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Summary for 4 band(s):"));
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn bands_and_bands_preset_are_mutually_exclusive() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m,20m",
+            "--bands-preset",
+            "portable",
+            "--bands-config",
+            "bands.toml",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("--bands and --bands-preset are mutually exclusive"));
+}
+
+#[test]
+fn unknown_bands_preset_shows_available_presets() {
+    let dir = temp_test_dir("bands-preset-unknown");
+    let config_path = dir.join("bands.toml");
+    fs::write(
+        &config_path,
+        "[presets]\nportable = [\"40m\", \"20m\"]\nfieldday = [\"80m\", \"40m\", \"20m\", \"15m\", \"10m\"]\n",
+    )
+    .expect("failed to write bands.toml");
+
+    let output = binary()
+        .current_dir(&dir)
+        .args(["--bands-preset", "dx", "--bands-config", "bands.toml"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("Available presets"));
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn multiple_exports_ignore_custom_output_name() {
     let dir = temp_test_dir("multi-export");
     let output = binary()
@@ -278,6 +350,81 @@ fn efhw_recommended_transformer_resolves_to_1_56() {
 
     assert!(output.status.success());
     assert!(stdout.contains("Using transformer ratio: 1:56"));
+}
+
+#[test]
+fn advise_outputs_ranked_candidates_for_efhw() {
+    let output = binary()
+        .args(["--advise", "--bands", "40m,20m", "--antenna", "efhw"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Advise candidates:"));
+    assert!(stdout.contains("ratio 1:56"));
+    assert!(stdout.contains("efficiency"));
+    assert!(stdout.contains("wire"));
+}
+
+#[test]
+fn advise_with_preset_uses_band_selection_and_succeeds() {
+    let dir = temp_test_dir("advise-with-preset");
+    let config_path = dir.join("bands.toml");
+    fs::write(
+        &config_path,
+        "[presets]\nportable = [\"40m\", \"20m\", \"15m\", \"10m\"]\n",
+    )
+    .expect("failed to write bands.toml");
+
+    let output = binary()
+        .current_dir(&dir)
+        .args([
+            "--advise",
+            "--bands-preset",
+            "portable",
+            "--bands-config",
+            "bands.toml",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Advise candidates:"));
+    assert!(stdout.contains("ratio"));
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn advise_markdown_export_writes_md_file() {
+    let dir = temp_test_dir("advise-markdown-export");
+    let output = binary()
+        .current_dir(&dir)
+        .args([
+            "--advise",
+            "--bands",
+            "40m,20m",
+            "--antenna",
+            "efhw",
+            "--export",
+            "markdown",
+            "--output",
+            "advise.md",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Exported advise results to advise.md"));
+
+    let md = fs::read_to_string(dir.join("advise.md")).expect("failed to read markdown export");
+    assert!(md.contains("# Rusty Wire Advise Candidates"));
+    assert!(md.contains("| Rank | Ratio |"));
+
+    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
