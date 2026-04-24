@@ -80,6 +80,18 @@ fn invalid_height_shows_clap_error() {
 }
 
 #[test]
+fn invalid_ground_shows_clap_error() {
+    let output = binary()
+        .args(["--bands", "40m", "--ground", "rocky"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("possible values"));
+}
+
+#[test]
 fn height_12m_shows_longer_skip_than_7m() {
     let out_7 = binary()
         .args(["--bands", "40m", "--height", "7"])
@@ -107,6 +119,36 @@ fn height_12m_shows_longer_skip_than_7m() {
 
     assert!(min12 > min7);
     assert!(max12 > max7);
+}
+
+#[test]
+fn ground_good_shows_longer_skip_than_poor() {
+    let out_poor = binary()
+        .args(["--bands", "40m", "--height", "10", "--ground", "poor"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let out_good = binary()
+        .args(["--bands", "40m", "--height", "10", "--ground", "good"])
+        .output()
+        .expect("failed to run rusty-wire");
+
+    assert!(out_poor.status.success());
+    assert!(out_good.status.success());
+
+    let poor_stdout = String::from_utf8_lossy(&out_poor.stdout);
+    let good_stdout = String::from_utf8_lossy(&out_good.stdout);
+
+    let min_poor = extract_summary_skip_km(&poor_stdout, "Average minimum skip distance")
+        .expect("expected minimum skip summary for poor ground");
+    let max_poor = extract_summary_skip_km(&poor_stdout, "Average maximum skip distance")
+        .expect("expected maximum skip summary for poor ground");
+    let min_good = extract_summary_skip_km(&good_stdout, "Average minimum skip distance")
+        .expect("expected minimum skip summary for good ground");
+    let max_good = extract_summary_skip_km(&good_stdout, "Average maximum skip distance")
+        .expect("expected maximum skip summary for good ground");
+
+    assert!(min_good > min_poor);
+    assert!(max_good > max_poor);
 }
 
 #[test]

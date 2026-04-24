@@ -11,11 +11,13 @@ All notable changes to Rusty Wire are documented here.
 - **Advise exports**: `--advise` now supports `--export csv,json,markdown,txt` with dedicated advise report outputs; Markdown export is available via `--export markdown`.
 - **Math reference documentation**: added `docs/math.md` with KaTeX equations for core wire-length formulas, mismatch model, and optimizer objective functions (non-resonant, resonant compromise, OCFD split, and advise ranking).
 - **Standard antenna height model**: added `--height 7|10|12` to CLI and interactive flows, with app-layer validation and propagation into calculations.
+- **Ground-class model**: added `--ground poor|average|good` to CLI and interactive flows, propagating into skip-distance modeling.
 
 ### Changed
 - **Roadmap sequencing**: captured `advise` feature direction (candidate ranking for wire length + balun/unun choice with efficiency-style metadata) and marked balun optimizer groundwork as the prerequisite milestone.
 - **Model realism adjustments**: inverted-V geometry now uses empirical apex-angle shortening factors (90°: 0.97, 120°: 0.985), and full-wave loop circumference now uses `1005/f` guidance.
 - **Practical-limits first mitigation**: skip-distance summaries now include first-order height-aware scaling for 7 m, 10 m, and 12 m antenna heights.
+- **Practical-limits extension**: skip-distance summaries now also include first-order ground-class scaling (poor/average/good).
 
 ## [2.5.2] - 2026-04-21
 

@@ -214,8 +214,14 @@ $$
 F_h(7\,\mathrm{m}) = 0.78,\quad F_h(10\,\mathrm{m}) = 1.00,\quad F_h(12\,\mathrm{m}) = 1.12
 $$
 
+Current ground-class scaling:
+
 $$
-	ext{skip}_{\min,\max} = F_h\cdot \text{skip}^{\text{band-table}}_{\min,\max}
+F_g(\mathrm{poor}) = 0.88,\quad F_g(\mathrm{average}) = 1.00,\quad F_g(\mathrm{good}) = 1.10
+$$
+
+$$
+	ext{skip}_{\min,\max} = F_h\cdot F_g\cdot \text{skip}^{\text{band-table}}_{\min,\max}
 $$
 
 For mission-critical designs, use Rusty Wire results as initial conditions and validate with NEC simulation and on-air/instrument measurements.

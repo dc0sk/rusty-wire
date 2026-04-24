@@ -5,6 +5,23 @@ use std::fmt;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroundClass {
+    Poor,
+    Average,
+    Good,
+}
+
+impl GroundClass {
+    pub fn as_label(self) -> &'static str {
+        match self {
+            GroundClass::Poor => "poor",
+            GroundClass::Average => "average",
+            GroundClass::Good => "good",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransformerRatio {
     R1To1,
     R1To2,
@@ -273,6 +290,7 @@ pub fn calculate_for_band_with_velocity(
     velocity_factor: f64,
     transformer: TransformerRatio,
     antenna_height_m: f64,
+    ground_class: GroundClass,
 ) -> WireCalculation {
     let freq = band.freq_center_mhz;
 
@@ -342,7 +360,7 @@ pub fn calculate_for_band_with_velocity(
     let trap_dipole_leg_ft = trap_dipole_leg_m * METERS_TO_FEET;
 
     // Height-aware first-order skip scaling for practical deployment heights.
-    let skip_factor = height_skip_factor(antenna_height_m);
+    let skip_factor = height_skip_factor(antenna_height_m) * ground_skip_factor(ground_class);
     let skip_distance_min_km = band.typical_skip_km.0 * skip_factor;
     let skip_distance_max_km = band.typical_skip_km.1 * skip_factor;
     let skip_distance_avg_km = (skip_distance_min_km + skip_distance_max_km) / 2.0;
@@ -408,6 +426,14 @@ fn height_skip_factor(antenna_height_m: f64) -> f64 {
     } else {
         // Keep a safe fallback if called outside presets.
         (1.0 + ((antenna_height_m - 10.0) * 0.035)).clamp(0.70, 1.20)
+    }
+}
+
+fn ground_skip_factor(ground_class: GroundClass) -> f64 {
+    match ground_class {
+        GroundClass::Poor => 0.88,
+        GroundClass::Average => 1.0,
+        GroundClass::Good => 1.10,
     }
 }
 
@@ -928,7 +954,13 @@ mod tests {
     #[test]
     fn calculate_for_band_basic_lengths() {
         let band = sample_band();
-        let result = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0);
+        let result = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
 
         assert_eq!(result.band_name, "20m");
         assert_eq!(result.frequency_mhz, 14.175);
@@ -941,8 +973,20 @@ mod tests {
     #[test]
     fn calculate_for_band_velocity_factor_effect() {
         let band = sample_band();
-        let slow = calculate_for_band_with_velocity(&band, 0.8, TransformerRatio::R1To1, 10.0);
-        let fast = calculate_for_band_with_velocity(&band, 1.0, TransformerRatio::R1To1, 10.0);
+        let slow = calculate_for_band_with_velocity(
+            &band,
+            0.8,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let fast = calculate_for_band_with_velocity(
+            &band,
+            1.0,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
 
         assert!(slow.half_wave_m < fast.half_wave_m);
         assert!(slow.quarter_wave_m < fast.quarter_wave_m);
@@ -951,7 +995,13 @@ mod tests {
     #[test]
     fn calculate_for_band_unit_conversion() {
         let band = sample_band();
-        let result = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0);
+        let result = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
 
         let m_to_ft = 3.28084;
         assert!((result.half_wave_ft - result.half_wave_m * m_to_ft).abs() < 0.01);
@@ -961,7 +1011,13 @@ mod tests {
     #[test]
     fn calculate_for_band_derived_antenna_models() {
         let band = sample_band();
-        let result = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0);
+        let result = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
         let m_to_ft = 3.28084;
 
         assert!((result.end_fed_half_wave_m - result.corrected_half_wave_m).abs() < 1e-9);
@@ -1018,7 +1074,13 @@ mod tests {
     #[test]
     fn optimize_ocfd_split_for_length_returns_valid_recommendation() {
         let band = sample_band();
-        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0);
+        let calc = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
         let total = calc.corrected_half_wave_m;
 
         let rec = optimize_ocfd_split_for_length(&[calc], total)
@@ -1040,7 +1102,13 @@ mod tests {
     #[test]
     fn calculate_average_distances_single() {
         let band = sample_band();
-        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0);
+        let calc = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
 
         let avg_min = calculate_average_min_distance(&[calc.clone()]);
         let avg_max = calculate_average_max_distance(&[calc.clone()]);
@@ -1052,12 +1120,24 @@ mod tests {
     #[test]
     fn calculate_average_distances_multiple() {
         let band1 = sample_band();
-        let calc1 = calculate_for_band_with_velocity(&band1, 0.95, TransformerRatio::R1To1, 10.0);
+        let calc1 = calculate_for_band_with_velocity(
+            &band1,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
 
         let mut band2 = sample_band();
         band2.name = "10m";
         band2.typical_skip_km = (250.0, 1200.0);
-        let calc2 = calculate_for_band_with_velocity(&band2, 0.95, TransformerRatio::R1To1, 10.0);
+        let calc2 = calculate_for_band_with_velocity(
+            &band2,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
 
         let avg_min = calculate_average_min_distance(&[calc1.clone(), calc2.clone()]);
         let avg_max = calculate_average_max_distance(&[calc1.clone(), calc2.clone()]);
@@ -1088,7 +1168,13 @@ mod tests {
     #[test]
     fn calculate_non_resonant_optima_invalid_config() {
         let band = sample_band();
-        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0);
+        let calc = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
 
         // Invalid config: min > max
         let config = NonResonantSearchConfig {
@@ -1104,7 +1190,13 @@ mod tests {
     #[test]
     fn calculate_non_resonant_optima_result_structure() {
         let band = sample_band();
-        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0);
+        let calc = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
 
         let config = NonResonantSearchConfig {
             min_len_m: 8.0,
@@ -1138,7 +1230,13 @@ mod tests {
     #[test]
     fn calculate_best_non_resonant_length_from_optima() {
         let band = sample_band();
-        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0);
+        let calc = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
 
         let config = NonResonantSearchConfig {
             min_len_m: 8.0,
@@ -1171,7 +1269,13 @@ mod tests {
     #[test]
     fn calculate_resonant_compromises_result_structure() {
         let band = sample_band();
-        let calc = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0);
+        let calc = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
 
         let config = NonResonantSearchConfig {
             min_len_m: 8.0,

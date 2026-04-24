@@ -60,6 +60,8 @@ equal-tie support.
   velocity factors and print a side-by-side comparison table.
 - `--height 7|10|12` — select standard antenna height model (meters) used for
   height-aware skip-distance estimates.
+- `--ground poor|average|good` — select ground-class model used for
+  skip-distance scaling (default: `average`).
 - `--step <meters>` — control non-resonant search resolution (default 0.05 m).
 - `--velocity <value>` — velocity factor from 0.50 to 1.00 (default 0.95).
 - `--transformer recommended|1:1|1:4|1:9|1:49|1:56|...` — auto-resolved per
@@ -107,7 +109,7 @@ rusty-wire --mode resonant --bands 40m,20m --antenna efhw --transformer recommen
 
 **OCFD resonant analysis:**
 ```bash
-rusty-wire --mode resonant --bands 40m,20m --antenna ocfd --height 10
+rusty-wire --mode resonant --bands 40m,20m --antenna ocfd --height 10 --ground average
 ```
 
 **Find the best non-resonant wire for a 10–35 m garden:**
