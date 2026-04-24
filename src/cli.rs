@@ -5,16 +5,18 @@
 /// The computation itself is delegated to `app::run_calculation`; the only
 /// imports from the core modules that this file needs are for display helpers.
 use crate::app::{
-    band_label_for_index, band_listing_display_lines, band_listing_view, execute_request_checked,
-    format_quiet_summary, parse_band_selection, parse_single_band_token,
+    band_label_for_index, band_listing_display_lines, band_listing_view, build_advise_candidates,
+    execute_request_checked, format_quiet_summary, parse_band_selection, parse_single_band_token,
     recommended_transformer_ratio, recommended_transformer_ratio_fallback_message,
     resolve_wire_window_inputs, results_display_document, validate_velocity_sweep,
     velocity_sweep_display_lines, velocity_sweep_view, AntennaModel, AppConfig, AppRequest,
     AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION,
     FEET_TO_METERS,
 };
+use crate::band_presets::load_preset_selection;
 use crate::bands::{ITURegion, ALL_REGIONS};
 use crate::calculations::{TransformerRatio, DEFAULT_NON_RESONANT_CONFIG};
+use crate::export::{default_advise_output_name, export_advise};
 use crate::export::{default_output_name, export_results, validate_export_path};
 use clap::Parser;
 use std::io::{self, BufRead, Write};
@@ -47,6 +49,14 @@ struct Cli {
     /// Band names/ranges (comma-separated, e.g., "40m,20m,10m-15m,60m-80m")
     #[arg(short, long)]
     bands: Option<String>,
+
+    /// Named band preset from a TOML config file, e.g. portable-dx
+    #[arg(long)]
+    bands_preset: Option<String>,
+
+    /// Band preset config file path (default: bands.toml)
+    #[arg(long)]
+    bands_config: Option<String>,
 
     /// Velocity factor (0.50-1.00)
     #[arg(short, long, default_value_t = 0.95)]
@@ -120,6 +130,10 @@ struct Cli {
     /// Run a sweep over multiple velocity factors (comma-separated, e.g. 0.66,0.85,0.95)
     #[arg(long, value_delimiter = ',')]
     velocity_sweep: Option<Vec<f64>>,
+
+    /// Print ranked wire + balun/unun advise candidates for the selected setup
+    #[arg(long)]
+    advise: bool,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -361,15 +375,43 @@ pub fn run_from_args(args: &[String]) -> bool {
         }
     }
 
-    let bands = match &cli.bands {
-        Some(selection) => match parse_band_selection(selection, cli.region.into()) {
+    if cli.bands.is_some() && cli.bands_preset.is_some() {
+        eprintln!(
+            "Error: --bands and --bands-preset are mutually exclusive; use one or the other."
+        );
+        return false;
+    }
+
+    let bands = match (&cli.bands, &cli.bands_preset) {
+        (Some(selection), None) => match parse_band_selection(selection, cli.region.into()) {
             Ok(parsed) => parsed,
             Err(err) => {
                 eprintln!("Error: invalid --bands value: {err}");
                 return false;
             }
         },
-        None => DEFAULT_BAND_SELECTION.to_vec(),
+        (None, Some(preset_name)) => {
+            let config_path = cli.bands_config.as_deref().unwrap_or("bands.toml");
+            let resolved_selection = match load_preset_selection(config_path, preset_name) {
+                Ok(selection) => selection,
+                Err(err) => {
+                    eprintln!("Error: invalid --bands-preset value: {err}");
+                    return false;
+                }
+            };
+            match parse_band_selection(&resolved_selection, cli.region.into()) {
+                Ok(parsed) => parsed,
+                Err(err) => {
+                    eprintln!(
+                        "Error: preset '{}' in '{}' resolved to an invalid band selection: {err}",
+                        preset_name, config_path
+                    );
+                    return false;
+                }
+            }
+        }
+        (None, None) => DEFAULT_BAND_SELECTION.to_vec(),
+        (Some(_), Some(_)) => unreachable!("validated above"),
     };
 
     let resolved_window = match resolve_wire_window_inputs(
@@ -429,6 +471,10 @@ pub fn run_from_args(args: &[String]) -> bool {
         return run_velocity_sweep(&velocity_values, config, units);
     }
 
+    if cli.advise {
+        return print_advise_candidates(&config, &export_formats, cli.output.as_deref());
+    }
+
     let results = match execute_request_checked(AppRequest::new(config)) {
         Ok(response) => response.results,
         Err(err) => {
@@ -478,6 +524,81 @@ pub fn run_from_args(args: &[String]) -> bool {
         }
         println!("Exported results to {output}");
     }
+    true
+}
+
+fn print_advise_candidates(
+    config: &AppConfig,
+    export_formats: &[ExportFormat],
+    single_output: Option<&str>,
+) -> bool {
+    if let Err(err) = execute_request_checked(AppRequest::new(config.clone())) {
+        eprintln!("Error: {err}");
+        return false;
+    }
+
+    let view = build_advise_candidates(config, 5);
+    if view.candidates.is_empty() {
+        eprintln!("Error: no advise candidates available for the current selection.");
+        return false;
+    }
+
+    println!("\nAdvise candidates:");
+    println!("------------------------------------------------------------");
+    println!(
+        "Assumed feedpoint impedance: {:.0} ohm",
+        view.assumed_feedpoint_ohm
+    );
+    println!("Ranked combinations (wire length + balun/unun ratio):");
+    println!();
+
+    for (idx, candidate) in view.candidates.iter().enumerate() {
+        println!(
+            "{:2}. ratio {}  wire {:.2} m ({:.2} ft)",
+            idx + 1,
+            candidate.ratio.as_label(),
+            candidate.recommended_length_m,
+            candidate.recommended_length_ft
+        );
+        println!(
+            "    efficiency {:.2}%  mismatch loss {:.3} dB  clearance {:.2}%",
+            candidate.estimated_efficiency_pct,
+            candidate.mismatch_loss_db,
+            candidate.min_resonance_clearance_pct
+        );
+        println!(
+            "    score {:.2}  correction shift {:.2}%",
+            candidate.score, candidate.average_length_shift_pct
+        );
+    }
+
+    println!();
+    println!(
+        "Note: efficiency and score are model-based estimates for ranking, not lab measurements."
+    );
+
+    for (i, &fmt) in export_formats.iter().enumerate() {
+        let output = if export_formats.len() == 1 {
+            single_output
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| default_advise_output_name(fmt).to_string())
+        } else {
+            if i == 0 && single_output.is_some() {
+                eprintln!(
+                    "Warning: --output is ignored when multiple formats are selected; using default names."
+                );
+            }
+            default_advise_output_name(fmt).to_string()
+        };
+
+        if let Err(err) = export_advise(fmt, &output, view.assumed_feedpoint_ohm, &view.candidates)
+        {
+            eprintln!("Failed to export {output}: {err}");
+            return false;
+        }
+        println!("Exported advise results to {output}");
+    }
+
     true
 }
 

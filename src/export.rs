@@ -3,7 +3,7 @@
 /// Each `to_*` function is a pure string transform; `export_results` is the
 /// only function that touches the file system.  Both are accessible from
 /// future GUI code (e.g. to pipe content into a preview widget).
-use crate::app::{ExportFormat, UnitSystem};
+use crate::app::{AdviseCandidate, ExportFormat, UnitSystem};
 use crate::calculations::{NonResonantRecommendation, WireCalculation};
 use std::fs;
 use std::io;
@@ -19,6 +19,15 @@ pub fn default_output_name(format: ExportFormat) -> &'static str {
         ExportFormat::Json => "rusty-wire-results.json",
         ExportFormat::Markdown => "rusty-wire-results.md",
         ExportFormat::Txt => "rusty-wire-results.txt",
+    }
+}
+
+pub fn default_advise_output_name(format: ExportFormat) -> &'static str {
+    match format {
+        ExportFormat::Csv => "rusty-wire-advise.csv",
+        ExportFormat::Json => "rusty-wire-advise.json",
+        ExportFormat::Markdown => "rusty-wire-advise.md",
+        ExportFormat::Txt => "rusty-wire-advise.txt",
     }
 }
 
@@ -95,6 +104,29 @@ pub fn export_results(
             to_markdown(calculations, recommendation, units, wire_min_m, wire_max_m)
         }
         ExportFormat::Txt => to_txt(calculations, recommendation, units, wire_min_m, wire_max_m),
+    };
+    fs::write(output_path, content)
+}
+
+pub fn export_advise(
+    format: ExportFormat,
+    output: &str,
+    assumed_feedpoint_ohm: f64,
+    candidates: &[AdviseCandidate],
+) -> io::Result<()> {
+    let output_path = validate_export_path(output)
+        .map_err(|msg| io::Error::new(io::ErrorKind::InvalidInput, msg))?;
+    if let Some(parent) = output_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+
+    let content = match format {
+        ExportFormat::Csv => to_advise_csv(assumed_feedpoint_ohm, candidates),
+        ExportFormat::Json => to_advise_json(assumed_feedpoint_ohm, candidates),
+        ExportFormat::Markdown => to_advise_markdown(assumed_feedpoint_ohm, candidates),
+        ExportFormat::Txt => to_advise_txt(assumed_feedpoint_ohm, candidates),
     };
     fs::write(output_path, content)
 }
@@ -737,6 +769,107 @@ pub fn to_txt(
         out.push_str("  No resonant points in this window.\n");
     }
 
+    out
+}
+
+pub fn to_advise_csv(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
+    let mut out = String::from(
+        "rank,ratio,recommended_length_m,recommended_length_ft,clearance_pct,estimated_efficiency_pct,mismatch_loss_db,average_length_shift_pct,score,assumed_feedpoint_ohm\n",
+    );
+    for (idx, c) in candidates.iter().enumerate() {
+        out.push_str(&format!(
+            "{},{},{:.2},{:.2},{:.2},{:.2},{:.3},{:.2},{:.2},{:.0}\n",
+            idx + 1,
+            c.ratio.as_label(),
+            c.recommended_length_m,
+            c.recommended_length_ft,
+            c.min_resonance_clearance_pct,
+            c.estimated_efficiency_pct,
+            c.mismatch_loss_db,
+            c.average_length_shift_pct,
+            c.score,
+            assumed_feedpoint_ohm,
+        ));
+    }
+    out
+}
+
+pub fn to_advise_json(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
+    let mut out = String::from("{\n");
+    out.push_str(&format!(
+        "  \"assumed_feedpoint_ohm\": {:.0},\n",
+        assumed_feedpoint_ohm
+    ));
+    out.push_str("  \"candidates\": [\n");
+    for (idx, c) in candidates.iter().enumerate() {
+        let comma = if idx + 1 == candidates.len() { "" } else { "," };
+        out.push_str(&format!(
+            "    {{\"rank\": {}, \"ratio\": \"{}\", \"recommended_length_m\": {:.2}, \"recommended_length_ft\": {:.2}, \"clearance_pct\": {:.2}, \"estimated_efficiency_pct\": {:.2}, \"mismatch_loss_db\": {:.3}, \"average_length_shift_pct\": {:.2}, \"score\": {:.2}}}{}\n",
+            idx + 1,
+            c.ratio.as_label(),
+            c.recommended_length_m,
+            c.recommended_length_ft,
+            c.min_resonance_clearance_pct,
+            c.estimated_efficiency_pct,
+            c.mismatch_loss_db,
+            c.average_length_shift_pct,
+            c.score,
+            comma,
+        ));
+    }
+    out.push_str("  ]\n}");
+    out
+}
+
+pub fn to_advise_markdown(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
+    let mut out = String::from("# Rusty Wire Advise Candidates\n\n");
+    out.push_str(&format!(
+        "Assumed feedpoint impedance: {:.0} ohm\n\n",
+        assumed_feedpoint_ohm
+    ));
+    out.push_str("| Rank | Ratio | Wire (m) | Wire (ft) | Clearance (%) | Efficiency (%) | Mismatch Loss (dB) | Shift (%) | Score |\n");
+    out.push_str("|------|-------|----------|-----------|---------------|----------------|--------------------|-----------|-------|\n");
+    for (idx, c) in candidates.iter().enumerate() {
+        out.push_str(&format!(
+            "| {} | {} | {:.2} | {:.2} | {:.2} | {:.2} | {:.3} | {:.2} | {:.2} |\n",
+            idx + 1,
+            c.ratio.as_label(),
+            c.recommended_length_m,
+            c.recommended_length_ft,
+            c.min_resonance_clearance_pct,
+            c.estimated_efficiency_pct,
+            c.mismatch_loss_db,
+            c.average_length_shift_pct,
+            c.score,
+        ));
+    }
+    out
+}
+
+pub fn to_advise_txt(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
+    let mut out = String::from("Rusty Wire Advise Candidates\n");
+    out.push_str("============================================================\n");
+    out.push_str(&format!(
+        "Assumed feedpoint impedance: {:.0} ohm\n\n",
+        assumed_feedpoint_ohm
+    ));
+    for (idx, c) in candidates.iter().enumerate() {
+        out.push_str(&format!(
+            "{:2}. ratio {}  wire {:.2} m ({:.2} ft)\n",
+            idx + 1,
+            c.ratio.as_label(),
+            c.recommended_length_m,
+            c.recommended_length_ft,
+        ));
+        out.push_str(&format!(
+            "    efficiency {:.2}%  mismatch loss {:.3} dB  clearance {:.2}%\n",
+            c.estimated_efficiency_pct, c.mismatch_loss_db, c.min_resonance_clearance_pct
+        ));
+        out.push_str(&format!(
+            "    score {:.2}  correction shift {:.2}%\n\n",
+            c.score, c.average_length_shift_pct
+        ));
+    }
     out
 }
 
