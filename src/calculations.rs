@@ -256,10 +256,13 @@ const METERS_TO_FEET: f64 = 3.28084;
 
 /// Calculate resonant dipole wire lengths for a given frequency
 ///
-/// Using the standard formulas:
-/// - Half-wave dipole (feet): 468 / frequency_MHz
-/// - Full-wave dipole (feet): 936 / frequency_MHz
-/// - Quarter-wave (feet): 234 / frequency_MHz
+/// Internal policy: compute lengths in meters first, then derive feet values only
+/// for imperial output fields.
+///
+/// Using standard practical formulas in meters:
+/// - Half-wave dipole (m): (468 / 3.28084) / frequency_MHz
+/// - Full-wave dipole (m): (936 / 3.28084) / frequency_MHz
+/// - Quarter-wave (m): (234 / 3.28084) / frequency_MHz
 pub fn calculate_for_band_with_velocity(
     band: &Band,
     velocity_factor: f64,
@@ -267,24 +270,25 @@ pub fn calculate_for_band_with_velocity(
 ) -> WireCalculation {
     let freq = band.freq_center_mhz;
 
-    // The constants are in feet; apply velocity factor in feet, then convert to meters.
-    let half_wave_ft = (468.0 / freq) * velocity_factor;
-    let full_wave_ft = (936.0 / freq) * velocity_factor;
-    let quarter_wave_ft = (234.0 / freq) * velocity_factor;
+    // Metric-first core calculations.
+    let half_wave_m = ((468.0 / METERS_TO_FEET) / freq) * velocity_factor;
+    let full_wave_m = ((936.0 / METERS_TO_FEET) / freq) * velocity_factor;
+    let quarter_wave_m = ((234.0 / METERS_TO_FEET) / freq) * velocity_factor;
 
-    let half_wave_m = half_wave_ft / METERS_TO_FEET;
-    let full_wave_m = full_wave_ft / METERS_TO_FEET;
-    let quarter_wave_m = quarter_wave_ft / METERS_TO_FEET;
+    // Imperial output fields are derived from metric values.
+    let half_wave_ft = half_wave_m * METERS_TO_FEET;
+    let full_wave_ft = full_wave_m * METERS_TO_FEET;
+    let quarter_wave_ft = quarter_wave_m * METERS_TO_FEET;
 
     // Use a shared nominal feedpoint reference so transformer selection has a
     // consistent impact across resonant families and optimization behavior.
-    let corrected_half_wave_ft = impedance_corrected_length_ft(half_wave_ft, 73.0, transformer);
-    let corrected_full_wave_ft = impedance_corrected_length_ft(full_wave_ft, 73.0, transformer);
-    let corrected_quarter_wave_ft =
-        impedance_corrected_length_ft(quarter_wave_ft, 73.0, transformer);
-    let corrected_half_wave_m = corrected_half_wave_ft / METERS_TO_FEET;
-    let corrected_full_wave_m = corrected_full_wave_ft / METERS_TO_FEET;
-    let corrected_quarter_wave_m = corrected_quarter_wave_ft / METERS_TO_FEET;
+    let corrected_half_wave_m = impedance_corrected_length_m(half_wave_m, 73.0, transformer);
+    let corrected_full_wave_m = impedance_corrected_length_m(full_wave_m, 73.0, transformer);
+    let corrected_quarter_wave_m = impedance_corrected_length_m(quarter_wave_m, 73.0, transformer);
+    let corrected_half_wave_ft = corrected_half_wave_m * METERS_TO_FEET;
+    let corrected_full_wave_ft = corrected_full_wave_m * METERS_TO_FEET;
+    let corrected_quarter_wave_ft = corrected_quarter_wave_m * METERS_TO_FEET;
+
     let end_fed_half_wave_ft = corrected_half_wave_ft;
     let end_fed_half_wave_m = corrected_half_wave_m;
 
@@ -295,40 +299,41 @@ pub fn calculate_for_band_with_velocity(
     //   120° apex → K_120 ≈ 0.985 (~1.5 % shorter than flat dipole)
     const INV_V_SHORTENING_90: f64 = 0.97;
     const INV_V_SHORTENING_120: f64 = 0.985;
-    let inverted_v_total_ft = corrected_half_wave_ft * INV_V_SHORTENING_90;
-    let inverted_v_total_m = inverted_v_total_ft / METERS_TO_FEET;
-    let inverted_v_leg_ft = inverted_v_total_ft / 2.0;
+    let inverted_v_total_m = corrected_half_wave_m * INV_V_SHORTENING_90;
+    let inverted_v_total_ft = inverted_v_total_m * METERS_TO_FEET;
     let inverted_v_leg_m = inverted_v_total_m / 2.0;
+    let inverted_v_leg_ft = inverted_v_leg_m * METERS_TO_FEET;
     let inverted_v_span_90_ft = inverted_v_leg_ft * std::f64::consts::SQRT_2;
     let inverted_v_span_90_m = inverted_v_leg_m * std::f64::consts::SQRT_2;
     // 120° apex span uses its own shortened total so the geometry is consistent
-    let inv_v_total_120_ft = corrected_half_wave_ft * INV_V_SHORTENING_120;
-    let inv_v_leg_120_ft = inv_v_total_120_ft / 2.0;
-    let inv_v_leg_120_m = inv_v_leg_120_ft / METERS_TO_FEET;
+    let inv_v_total_120_m = corrected_half_wave_m * INV_V_SHORTENING_120;
+    let inv_v_leg_120_m = inv_v_total_120_m / 2.0;
+    let inv_v_leg_120_ft = inv_v_leg_120_m * METERS_TO_FEET;
     let inverted_v_span_120_ft = inv_v_leg_120_ft * 3.0_f64.sqrt();
     let inverted_v_span_120_m = inv_v_leg_120_m * 3.0_f64.sqrt();
 
     // Full-wave loop: ARRL Antenna Book standard formula is 1005/f (feet).
     // This is ~7 % longer than 2 × half-wave dipole (936/f) because the "end effect"
     // for a closed resonant loop differs from that of open-ended dipole elements.
-    let full_wave_loop_circumference_ft = (1005.0 / freq) * velocity_factor;
-    let full_wave_loop_circumference_m = full_wave_loop_circumference_ft / METERS_TO_FEET;
-    let full_wave_loop_square_side_ft = full_wave_loop_circumference_ft / 4.0;
+    let full_wave_loop_circumference_m = ((1005.0 / METERS_TO_FEET) / freq) * velocity_factor;
+    let full_wave_loop_circumference_ft = full_wave_loop_circumference_m * METERS_TO_FEET;
     let full_wave_loop_square_side_m = full_wave_loop_circumference_m / 4.0;
-    let ocfd_total_ft = corrected_half_wave_ft;
+    let full_wave_loop_square_side_ft = full_wave_loop_square_side_m * METERS_TO_FEET;
+
     let ocfd_total_m = corrected_half_wave_m;
-    let ocfd_33_short_leg_ft = ocfd_total_ft / 3.0;
     let ocfd_33_short_leg_m = ocfd_total_m / 3.0;
-    let ocfd_33_long_leg_ft = ocfd_total_ft * 2.0 / 3.0;
+    let ocfd_33_short_leg_ft = ocfd_33_short_leg_m * METERS_TO_FEET;
     let ocfd_33_long_leg_m = ocfd_total_m * 2.0 / 3.0;
-    let ocfd_20_short_leg_ft = ocfd_total_ft * 0.2;
+    let ocfd_33_long_leg_ft = ocfd_33_long_leg_m * METERS_TO_FEET;
     let ocfd_20_short_leg_m = ocfd_total_m * 0.2;
-    let ocfd_20_long_leg_ft = ocfd_total_ft * 0.8;
+    let ocfd_20_short_leg_ft = ocfd_20_short_leg_m * METERS_TO_FEET;
     let ocfd_20_long_leg_m = ocfd_total_m * 0.8;
-    let trap_dipole_total_ft = (450.0 / freq) * velocity_factor;
-    let trap_dipole_total_m = trap_dipole_total_ft / METERS_TO_FEET;
-    let trap_dipole_leg_ft = trap_dipole_total_ft / 2.0;
+    let ocfd_20_long_leg_ft = ocfd_20_long_leg_m * METERS_TO_FEET;
+
+    let trap_dipole_total_m = ((450.0 / METERS_TO_FEET) / freq) * velocity_factor;
+    let trap_dipole_total_ft = trap_dipole_total_m * METERS_TO_FEET;
     let trap_dipole_leg_m = trap_dipole_total_m / 2.0;
+    let trap_dipole_leg_ft = trap_dipole_leg_m * METERS_TO_FEET;
 
     // Calculate skip distance average
     let skip_distance_avg_km = (band.typical_skip_km.0 + band.typical_skip_km.1) / 2.0;
@@ -381,13 +386,13 @@ pub fn calculate_for_band_with_velocity(
     }
 }
 
-fn impedance_corrected_length_ft(
-    base_len_ft: f64,
+fn impedance_corrected_length_m(
+    base_len_m: f64,
     nominal_feedpoint_ohm: f64,
     transformer: TransformerRatio,
 ) -> f64 {
     if transformer == TransformerRatio::R1To1 {
-        return base_len_ft;
+        return base_len_m;
     }
 
     let target_antenna_ohm = 50.0 * transformer.impedance_ratio();
@@ -395,7 +400,7 @@ fn impedance_corrected_length_ft(
 
     // Heuristic correction: small logarithmic shift around resonance, bounded to practical limits.
     let correction = (1.0 + 0.03 * ratio.log10()).clamp(0.85, 1.15);
-    base_len_ft * correction
+    base_len_m * correction
 }
 
 /// Calculate the most distant reachable distance by averaging skip distances

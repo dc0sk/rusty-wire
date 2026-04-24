@@ -2,6 +2,8 @@
 
 This document defines the formulas and optimization objectives used in Rusty Wire.
 
+Internal unit policy: all core calculations are performed in meters; feet values are derived only for imperial output display/export.
+
 ## 1) Core Length Formulas
 
 Rusty Wire uses MHz-domain handbook formulas with velocity-factor scaling.
@@ -14,28 +16,28 @@ $$
 
 with $f$ in Hz and $c \approx 299{,}792{,}458\ \mathrm{m/s}$.
 
-Practical ham formulas (with $f_{\mathrm{MHz}}$ in MHz):
+Practical ham formulas (with $f_{\mathrm{MHz}}$ in MHz, lengths in meters):
 
 $$
-L_{1/2,\mathrm{ft}} = \frac{468}{f_{\mathrm{MHz}}}\,VF
-$$
-
-$$
-L_{1/4,\mathrm{ft}} = \frac{234}{f_{\mathrm{MHz}}}\,VF
+L_{1/2,\mathrm{m}} = \frac{142.65}{f_{\mathrm{MHz}}}\,VF
 $$
 
 $$
-L_{\mathrm{loop},\mathrm{ft}} = \frac{1005}{f_{\mathrm{MHz}}}\,VF
+L_{\mathrm{full\ dipole},\mathrm{m}} = \frac{285.30}{f_{\mathrm{MHz}}}\,VF
 $$
 
-Unit conversion:
+$$
+L_{1/4,\mathrm{m}} = \frac{71.32}{f_{\mathrm{MHz}}}\,VF
+$$
 
 $$
-L_{\mathrm{m}} = \frac{L_{\mathrm{ft}}}{3.28084}
+L_{\mathrm{loop},\mathrm{m}} = \frac{306.32}{f_{\mathrm{MHz}}}\,VF
 $$
+
+Equivalent imperial constants (used internally in some code paths) are the same relations expressed as 468, 936, 234, and 1005 in feet.
 
 Notes:
-- The loop formula intentionally uses $1005/f$ (not $936/f$), consistent with common full-wave loop practice.
+- The loop formula intentionally uses $306.32/f$ m (equivalent to $1005/f$ ft), consistent with common full-wave loop practice.
 - The "full-wave dipole" value in output is still the doubled half-wave reference for dipole family guidance.
 
 ## 2) Inverted-V Geometry Adjustment
