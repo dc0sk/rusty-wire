@@ -14,6 +14,7 @@ pub enum AppError {
     InvalidSearchStep(f64),
     InvalidFrequency(f64),
     InvalidAntennaHeight(f64),
+    InvalidConductorDiameter(f64),
     /// A velocity factor in a `--velocity-sweep` list is out of the 0.50–1.00 range.
     InvalidVelocitySweep(f64),
     EmptyBandSelection,
@@ -64,6 +65,12 @@ impl fmt::Display for AppError {
                     "antenna height must be one of 7 m, 10 m, or 12 m (got {height:.2} m)"
                 )
             }
+            AppError::InvalidConductorDiameter(diameter_mm) => {
+                write!(
+                    f,
+                    "conductor diameter must be between {MIN_CONDUCTOR_DIAMETER_MM:.1} mm and {MAX_CONDUCTOR_DIAMETER_MM:.1} mm (got {diameter_mm:.2} mm)"
+                )
+            }
             AppError::InvalidVelocitySweep(vf) => {
                 write!(
                     f,
@@ -88,11 +95,12 @@ impl std::error::Error for AppError {}
 use crate::bands::{get_band_by_index_for_region, Band, BandType, ITURegion};
 use crate::calculations::{
     calculate_average_max_distance, calculate_average_min_distance,
-    calculate_best_non_resonant_length, calculate_for_band_with_velocity,
+    calculate_best_non_resonant_length, calculate_for_band_with_environment,
     calculate_non_resonant_optima, calculate_non_resonant_window_optima,
     calculate_resonant_compromises, optimize_ocfd_split_for_length, GroundClass,
     NonResonantRecommendation, NonResonantSearchConfig, ResonantCompromise, TransformerRatio,
-    WireCalculation, DEFAULT_NON_RESONANT_CONFIG,
+    WireCalculation, DEFAULT_CONDUCTOR_DIAMETER_MM as CALC_DEFAULT_CONDUCTOR_DIAMETER_MM,
+    DEFAULT_NON_RESONANT_CONFIG, MAX_CONDUCTOR_DIAMETER_MM, MIN_CONDUCTOR_DIAMETER_MM,
 };
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -105,6 +113,7 @@ pub const DEFAULT_TRANSFORMER_RATIO: TransformerRatio = TransformerRatio::R1To1;
 pub const STANDARD_ANTENNA_HEIGHTS_M: [f64; 3] = [7.0, 10.0, 12.0];
 pub const DEFAULT_ANTENNA_HEIGHT_M: f64 = 10.0;
 pub const DEFAULT_GROUND_CLASS: GroundClass = GroundClass::Average;
+pub const DEFAULT_CONDUCTOR_DIAMETER_MM: f64 = CALC_DEFAULT_CONDUCTOR_DIAMETER_MM;
 
 pub fn recommended_transformer_ratio(
     mode: CalcMode,
@@ -312,12 +321,13 @@ fn build_optimizer_calculations(
                     typical_skip_km: (0.0, 0.0),
                     regions: &[],
                 };
-                calculate_for_band_with_velocity(
+                calculate_for_band_with_environment(
                     &custom_band,
                     config.velocity_factor,
                     ratio,
                     config.antenna_height_m,
                     config.ground_class,
+                    config.conductor_diameter_mm,
                 )
             })
             .collect();
@@ -333,12 +343,13 @@ fn build_optimizer_calculations(
             typical_skip_km: (0.0, 0.0),
             regions: &[],
         };
-        return vec![calculate_for_band_with_velocity(
+        return vec![calculate_for_band_with_environment(
             &custom_band,
             config.velocity_factor,
             ratio,
             config.antenna_height_m,
             config.ground_class,
+            config.conductor_diameter_mm,
         )];
     }
 
@@ -349,6 +360,7 @@ fn build_optimizer_calculations(
         ratio,
         config.antenna_height_m,
         config.ground_class,
+        config.conductor_diameter_mm,
     );
     calculations
 }
@@ -538,6 +550,7 @@ pub struct AppConfig {
     pub antenna_model: Option<AntennaModel>,
     pub antenna_height_m: f64,
     pub ground_class: GroundClass,
+    pub conductor_diameter_mm: f64,
     /// Direct frequency input in MHz; when set, bypasses band selection entirely.
     pub custom_freq_mhz: Option<f64>,
     /// Multiple explicit frequencies in MHz; when non-empty, bypasses band selection.
@@ -560,6 +573,7 @@ impl Default for AppConfig {
             antenna_model: None,
             antenna_height_m: DEFAULT_ANTENNA_HEIGHT_M,
             ground_class: DEFAULT_GROUND_CLASS,
+            conductor_diameter_mm: DEFAULT_CONDUCTOR_DIAMETER_MM,
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
         }
@@ -842,12 +856,13 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
                     typical_skip_km: (0.0, 0.0),
                     regions: &[],
                 };
-                let mut calc = calculate_for_band_with_velocity(
+                let mut calc = calculate_for_band_with_environment(
                     &custom_band,
                     config.velocity_factor,
                     config.transformer_ratio,
                     config.antenna_height_m,
                     config.ground_class,
+                    config.conductor_diameter_mm,
                 );
                 calc.band_name = format!("{freq_mhz:.3} MHz");
                 calc
@@ -864,12 +879,13 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
             typical_skip_km: (0.0, 0.0),
             regions: &[],
         };
-        let mut calc = calculate_for_band_with_velocity(
+        let mut calc = calculate_for_band_with_environment(
             &custom_band,
             config.velocity_factor,
             config.transformer_ratio,
             config.antenna_height_m,
             config.ground_class,
+            config.conductor_diameter_mm,
         );
         calc.band_name = format!("{freq_mhz:.3} MHz");
         (vec![calc], Vec::new())
@@ -881,6 +897,7 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
             config.transformer_ratio,
             config.antenna_height_m,
             config.ground_class,
+            config.conductor_diameter_mm,
         )
     };
 
@@ -946,6 +963,14 @@ pub fn validate_config(config: &AppConfig) -> Result<(), AppError> {
         .any(|v| (config.antenna_height_m - *v).abs() < 1e-9)
     {
         return Err(AppError::InvalidAntennaHeight(config.antenna_height_m));
+    }
+
+    if !(MIN_CONDUCTOR_DIAMETER_MM..=MAX_CONDUCTOR_DIAMETER_MM)
+        .contains(&config.conductor_diameter_mm)
+    {
+        return Err(AppError::InvalidConductorDiameter(
+            config.conductor_diameter_mm,
+        ));
     }
 
     if config.wire_min_m <= 0.0 || config.wire_max_m <= config.wire_min_m {
@@ -1216,6 +1241,10 @@ pub fn results_overview_view(results: &AppResults) -> ResultsOverviewView {
             format!("Antenna model: {}", summary.antenna_model_label),
             format!("Antenna height: {:.0} m", results.config.antenna_height_m),
             format!("Ground class: {}", results.config.ground_class.as_label()),
+            format!(
+                "Conductor diameter: {:.1} mm",
+                results.config.conductor_diameter_mm
+            ),
             "------------------------------------------------------------".to_string(),
         ],
         summary_lines: vec![
@@ -2726,6 +2755,7 @@ fn build_calculations(
     transformer_ratio: TransformerRatio,
     antenna_height_m: f64,
     ground_class: GroundClass,
+    conductor_diameter_mm: f64,
 ) -> (Vec<WireCalculation>, Vec<usize>) {
     let mut calculations = Vec::new();
     let mut skipped_band_indices = Vec::new();
@@ -2738,12 +2768,13 @@ fn build_calculations(
 
         let band_index = idx - 1;
         if let Some(band) = get_band_by_index_for_region(band_index, region) {
-            calculations.push(calculate_for_band_with_velocity(
+            calculations.push(calculate_for_band_with_environment(
                 &band,
                 velocity,
                 transformer_ratio,
                 antenna_height_m,
                 ground_class,
+                conductor_diameter_mm,
             ));
         } else {
             skipped_band_indices.push(idx);

@@ -216,6 +216,10 @@ pub const DEFAULT_NON_RESONANT_CONFIG: NonResonantSearchConfig = NonResonantSear
     preferred_center_m: 20.0,
 };
 
+pub const DEFAULT_CONDUCTOR_DIAMETER_MM: f64 = 2.0;
+pub const MIN_CONDUCTOR_DIAMETER_MM: f64 = 1.0;
+pub const MAX_CONDUCTOR_DIAMETER_MM: f64 = 4.0;
+
 impl fmt::Display for WireCalculation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -292,6 +296,24 @@ pub fn calculate_for_band_with_velocity(
     antenna_height_m: f64,
     ground_class: GroundClass,
 ) -> WireCalculation {
+    calculate_for_band_with_environment(
+        band,
+        velocity_factor,
+        transformer,
+        antenna_height_m,
+        ground_class,
+        DEFAULT_CONDUCTOR_DIAMETER_MM,
+    )
+}
+
+pub fn calculate_for_band_with_environment(
+    band: &Band,
+    velocity_factor: f64,
+    transformer: TransformerRatio,
+    antenna_height_m: f64,
+    ground_class: GroundClass,
+    conductor_diameter_mm: f64,
+) -> WireCalculation {
     let freq = band.freq_center_mhz;
 
     // Metric-first core calculations.
@@ -306,9 +328,12 @@ pub fn calculate_for_band_with_velocity(
 
     // Use a shared nominal feedpoint reference so transformer selection has a
     // consistent impact across resonant families and optimization behavior.
-    let corrected_half_wave_m = impedance_corrected_length_m(half_wave_m, 73.0, transformer);
-    let corrected_full_wave_m = impedance_corrected_length_m(full_wave_m, 73.0, transformer);
-    let corrected_quarter_wave_m = impedance_corrected_length_m(quarter_wave_m, 73.0, transformer);
+    let corrected_half_wave_m =
+        impedance_corrected_length_m(half_wave_m, 73.0, transformer, conductor_diameter_mm);
+    let corrected_full_wave_m =
+        impedance_corrected_length_m(full_wave_m, 73.0, transformer, conductor_diameter_mm);
+    let corrected_quarter_wave_m =
+        impedance_corrected_length_m(quarter_wave_m, 73.0, transformer, conductor_diameter_mm);
     let corrected_half_wave_ft = corrected_half_wave_m * METERS_TO_FEET;
     let corrected_full_wave_ft = corrected_full_wave_m * METERS_TO_FEET;
     let corrected_quarter_wave_ft = corrected_quarter_wave_m * METERS_TO_FEET;
@@ -441,9 +466,10 @@ fn impedance_corrected_length_m(
     base_len_m: f64,
     nominal_feedpoint_ohm: f64,
     transformer: TransformerRatio,
+    conductor_diameter_mm: f64,
 ) -> f64 {
     if transformer == TransformerRatio::R1To1 {
-        return base_len_m;
+        return base_len_m * conductor_diameter_correction_factor(conductor_diameter_mm);
     }
 
     let target_antenna_ohm = 50.0 * transformer.impedance_ratio();
@@ -451,7 +477,16 @@ fn impedance_corrected_length_m(
 
     // Heuristic correction: small logarithmic shift around resonance, bounded to practical limits.
     let correction = (1.0 + 0.03 * ratio.log10()).clamp(0.85, 1.15);
-    base_len_m * correction
+    base_len_m * correction * conductor_diameter_correction_factor(conductor_diameter_mm)
+}
+
+fn conductor_diameter_correction_factor(conductor_diameter_mm: f64) -> f64 {
+    // First-order geometry term: thicker conductors generally resonate slightly
+    // shorter, thinner conductors slightly longer, relative to a 2.0 mm baseline.
+    let d_mm = conductor_diameter_mm
+        .clamp(MIN_CONDUCTOR_DIAMETER_MM, MAX_CONDUCTOR_DIAMETER_MM)
+        .max(0.1);
+    (1.0 - 0.012 * (d_mm / DEFAULT_CONDUCTOR_DIAMETER_MM).ln()).clamp(0.97, 1.03)
 }
 
 /// Calculate the most distant reachable distance by averaging skip distances
@@ -990,6 +1025,30 @@ mod tests {
 
         assert!(slow.half_wave_m < fast.half_wave_m);
         assert!(slow.quarter_wave_m < fast.quarter_wave_m);
+    }
+
+    #[test]
+    fn thicker_conductor_shortens_corrected_lengths() {
+        let band = sample_band();
+        let thin = calculate_for_band_with_environment(
+            &band,
+            0.95,
+            TransformerRatio::R1To4,
+            10.0,
+            GroundClass::Average,
+            1.0,
+        );
+        let thick = calculate_for_band_with_environment(
+            &band,
+            0.95,
+            TransformerRatio::R1To4,
+            10.0,
+            GroundClass::Average,
+            4.0,
+        );
+
+        assert!(thick.corrected_half_wave_m < thin.corrected_half_wave_m);
+        assert!(thick.corrected_quarter_wave_m < thin.corrected_quarter_wave_m);
     }
 
     #[test]

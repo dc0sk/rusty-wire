@@ -59,6 +59,8 @@ It lets you:
 - Choose calculation mode
 - Set velocity factor
 - Set standard antenna height (7 m / 10 m / 12 m)
+- Set ground class (poor / average / good)
+- Set conductor diameter in millimeters (1.0 to 4.0 mm)
 - Choose transformer ratio
 - Configure non-resonant wire windows interactively
 - Export results and print an equivalent CLI command
@@ -115,6 +117,7 @@ rusty-wire --interactive
 - `--velocity <value>` Velocity factor, valid range `0.50..=1.00` (default: `0.95`)
 - `--height <7|10|12>` Standard antenna height in meters used for height-aware skip estimates (default: `10`)
 - `--ground <poor|average|good>` Ground class used in skip-distance scaling (default: `average`)
+- `--conductor-mm <value>` Conductor diameter in millimeters, valid range `1.0..=4.0` (default: `2.0`)
 - `--antenna <dipole|inverted-v|efhw|loop|ocfd|trap-dipole>` Filter output to one model (omit to show all)
 - `--transformer <recommended|1:1|1:2|1:4|1:5|1:6|1:9|1:16|1:49|1:56|1:64>`
 - `--units <m|ft|both>` Output unit filter

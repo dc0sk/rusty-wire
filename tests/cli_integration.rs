@@ -92,6 +92,18 @@ fn invalid_ground_shows_clap_error() {
 }
 
 #[test]
+fn invalid_conductor_mm_shows_validation_error() {
+    let output = binary()
+        .args(["--bands", "40m", "--conductor-mm", "0.5"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("conductor diameter must be between"));
+}
+
+#[test]
 fn height_12m_shows_longer_skip_than_7m() {
     let out_7 = binary()
         .args(["--bands", "40m", "--height", "7"])
@@ -149,6 +161,42 @@ fn ground_good_shows_longer_skip_than_poor() {
 
     assert!(min_good > min_poor);
     assert!(max_good > max_poor);
+}
+
+#[test]
+fn thicker_conductor_shows_shorter_half_wave_than_thin() {
+    let out_thin = binary()
+        .args(["--bands", "40m", "--conductor-mm", "1.0"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let out_thick = binary()
+        .args(["--bands", "40m", "--conductor-mm", "4.0"])
+        .output()
+        .expect("failed to run rusty-wire");
+
+    assert!(out_thin.status.success());
+    assert!(out_thick.status.success());
+
+    let thin_stdout = String::from_utf8_lossy(&out_thin.stdout);
+    let thick_stdout = String::from_utf8_lossy(&out_thick.stdout);
+
+    // Parse the 40m half-wave line from the default resonant output.
+    let thin_half = thin_stdout
+        .lines()
+        .find(|l| l.contains("Half-wave:"))
+        .and_then(|l| l.split(':').nth(1))
+        .and_then(|v| v.trim().split('m').next())
+        .and_then(|v| v.trim().parse::<f64>().ok())
+        .expect("expected half-wave line for thin conductor");
+    let thick_half = thick_stdout
+        .lines()
+        .find(|l| l.contains("Half-wave:"))
+        .and_then(|l| l.split(':').nth(1))
+        .and_then(|v| v.trim().split('m').next())
+        .and_then(|v| v.trim().parse::<f64>().ok())
+        .expect("expected half-wave line for thick conductor");
+
+    assert!(thick_half < thin_half);
 }
 
 #[test]

@@ -11,11 +11,15 @@ use crate::app::{
     resolve_wire_window_inputs, results_display_document, validate_velocity_sweep,
     velocity_sweep_display_lines, velocity_sweep_view, AntennaModel, AppConfig, AppRequest,
     AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_ANTENNA_HEIGHT_M,
-    DEFAULT_BAND_SELECTION, DEFAULT_GROUND_CLASS, DEFAULT_ITU_REGION, FEET_TO_METERS,
+    DEFAULT_BAND_SELECTION, DEFAULT_CONDUCTOR_DIAMETER_MM, DEFAULT_GROUND_CLASS,
+    DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
 use crate::band_presets::load_preset_selection;
 use crate::bands::{ITURegion, ALL_REGIONS};
-use crate::calculations::{GroundClass, TransformerRatio, DEFAULT_NON_RESONANT_CONFIG};
+use crate::calculations::{
+    GroundClass, TransformerRatio, DEFAULT_NON_RESONANT_CONFIG, MAX_CONDUCTOR_DIAMETER_MM,
+    MIN_CONDUCTOR_DIAMETER_MM,
+};
 use crate::export::{default_advise_output_name, export_advise};
 use crate::export::{default_output_name, export_results, validate_export_path};
 use clap::Parser;
@@ -69,6 +73,10 @@ struct Cli {
     /// Ground class model for skip-distance estimates
     #[arg(long, value_enum, default_value = "average")]
     ground: CliGroundClass,
+
+    /// Conductor diameter in millimeters for first-order length correction
+    #[arg(long, default_value_t = DEFAULT_CONDUCTOR_DIAMETER_MM)]
+    conductor_mm: f64,
 
     /// Transformer ratio (default: recommended for the selected mode/antenna)
     #[arg(short, long, value_enum, default_value = "recommended")]
@@ -509,6 +517,7 @@ pub fn run_from_args(args: &[String]) -> bool {
         antenna_model,
         antenna_height_m: cli.height.into(),
         ground_class: cli.ground.into(),
+        conductor_diameter_mm: cli.conductor_mm,
         custom_freq_mhz: cli.freq,
         freq_list_mhz: cli.freq_list.unwrap_or_default(),
     };
@@ -713,6 +722,7 @@ struct InteractiveDefaults {
     velocity: Option<f64>,
     antenna_height_m: Option<f64>,
     ground_class: Option<GroundClass>,
+    conductor_diameter_mm: Option<f64>,
     transformer_ratio: Option<String>,
     wire_min_m: Option<f64>,
     wire_max_m: Option<f64>,
@@ -728,6 +738,7 @@ impl InteractiveDefaults {
             velocity: None,
             antenna_height_m: None,
             ground_class: None,
+            conductor_diameter_mm: None,
             transformer_ratio: None,
             wire_min_m: None,
             wire_max_m: None,
@@ -861,6 +872,28 @@ fn prompt_ground_class_with_default(
         "average" => GroundClass::Average,
         "good" => GroundClass::Good,
         _ => default.unwrap_or(DEFAULT_GROUND_CLASS),
+    }
+}
+
+fn prompt_conductor_diameter_with_default(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    default: Option<f64>,
+) -> f64 {
+    let default_mm = default.unwrap_or(DEFAULT_CONDUCTOR_DIAMETER_MM);
+    let prompt_str = format!(
+        "Conductor diameter in mm ({:.1}-{:.1}) [{default_mm:.1}]: ",
+        MIN_CONDUCTOR_DIAMETER_MM, MAX_CONDUCTOR_DIAMETER_MM
+    );
+    prompt(output, &prompt_str);
+    let line = read_line(input, "failed to read conductor diameter");
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return default_mm;
+    }
+    match trimmed.parse::<f64>() {
+        Ok(v) if (MIN_CONDUCTOR_DIAMETER_MM..=MAX_CONDUCTOR_DIAMETER_MM).contains(&v) => v,
+        _ => default_mm,
     }
 }
 
@@ -1159,6 +1192,9 @@ fn calculate_selected_bands_with_defaults(
     defaults.antenna_height_m = Some(antenna_height_m);
     let ground_class = prompt_ground_class_with_default(input, output, defaults.ground_class);
     defaults.ground_class = Some(ground_class);
+    let conductor_diameter_mm =
+        prompt_conductor_diameter_with_default(input, output, defaults.conductor_diameter_mm);
+    defaults.conductor_diameter_mm = Some(conductor_diameter_mm);
     let transformer_ratio = prompt_transformer_ratio_with_default(
         input,
         output,
@@ -1199,6 +1235,7 @@ fn calculate_selected_bands_with_defaults(
         antenna_model,
         antenna_height_m,
         ground_class,
+        conductor_diameter_mm,
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
     };
@@ -1262,6 +1299,9 @@ fn quick_calculation_with_defaults(
     defaults.antenna_height_m = Some(antenna_height_m);
     let ground_class = prompt_ground_class_with_default(input, output, defaults.ground_class);
     defaults.ground_class = Some(ground_class);
+    let conductor_diameter_mm =
+        prompt_conductor_diameter_with_default(input, output, defaults.conductor_diameter_mm);
+    defaults.conductor_diameter_mm = Some(conductor_diameter_mm);
     let transformer_ratio = prompt_transformer_ratio_with_default(
         input,
         output,
@@ -1302,6 +1342,7 @@ fn quick_calculation_with_defaults(
         antenna_model,
         antenna_height_m,
         ground_class,
+        conductor_diameter_mm,
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
     };
@@ -1498,7 +1539,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
         UnitSystem::Both => "both",
     };
     let mut cmd = format!(
-        "rusty-wire --region {} --mode {} --bands {} --velocity {:.2} --height {:.0} --ground {} --transformer {} --units {}",
+        "rusty-wire --region {} --mode {} --bands {} --velocity {:.2} --height {:.0} --ground {} --conductor-mm {:.1} --transformer {} --units {}",
         shell_quote(config.itu_region.short_name()),
         shell_quote(match config.mode {
             CalcMode::Resonant => "resonant",
@@ -1508,6 +1549,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
         config.velocity_factor,
         config.antenna_height_m,
         shell_quote(config.ground_class.as_label()),
+        config.conductor_diameter_mm,
         shell_quote(config.transformer_ratio.as_label()),
         shell_quote(units_str),
     );
@@ -1757,6 +1799,7 @@ mod tests {
             antenna_model: None,
             antenna_height_m: DEFAULT_ANTENNA_HEIGHT_M,
             ground_class: DEFAULT_GROUND_CLASS,
+            conductor_diameter_mm: DEFAULT_CONDUCTOR_DIAMETER_MM,
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
         };

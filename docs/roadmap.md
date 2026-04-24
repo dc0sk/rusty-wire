@@ -55,10 +55,11 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 - Add a user-facing flow where a named/explicit band set produces ranked wire-length + balun/unun candidates
 - Include compact scoring metadata (efficiency estimate and tradeoff notes) per candidate
 
-### 3c) Practical-limits mitigation (height/ground realism)
+### 3c) Practical-limits mitigation (height/ground/conductor realism)
 - Implemented first pass: standardized antenna-height presets (7 m, 10 m, 12 m) with height-aware skip-distance scaling.
 - Implemented second pass: ground-class presets (poor/average/good) with additional skip-distance scaling.
-- Next pass: add optional conductor-diameter inputs and calibrate feedpoint/mismatch estimates against NEC reference sweeps.
+- Implemented third pass: optional conductor-diameter input (`--conductor-mm 1.0..4.0`) with first-order impedance/length correction.
+- Next pass: calibrate feedpoint/mismatch estimates against NEC reference sweeps.
 
 ### 4) Interactive-mode testability
 - Refactor interactive prompts to accept injected I/O (already partially done)

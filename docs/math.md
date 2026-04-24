@@ -224,6 +224,17 @@ $$
 	ext{skip}_{\min,\max} = F_h\cdot F_g\cdot \text{skip}^{\text{band-table}}_{\min,\max}
 $$
 
+Current conductor-diameter correction for resonant-length estimation
+(metric-only input, default baseline $d_0=2.0\,\mathrm{mm}$):
+
+$$
+F_d(d) = \operatorname{clamp}\left(1 - 0.012\ln\left(\frac{d}{d_0}\right),\,0.97,\,1.03\right),\quad d\in[1.0,4.0]\,\mathrm{mm}
+$$
+
+$$
+L_{\text{corrected}} = L_{\text{impedance-corrected}}\cdot F_d(d)
+$$
+
 For mission-critical designs, use Rusty Wire results as initial conditions and validate with NEC simulation and on-air/instrument measurements.
 
 ## References
