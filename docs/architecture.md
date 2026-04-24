@@ -2,6 +2,8 @@
 
 This document describes the current architecture of Rusty Wire, including module responsibilities, key types, and the main execution flows.
 
+Formula definitions and optimizer objective functions are documented in [math.md](math.md).
+
 > Last updated: 2026-04-21 (v2.5.2)
 
 ---

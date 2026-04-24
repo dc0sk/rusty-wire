@@ -167,6 +167,7 @@ rusty-wire --list-bands --region 2
 ```
 
 For a complete option reference see [docs/cli-guide.md](docs/cli-guide.md).
+For formulas and optimizer objective functions see [docs/math.md](docs/math.md).
 
 ---
 
@@ -175,6 +176,7 @@ For a complete option reference see [docs/cli-guide.md](docs/cli-guide.md).
 | Document | Contents |
 |---|---|
 | [docs/cli-guide.md](docs/cli-guide.md) | Full option reference and worked examples |
+| [docs/math.md](docs/math.md) | Formula definitions and optimizer objective functions (KaTeX) |
 | [docs/architecture.md](docs/architecture.md) | Module design, execution flow, app-layer API |
 | [docs/roadmap.md](docs/roadmap.md) | Milestone plan (2.x TUI, 3.x GUI) |
 | [docs/backlog.md](docs/backlog.md) | Unconfirmed ideas under consideration |

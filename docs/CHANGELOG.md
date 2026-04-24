@@ -9,9 +9,11 @@ All notable changes to Rusty Wire are documented here.
 - **Balun optimizer app-layer foundation**: added `optimize_transformer_candidates(&AppConfig)` with ranked transformer candidates and per-candidate metadata (target impedance, mismatch factor, estimated efficiency, mismatch loss, and correction-shift penalty score). This is the prerequisite API for upcoming `advise` mode.
 - **`--advise` CLI mode**: added ranked advise output that combines recommended wire length with balun/unun ratio candidates for the selected bands, including efficiency estimate, mismatch loss, clearance, and overall score.
 - **Advise exports**: `--advise` now supports `--export csv,json,markdown,txt` with dedicated advise report outputs; Markdown export is available via `--export markdown`.
+- **Math reference documentation**: added `docs/math.md` with KaTeX equations for core wire-length formulas, mismatch model, and optimizer objective functions (non-resonant, resonant compromise, OCFD split, and advise ranking).
 
 ### Changed
 - **Roadmap sequencing**: captured `advise` feature direction (candidate ranking for wire length + balun/unun choice with efficiency-style metadata) and marked balun optimizer groundwork as the prerequisite milestone.
+- **Model realism adjustments**: inverted-V geometry now uses empirical apex-angle shortening factors (90°: 0.97, 120°: 0.985), and full-wave loop circumference now uses `1005/f` guidance.
 
 ## [2.5.2] - 2026-04-21
 

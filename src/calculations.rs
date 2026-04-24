@@ -287,16 +287,32 @@ pub fn calculate_for_band_with_velocity(
     let corrected_quarter_wave_m = corrected_quarter_wave_ft / METERS_TO_FEET;
     let end_fed_half_wave_ft = corrected_half_wave_ft;
     let end_fed_half_wave_m = corrected_half_wave_m;
-    let inverted_v_total_ft = corrected_half_wave_ft;
-    let inverted_v_total_m = corrected_half_wave_m;
+
+    // Inverted-V shortening: a drooping dipole resonates at a shorter total wire length
+    // than a flat dipole due to capacitive coupling between the sloped legs.
+    // ARRL Antenna Book empirical values:
+    //   90° apex  → K_90  ≈ 0.97  (~3 % shorter than flat dipole)
+    //   120° apex → K_120 ≈ 0.985 (~1.5 % shorter than flat dipole)
+    const INV_V_SHORTENING_90: f64 = 0.97;
+    const INV_V_SHORTENING_120: f64 = 0.985;
+    let inverted_v_total_ft = corrected_half_wave_ft * INV_V_SHORTENING_90;
+    let inverted_v_total_m = inverted_v_total_ft / METERS_TO_FEET;
     let inverted_v_leg_ft = inverted_v_total_ft / 2.0;
     let inverted_v_leg_m = inverted_v_total_m / 2.0;
     let inverted_v_span_90_ft = inverted_v_leg_ft * std::f64::consts::SQRT_2;
     let inverted_v_span_90_m = inverted_v_leg_m * std::f64::consts::SQRT_2;
-    let inverted_v_span_120_ft = inverted_v_leg_ft * 3.0_f64.sqrt();
-    let inverted_v_span_120_m = inverted_v_leg_m * 3.0_f64.sqrt();
-    let full_wave_loop_circumference_ft = corrected_full_wave_ft;
-    let full_wave_loop_circumference_m = corrected_full_wave_m;
+    // 120° apex span uses its own shortened total so the geometry is consistent
+    let inv_v_total_120_ft = corrected_half_wave_ft * INV_V_SHORTENING_120;
+    let inv_v_leg_120_ft = inv_v_total_120_ft / 2.0;
+    let inv_v_leg_120_m = inv_v_leg_120_ft / METERS_TO_FEET;
+    let inverted_v_span_120_ft = inv_v_leg_120_ft * 3.0_f64.sqrt();
+    let inverted_v_span_120_m = inv_v_leg_120_m * 3.0_f64.sqrt();
+
+    // Full-wave loop: ARRL Antenna Book standard formula is 1005/f (feet).
+    // This is ~7 % longer than 2 × half-wave dipole (936/f) because the "end effect"
+    // for a closed resonant loop differs from that of open-ended dipole elements.
+    let full_wave_loop_circumference_ft = (1005.0 / freq) * velocity_factor;
+    let full_wave_loop_circumference_m = full_wave_loop_circumference_ft / METERS_TO_FEET;
     let full_wave_loop_square_side_ft = full_wave_loop_circumference_ft / 4.0;
     let full_wave_loop_square_side_m = full_wave_loop_circumference_m / 4.0;
     let ocfd_total_ft = corrected_half_wave_ft;
@@ -916,18 +932,27 @@ mod tests {
     fn calculate_for_band_derived_antenna_models() {
         let band = sample_band();
         let result = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1);
+        let m_to_ft = 3.28084;
 
         assert!((result.end_fed_half_wave_m - result.corrected_half_wave_m).abs() < 1e-9);
         assert!((result.end_fed_half_wave_ft - result.corrected_half_wave_ft).abs() < 1e-9);
-        assert!((result.inverted_v_total_m - result.corrected_half_wave_m).abs() < 1e-9);
+        assert!((result.inverted_v_total_ft - result.corrected_half_wave_ft * 0.97).abs() < 1e-9);
+        assert!((result.inverted_v_total_m - (result.inverted_v_total_ft / m_to_ft)).abs() < 1e-9);
         assert!((result.inverted_v_leg_m * 2.0 - result.inverted_v_total_m).abs() < 1e-9);
         assert!((result.inverted_v_leg_ft * 2.0 - result.inverted_v_total_ft).abs() < 1e-9);
         assert!(result.inverted_v_span_120_m > result.inverted_v_span_90_m);
+        let expected_span_120_ft = (result.corrected_half_wave_ft * 0.985 / 2.0) * 3.0_f64.sqrt();
+        assert!((result.inverted_v_span_120_ft - expected_span_120_ft).abs() < 1e-9);
         assert!(
-            (result.full_wave_loop_circumference_m - result.corrected_full_wave_m).abs() < 1e-9
+            (result.full_wave_loop_circumference_ft - ((1005.0 / band.freq_center_mhz) * 0.95))
+                .abs()
+                < 1e-9
         );
         assert!(
-            (result.full_wave_loop_circumference_ft - result.corrected_full_wave_ft).abs() < 1e-9
+            (result.full_wave_loop_circumference_m
+                - result.full_wave_loop_circumference_ft / m_to_ft)
+                .abs()
+                < 1e-9
         );
         assert!(
             (result.full_wave_loop_square_side_m * 4.0 - result.full_wave_loop_circumference_m)

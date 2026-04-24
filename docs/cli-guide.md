@@ -5,6 +5,7 @@
 Use this page as the command reference for Rusty Wire.
 
 For test procedures, see [testing.md](testing.md).
+For formulas and optimizer scoring details, see [math.md](math.md).
 For architecture details, see [architecture.md](architecture.md).
 For release history, see [CHANGELOG.md](CHANGELOG.md).
 
