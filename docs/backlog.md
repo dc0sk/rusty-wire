@@ -49,6 +49,13 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 - Ranked transformer recommendation for EFHW (compare 1:49, 1:56, 1:64)
 - Balun/unun optimizer engine: score candidate transformer ratios against selected bands and feed assumptions; this should be implemented before `advise` mode
 
+## Practical Limits Follow-up
+
+- Extend height realism beyond current 7/10/12 m presets:
+  - Ground-class selector (poor/average/good) and optional soil conductivity/permittivity input
+  - Conductor-diameter input for end-effect/feedpoint approximation refinement
+  - Calibration matrix against NEC sweeps for representative bands and heights
+
 ## Infrastructure
 
 - `bands.toml` / `bands.json` for user-defined band presets

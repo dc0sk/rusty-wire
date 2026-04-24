@@ -18,6 +18,19 @@ fn temp_test_dir(name: &str) -> PathBuf {
     dir
 }
 
+fn extract_summary_skip_km(stdout: &str, marker: &str) -> Option<f64> {
+    let line = stdout.lines().find(|l| l.contains(marker))?;
+    let value = line
+        .split(':')
+        .nth(1)?
+        .trim()
+        .strip_suffix(" km")?
+        .trim()
+        .parse::<f64>()
+        .ok()?;
+    Some(value)
+}
+
 #[test]
 fn no_args_prints_help() {
     let output = binary().output().expect("failed to run rusty-wire");
@@ -52,6 +65,48 @@ fn invalid_velocity_shows_error() {
 
     assert!(!output.status.success());
     assert!(stderr.contains("velocity factor must be between 0.50 and 1.00"));
+}
+
+#[test]
+fn invalid_height_shows_clap_error() {
+    let output = binary()
+        .args(["--bands", "40m", "--height", "9"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("possible values"));
+}
+
+#[test]
+fn height_12m_shows_longer_skip_than_7m() {
+    let out_7 = binary()
+        .args(["--bands", "40m", "--height", "7"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let out_12 = binary()
+        .args(["--bands", "40m", "--height", "12"])
+        .output()
+        .expect("failed to run rusty-wire");
+
+    assert!(out_7.status.success());
+    assert!(out_12.status.success());
+
+    let s7 = String::from_utf8_lossy(&out_7.stdout);
+    let s12 = String::from_utf8_lossy(&out_12.stdout);
+
+    let min7 = extract_summary_skip_km(&s7, "Average minimum skip distance")
+        .expect("expected minimum skip summary for 7m");
+    let max7 = extract_summary_skip_km(&s7, "Average maximum skip distance")
+        .expect("expected maximum skip summary for 7m");
+    let min12 = extract_summary_skip_km(&s12, "Average minimum skip distance")
+        .expect("expected minimum skip summary for 12m");
+    let max12 = extract_summary_skip_km(&s12, "Average maximum skip distance")
+        .expect("expected maximum skip summary for 12m");
+
+    assert!(min12 > min7);
+    assert!(max12 > max7);
 }
 
 #[test]

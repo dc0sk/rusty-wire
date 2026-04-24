@@ -203,9 +203,20 @@ Higher score ranks earlier.
 ## 9) Practical Limits
 
 Current models are intentionally lightweight and fast:
+- Partial mitigation implemented: standardized antenna-height presets (7 m, 10 m, 12 m) now apply a first-order skip-distance scaling model.
 - No explicit R/X feedpoint sweep vs height/ground/conductor diameter.
 - No common-mode choke model or ferrite core loss/thermal derating.
 - No full current-distribution solver in the optimization loop.
+
+Current height scaling used for skip distance estimates:
+
+$$
+F_h(7\,\mathrm{m}) = 0.78,\quad F_h(10\,\mathrm{m}) = 1.00,\quad F_h(12\,\mathrm{m}) = 1.12
+$$
+
+$$
+	ext{skip}_{\min,\max} = F_h\cdot \text{skip}^{\text{band-table}}_{\min,\max}
+$$
 
 For mission-critical designs, use Rusty Wire results as initial conditions and validate with NEC simulation and on-air/instrument measurements.
 
