@@ -4,6 +4,7 @@
 /// bundled CLI (e.g. a future `iced` GUI or a test harness) can depend on
 /// this crate without pulling in CLI-specific logic.
 pub mod app;
+pub(crate) mod band_presets;
 pub mod bands;
 pub mod calculations;
 pub(crate) mod cli;
