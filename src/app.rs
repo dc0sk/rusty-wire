@@ -125,6 +125,222 @@ pub fn recommended_transformer_ratio_fallback_message(
     )
 }
 
+pub const TRANSFORMER_OPTIMIZER_CANDIDATES: &[TransformerRatio] = &[
+    TransformerRatio::R1To1,
+    TransformerRatio::R1To2,
+    TransformerRatio::R1To4,
+    TransformerRatio::R1To5,
+    TransformerRatio::R1To6,
+    TransformerRatio::R1To9,
+    TransformerRatio::R1To16,
+    TransformerRatio::R1To49,
+    TransformerRatio::R1To56,
+    TransformerRatio::R1To64,
+];
+
+#[derive(Debug, Clone)]
+pub struct TransformerOptimizerCandidate {
+    pub ratio: TransformerRatio,
+    pub target_impedance_ohm: f64,
+    pub mismatch_gamma: f64,
+    pub estimated_efficiency_pct: f64,
+    pub mismatch_loss_db: f64,
+    pub average_length_shift_pct: f64,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct TransformerOptimizerView {
+    pub assumed_feedpoint_ohm: f64,
+    pub candidate_count: usize,
+    pub candidates: Vec<TransformerOptimizerCandidate>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AdviseCandidate {
+    pub ratio: TransformerRatio,
+    pub recommended_length_m: f64,
+    pub recommended_length_ft: f64,
+    pub min_resonance_clearance_pct: f64,
+    pub estimated_efficiency_pct: f64,
+    pub mismatch_loss_db: f64,
+    pub average_length_shift_pct: f64,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct AdviseView {
+    pub assumed_feedpoint_ohm: f64,
+    pub candidates: Vec<AdviseCandidate>,
+}
+
+pub fn optimize_transformer_candidates(config: &AppConfig) -> TransformerOptimizerView {
+    let source_impedance = assumed_feedpoint_impedance_ohm(config.mode, config.antenna_model);
+
+    let baseline = build_optimizer_calculations(config, TransformerRatio::R1To1);
+    let baseline_avg_half_wave = mean_half_wave_m(&baseline);
+
+    let mut candidates: Vec<TransformerOptimizerCandidate> = TRANSFORMER_OPTIMIZER_CANDIDATES
+        .iter()
+        .copied()
+        .map(|ratio| {
+            let target_impedance = 50.0 * ratio.impedance_ratio();
+            let gamma = if source_impedance <= 0.0 {
+                1.0
+            } else {
+                ((target_impedance - source_impedance).abs()
+                    / (target_impedance + source_impedance))
+                    .clamp(0.0, 0.999_999)
+            };
+            let mismatch_efficiency = (1.0 - gamma * gamma) * 100.0;
+            let mismatch_loss_db = -10.0 * (1.0 - gamma * gamma).log10();
+
+            let ratio_calculations = build_optimizer_calculations(config, ratio);
+            let ratio_avg_half_wave = mean_half_wave_m(&ratio_calculations);
+            let average_length_shift_pct = if baseline_avg_half_wave > 0.0 {
+                ((ratio_avg_half_wave - baseline_avg_half_wave).abs() / baseline_avg_half_wave)
+                    * 100.0
+            } else {
+                0.0
+            };
+
+            // Optimizer score: prefer better impedance transfer and lightly penalize
+            // larger geometry shifts introduced by correction heuristics.
+            let score = mismatch_efficiency - (average_length_shift_pct * 0.35);
+
+            TransformerOptimizerCandidate {
+                ratio,
+                target_impedance_ohm: target_impedance,
+                mismatch_gamma: gamma,
+                estimated_efficiency_pct: mismatch_efficiency,
+                mismatch_loss_db,
+                average_length_shift_pct,
+                score,
+            }
+        })
+        .collect();
+
+    candidates.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    TransformerOptimizerView {
+        assumed_feedpoint_ohm: source_impedance,
+        candidate_count: candidates.len(),
+        candidates,
+    }
+}
+
+pub fn build_advise_candidates(config: &AppConfig, limit: usize) -> AdviseView {
+    let optimizer = optimize_transformer_candidates(config);
+    let non_res_cfg = NonResonantSearchConfig {
+        min_len_m: config.wire_min_m,
+        max_len_m: config.wire_max_m,
+        step_m: config.step_m,
+        preferred_center_m: (config.wire_min_m + config.wire_max_m) / 2.0,
+    };
+
+    let max_rows = limit.max(1);
+    let mut candidates = Vec::new();
+
+    for ranked in optimizer.candidates.iter().take(max_rows) {
+        let calculations = build_optimizer_calculations(config, ranked.ratio);
+        let recommendation =
+            calculate_best_non_resonant_length(&calculations, config.velocity_factor, non_res_cfg);
+
+        if let Some(rec) = recommendation {
+            candidates.push(AdviseCandidate {
+                ratio: ranked.ratio,
+                recommended_length_m: rec.length_m,
+                recommended_length_ft: rec.length_ft,
+                min_resonance_clearance_pct: rec.min_resonance_clearance_pct,
+                estimated_efficiency_pct: ranked.estimated_efficiency_pct,
+                mismatch_loss_db: ranked.mismatch_loss_db,
+                average_length_shift_pct: ranked.average_length_shift_pct,
+                score: ranked.score,
+            });
+        }
+    }
+
+    AdviseView {
+        assumed_feedpoint_ohm: optimizer.assumed_feedpoint_ohm,
+        candidates,
+    }
+}
+
+fn assumed_feedpoint_impedance_ohm(mode: CalcMode, antenna_model: Option<AntennaModel>) -> f64 {
+    match antenna_model {
+        Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) => 73.0,
+        Some(AntennaModel::TrapDipole) => 65.0,
+        Some(AntennaModel::FullWaveLoop) => 100.0,
+        Some(AntennaModel::EndFedHalfWave) => 2800.0,
+        Some(AntennaModel::OffCenterFedDipole) => 200.0,
+        None => match mode {
+            CalcMode::Resonant => 73.0,
+            CalcMode::NonResonant => 450.0,
+        },
+    }
+}
+
+fn build_optimizer_calculations(
+    config: &AppConfig,
+    ratio: TransformerRatio,
+) -> Vec<WireCalculation> {
+    if !config.freq_list_mhz.is_empty() {
+        return config
+            .freq_list_mhz
+            .iter()
+            .map(|&freq_mhz| {
+                let custom_band = Band {
+                    name: "custom",
+                    band_type: BandType::HF,
+                    freq_low_mhz: freq_mhz,
+                    freq_high_mhz: freq_mhz,
+                    freq_center_mhz: freq_mhz,
+                    typical_skip_km: (0.0, 0.0),
+                    regions: &[],
+                };
+                calculate_for_band_with_velocity(&custom_band, config.velocity_factor, ratio)
+            })
+            .collect();
+    }
+
+    if let Some(freq_mhz) = config.custom_freq_mhz {
+        let custom_band = Band {
+            name: "custom",
+            band_type: BandType::HF,
+            freq_low_mhz: freq_mhz,
+            freq_high_mhz: freq_mhz,
+            freq_center_mhz: freq_mhz,
+            typical_skip_km: (0.0, 0.0),
+            regions: &[],
+        };
+        return vec![calculate_for_band_with_velocity(
+            &custom_band,
+            config.velocity_factor,
+            ratio,
+        )];
+    }
+
+    let (calculations, _) = build_calculations(
+        &config.band_indices,
+        config.velocity_factor,
+        config.itu_region,
+        ratio,
+    );
+    calculations
+}
+
+fn mean_half_wave_m(calculations: &[WireCalculation]) -> f64 {
+    if calculations.is_empty() {
+        return 0.0;
+    }
+    let sum: f64 = calculations.iter().map(|c| c.corrected_half_wave_m).sum();
+    sum / calculations.len() as f64
+}
+
 /// Structured explanation for the recommended transformer ratio.
 ///
 /// Provides both the ratio value and a human-readable `reason` string
@@ -2685,6 +2901,63 @@ mod tests {
             Some(AntennaModel::EndFedHalfWave),
         );
         assert_eq!(msg, "Unknown ratio. Using recommended 1:56.");
+    }
+
+    #[test]
+    fn transformer_optimizer_prefers_efhw_match() {
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            antenna_model: Some(AntennaModel::EndFedHalfWave),
+            band_indices: vec![4, 6, 8],
+            ..AppConfig::default()
+        };
+
+        let view = optimize_transformer_candidates(&config);
+        assert_eq!(view.candidate_count, TRANSFORMER_OPTIMIZER_CANDIDATES.len());
+        assert_eq!(view.candidates[0].ratio, TransformerRatio::R1To56);
+        assert!(view.candidates[0].estimated_efficiency_pct > 99.0);
+    }
+
+    #[test]
+    fn transformer_optimizer_prefers_ocfd_match() {
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            antenna_model: Some(AntennaModel::OffCenterFedDipole),
+            band_indices: vec![4, 6],
+            ..AppConfig::default()
+        };
+
+        let view = optimize_transformer_candidates(&config);
+        assert_eq!(view.candidates[0].ratio, TransformerRatio::R1To4);
+    }
+
+    #[test]
+    fn transformer_optimizer_prefers_non_resonant_random_wire_default() {
+        let config = AppConfig {
+            mode: CalcMode::NonResonant,
+            antenna_model: None,
+            band_indices: vec![4, 6, 8, 10],
+            ..AppConfig::default()
+        };
+
+        let view = optimize_transformer_candidates(&config);
+        assert_eq!(view.candidates[0].ratio, TransformerRatio::R1To9);
+    }
+
+    #[test]
+    fn build_advise_candidates_returns_ranked_wire_and_ratio_matches() {
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            antenna_model: Some(AntennaModel::EndFedHalfWave),
+            band_indices: vec![4, 6, 8],
+            ..AppConfig::default()
+        };
+
+        let view = build_advise_candidates(&config, 3);
+        assert_eq!(view.candidates.len(), 3);
+        assert_eq!(view.candidates[0].ratio, TransformerRatio::R1To56);
+        assert!(view.candidates[0].recommended_length_m > 0.0);
+        assert!(view.candidates[0].estimated_efficiency_pct > 90.0);
     }
 
     #[test]
