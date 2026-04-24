@@ -62,6 +62,8 @@ equal-tie support.
   height-aware skip-distance estimates.
 - `--ground poor|average|good` — select ground-class model used for
   skip-distance scaling (default: `average`).
+- `--conductor-mm <1.0..4.0>` — set conductor diameter in millimeters for
+  first-order impedance/length correction (default: `2.0`).
 - `--step <meters>` — control non-resonant search resolution (default 0.05 m).
 - `--velocity <value>` — velocity factor from 0.50 to 1.00 (default 0.95).
 - `--transformer recommended|1:1|1:4|1:9|1:49|1:56|...` — auto-resolved per
@@ -109,7 +111,7 @@ rusty-wire --mode resonant --bands 40m,20m --antenna efhw --transformer recommen
 
 **OCFD resonant analysis:**
 ```bash
-rusty-wire --mode resonant --bands 40m,20m --antenna ocfd --height 10 --ground average
+rusty-wire --mode resonant --bands 40m,20m --antenna ocfd --height 10 --ground average --conductor-mm 2.5
 ```
 
 **Find the best non-resonant wire for a 10–35 m garden:**
