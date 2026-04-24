@@ -10,8 +10,8 @@ use crate::app::{
     recommended_transformer_ratio, recommended_transformer_ratio_fallback_message,
     resolve_wire_window_inputs, results_display_document, validate_velocity_sweep,
     velocity_sweep_display_lines, velocity_sweep_view, AntennaModel, AppConfig, AppRequest,
-    AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION,
-    FEET_TO_METERS,
+    AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_ANTENNA_HEIGHT_M,
+    DEFAULT_BAND_SELECTION, DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
 use crate::band_presets::load_preset_selection;
 use crate::bands::{ITURegion, ALL_REGIONS};
@@ -61,6 +61,10 @@ struct Cli {
     /// Velocity factor (0.50-1.00)
     #[arg(short, long, default_value_t = 0.95)]
     velocity: f64,
+
+    /// Antenna height in meters (standard presets: 7, 10, 12)
+    #[arg(long, value_enum, default_value = "10")]
+    height: CliAntennaHeight,
 
     /// Transformer ratio (default: recommended for the selected mode/antenna)
     #[arg(short, long, value_enum, default_value = "recommended")]
@@ -150,6 +154,26 @@ enum CliAntennaModel {
     OffCenterFedDipole,
     #[clap(name = "trap-dipole", help = "Trap dipole model")]
     TrapDipole,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+enum CliAntennaHeight {
+    #[clap(name = "7")]
+    H7,
+    #[clap(name = "10")]
+    H10,
+    #[clap(name = "12")]
+    H12,
+}
+
+impl From<CliAntennaHeight> for f64 {
+    fn from(height: CliAntennaHeight) -> Self {
+        match height {
+            CliAntennaHeight::H7 => 7.0,
+            CliAntennaHeight::H10 => 10.0,
+            CliAntennaHeight::H12 => 12.0,
+        }
+    }
 }
 
 impl From<CliAntennaModel> for AntennaModel {
@@ -462,6 +486,7 @@ pub fn run_from_args(args: &[String]) -> bool {
         itu_region: cli.region.into(),
         transformer_ratio,
         antenna_model,
+        antenna_height_m: cli.height.into(),
         custom_freq_mhz: cli.freq,
         freq_list_mhz: cli.freq_list.unwrap_or_default(),
     };
@@ -664,6 +689,7 @@ struct InteractiveDefaults {
     mode: Option<CalcMode>,
     antenna_model: Option<AntennaModel>,
     velocity: Option<f64>,
+    antenna_height_m: Option<f64>,
     transformer_ratio: Option<String>,
     wire_min_m: Option<f64>,
     wire_max_m: Option<f64>,
@@ -677,6 +703,7 @@ impl InteractiveDefaults {
             mode: None,
             antenna_model: None,
             velocity: None,
+            antenna_height_m: None,
             transformer_ratio: None,
             wire_min_m: None,
             wire_max_m: None,
@@ -766,6 +793,29 @@ fn prompt_velocity_factor_with_default(
     match trimmed.parse::<f64>() {
         Ok(v) if (0.5..=1.0).contains(&v) => v,
         _ => default.unwrap_or(0.95),
+    }
+}
+
+fn prompt_antenna_height_with_default(
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+    default: Option<f64>,
+) -> f64 {
+    let prompt_str = match default {
+        Some(v) => format!("Antenna height in meters (7/10/12) [{v:.0}]: "),
+        None => format!("Antenna height in meters (7/10/12) [{DEFAULT_ANTENNA_HEIGHT_M:.0}]: "),
+    };
+    prompt(output, &prompt_str);
+    let line = read_line(input, "failed to read antenna height");
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return default.unwrap_or(DEFAULT_ANTENNA_HEIGHT_M);
+    }
+    match trimmed {
+        "7" => 7.0,
+        "10" => 10.0,
+        "12" => 12.0,
+        _ => default.unwrap_or(DEFAULT_ANTENNA_HEIGHT_M),
     }
 }
 
@@ -1059,6 +1109,9 @@ fn calculate_selected_bands_with_defaults(
     defaults.antenna_model = antenna_model;
     let velocity = prompt_velocity_factor_with_default(input, output, defaults.velocity);
     defaults.velocity = Some(velocity);
+    let antenna_height_m =
+        prompt_antenna_height_with_default(input, output, defaults.antenna_height_m);
+    defaults.antenna_height_m = Some(antenna_height_m);
     let transformer_ratio = prompt_transformer_ratio_with_default(
         input,
         output,
@@ -1097,6 +1150,7 @@ fn calculate_selected_bands_with_defaults(
         itu_region: region,
         transformer_ratio,
         antenna_model,
+        antenna_height_m,
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
     };
@@ -1155,6 +1209,9 @@ fn quick_calculation_with_defaults(
     defaults.antenna_model = antenna_model;
     let velocity = prompt_velocity_factor_with_default(input, output, defaults.velocity);
     defaults.velocity = Some(velocity);
+    let antenna_height_m =
+        prompt_antenna_height_with_default(input, output, defaults.antenna_height_m);
+    defaults.antenna_height_m = Some(antenna_height_m);
     let transformer_ratio = prompt_transformer_ratio_with_default(
         input,
         output,
@@ -1193,6 +1250,7 @@ fn quick_calculation_with_defaults(
         itu_region: region,
         transformer_ratio,
         antenna_model,
+        antenna_height_m,
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
     };
@@ -1389,7 +1447,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
         UnitSystem::Both => "both",
     };
     let mut cmd = format!(
-        "rusty-wire --region {} --mode {} --bands {} --velocity {:.2} --transformer {} --units {}",
+        "rusty-wire --region {} --mode {} --bands {} --velocity {:.2} --height {:.0} --transformer {} --units {}",
         shell_quote(config.itu_region.short_name()),
         shell_quote(match config.mode {
             CalcMode::Resonant => "resonant",
@@ -1397,6 +1455,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
         }),
         shell_quote(&bands_csv),
         config.velocity_factor,
+        config.antenna_height_m,
         shell_quote(config.transformer_ratio.as_label()),
         shell_quote(units_str),
     );
@@ -1644,6 +1703,7 @@ mod tests {
             itu_region: ITURegion::Region1,
             transformer_ratio: TransformerRatio::R1To1,
             antenna_model: None,
+            antenna_height_m: DEFAULT_ANTENNA_HEIGHT_M,
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
         };

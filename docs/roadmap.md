@@ -25,6 +25,7 @@ New ideas that are not yet agreed on go to `docs/backlog.md` first.
 - app-layer contract tests for `AppRequest → AppResponse` boundary
 - shared app-layer wire-window normalization and band-selection parsing
 - `--step`, `--quiet`, `--freq`, `--velocity-sweep` flags
+- standard antenna-height presets (`--height 7|10|12`) with first-order height-aware skip-distance scaling
 
 ---
 
@@ -52,6 +53,10 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 ### 3b) `advise` candidate ranking mode
 - Add a user-facing flow where a named/explicit band set produces ranked wire-length + balun/unun candidates
 - Include compact scoring metadata (efficiency estimate and tradeoff notes) per candidate
+
+### 3c) Practical-limits mitigation (height/ground realism)
+- Implemented first pass: standardized antenna-height presets (7 m, 10 m, 12 m) with height-aware skip-distance scaling.
+- Next pass: add optional ground-class and conductor-diameter inputs and calibrate feedpoint/mismatch estimates against NEC reference sweeps.
 
 ### 4) Interactive-mode testability
 - Refactor interactive prompts to accept injected I/O (already partially done)

@@ -13,6 +13,7 @@ pub enum AppError {
     InvalidBandSelection(String),
     InvalidSearchStep(f64),
     InvalidFrequency(f64),
+    InvalidAntennaHeight(f64),
     /// A velocity factor in a `--velocity-sweep` list is out of the 0.50–1.00 range.
     InvalidVelocitySweep(f64),
     EmptyBandSelection,
@@ -57,6 +58,12 @@ impl fmt::Display for AppError {
                     "frequency must be greater than 0 and at most 1000 MHz (got {freq:.3} MHz)"
                 )
             }
+            AppError::InvalidAntennaHeight(height) => {
+                write!(
+                    f,
+                    "antenna height must be one of 7 m, 10 m, or 12 m (got {height:.2} m)"
+                )
+            }
             AppError::InvalidVelocitySweep(vf) => {
                 write!(
                     f,
@@ -95,6 +102,8 @@ pub const FEET_TO_METERS: f64 = 0.3048;
 pub const DEFAULT_BAND_SELECTION: [usize; 7] = [4, 5, 6, 7, 8, 9, 10];
 pub const DEFAULT_ITU_REGION: ITURegion = ITURegion::Region1;
 pub const DEFAULT_TRANSFORMER_RATIO: TransformerRatio = TransformerRatio::R1To1;
+pub const STANDARD_ANTENNA_HEIGHTS_M: [f64; 3] = [7.0, 10.0, 12.0];
+pub const DEFAULT_ANTENNA_HEIGHT_M: f64 = 10.0;
 
 pub fn recommended_transformer_ratio(
     mode: CalcMode,
@@ -302,7 +311,12 @@ fn build_optimizer_calculations(
                     typical_skip_km: (0.0, 0.0),
                     regions: &[],
                 };
-                calculate_for_band_with_velocity(&custom_band, config.velocity_factor, ratio)
+                calculate_for_band_with_velocity(
+                    &custom_band,
+                    config.velocity_factor,
+                    ratio,
+                    config.antenna_height_m,
+                )
             })
             .collect();
     }
@@ -321,6 +335,7 @@ fn build_optimizer_calculations(
             &custom_band,
             config.velocity_factor,
             ratio,
+            config.antenna_height_m,
         )];
     }
 
@@ -329,6 +344,7 @@ fn build_optimizer_calculations(
         config.velocity_factor,
         config.itu_region,
         ratio,
+        config.antenna_height_m,
     );
     calculations
 }
@@ -516,6 +532,7 @@ pub struct AppConfig {
     pub itu_region: ITURegion,
     pub transformer_ratio: TransformerRatio,
     pub antenna_model: Option<AntennaModel>,
+    pub antenna_height_m: f64,
     /// Direct frequency input in MHz; when set, bypasses band selection entirely.
     pub custom_freq_mhz: Option<f64>,
     /// Multiple explicit frequencies in MHz; when non-empty, bypasses band selection.
@@ -536,6 +553,7 @@ impl Default for AppConfig {
             itu_region: DEFAULT_ITU_REGION,
             transformer_ratio: DEFAULT_TRANSFORMER_RATIO,
             antenna_model: None,
+            antenna_height_m: DEFAULT_ANTENNA_HEIGHT_M,
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
         }
@@ -822,6 +840,7 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
                     &custom_band,
                     config.velocity_factor,
                     config.transformer_ratio,
+                    config.antenna_height_m,
                 );
                 calc.band_name = format!("{freq_mhz:.3} MHz");
                 calc
@@ -842,6 +861,7 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
             &custom_band,
             config.velocity_factor,
             config.transformer_ratio,
+            config.antenna_height_m,
         );
         calc.band_name = format!("{freq_mhz:.3} MHz");
         (vec![calc], Vec::new())
@@ -851,6 +871,7 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
             config.velocity_factor,
             config.itu_region,
             config.transformer_ratio,
+            config.antenna_height_m,
         )
     };
 
@@ -909,6 +930,13 @@ pub fn validate_config(config: &AppConfig) -> Result<(), AppError> {
 
     if !(0.5..=1.0).contains(&config.velocity_factor) {
         return Err(AppError::InvalidVelocityFactor(config.velocity_factor));
+    }
+
+    if !STANDARD_ANTENNA_HEIGHTS_M
+        .iter()
+        .any(|v| (config.antenna_height_m - *v).abs() < 1e-9)
+    {
+        return Err(AppError::InvalidAntennaHeight(config.antenna_height_m));
     }
 
     if config.wire_min_m <= 0.0 || config.wire_max_m <= config.wire_min_m {
@@ -1177,6 +1205,7 @@ pub fn results_overview_view(results: &AppResults) -> ResultsOverviewView {
                 summary.transformer_ratio_label
             ),
             format!("Antenna model: {}", summary.antenna_model_label),
+            format!("Antenna height: {:.0} m", results.config.antenna_height_m),
             "------------------------------------------------------------".to_string(),
         ],
         summary_lines: vec![
@@ -2685,6 +2714,7 @@ fn build_calculations(
     velocity: f64,
     region: ITURegion,
     transformer_ratio: TransformerRatio,
+    antenna_height_m: f64,
 ) -> (Vec<WireCalculation>, Vec<usize>) {
     let mut calculations = Vec::new();
     let mut skipped_band_indices = Vec::new();
@@ -2701,6 +2731,7 @@ fn build_calculations(
                 &band,
                 velocity,
                 transformer_ratio,
+                antenna_height_m,
             ));
         } else {
             skipped_band_indices.push(idx);
@@ -2786,7 +2817,17 @@ mod tests {
         assert_eq!(config.itu_region, ITURegion::Region1);
         assert_eq!(config.transformer_ratio, TransformerRatio::R1To1);
         assert_eq!(config.antenna_model, None);
+        assert_eq!(config.antenna_height_m, DEFAULT_ANTENNA_HEIGHT_M);
         assert_eq!(config.band_indices, vec![4, 5, 6, 7, 8, 9, 10]);
+    }
+
+    #[test]
+    fn validate_config_rejects_non_standard_antenna_height() {
+        let mut config = AppConfig::default();
+        config.antenna_height_m = 9.0;
+
+        let err = validate_config(&config).expect_err("height 9 m should be rejected");
+        assert!(matches!(err, AppError::InvalidAntennaHeight(9.0)));
     }
 
     #[test]
