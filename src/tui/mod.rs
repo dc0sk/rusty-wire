@@ -1385,6 +1385,105 @@ mod tests {
     }
 
     #[test]
+    fn band_preset_cycle_to_named_preset_returns_parsed_band_indices() {
+        let mut state = TuiState::new(None);
+        state.field_idx = ConfigField::ALL
+            .iter()
+            .position(|field| *field == ConfigField::Bands)
+            .expect("Bands field should exist");
+
+        let action = state.compute_action(true);
+
+        match action {
+            AppAction::SetBandIndices(indices) => {
+                let expected =
+                    parse_band_selection(BUILTIN_BAND_PRESETS[1].1, state.app.config.itu_region)
+                        .expect("built-in preset should parse");
+                assert_eq!(indices, expected);
+                assert_eq!(state.band_preset_idx, 1);
+            }
+            other => panic!("expected SetBandIndices, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn band_preset_cycle_to_custom_reuses_last_confirmed_custom_indices() {
+        let mut state = TuiState::new(None);
+        state.field_idx = ConfigField::ALL
+            .iter()
+            .position(|field| *field == ConfigField::Bands)
+            .expect("Bands field should exist");
+        state.band_preset_idx = state.band_presets.len() - 2;
+        state.custom_band_indices = vec![4, 6, 8];
+
+        let action = state.compute_action(true);
+
+        assert!(state.current_band_preset().is_custom());
+        match action {
+            AppAction::SetBandIndices(indices) => assert_eq!(indices, vec![4, 6, 8]),
+            other => panic!("expected SetBandIndices, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn frequency_preset_cycle_forward_sets_single_frequency_list() {
+        let mut state = TuiState::new(None);
+        state.field_idx = ConfigField::ALL
+            .iter()
+            .position(|field| *field == ConfigField::CustomFrequencies)
+            .expect("CustomFrequencies field should exist");
+
+        let action = state.compute_action(true);
+
+        match action {
+            AppAction::SetFreqList(freqs) => {
+                assert_eq!(freqs, vec![3.5]);
+                assert_eq!(state.freq_idx, 1);
+            }
+            other => panic!("expected SetFreqList, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn frequency_preset_cycle_backward_wraps_to_last_multi_frequency_set() {
+        let mut state = TuiState::new(None);
+        state.field_idx = ConfigField::ALL
+            .iter()
+            .position(|field| *field == ConfigField::CustomFrequencies)
+            .expect("CustomFrequencies field should exist");
+
+        let action = state.compute_action(false);
+
+        match action {
+            AppAction::SetFreqList(freqs) => {
+                assert_eq!(freqs, vec![3.5, 7.0, 14.0]);
+                assert_eq!(state.freq_idx, FREQUENCY_PRESETS.len() - 1);
+            }
+            other => panic!("expected SetFreqList, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn frequency_preset_use_bands_returns_empty_frequency_list() {
+        let mut state = TuiState::new(None);
+        state.field_idx = ConfigField::ALL
+            .iter()
+            .position(|field| *field == ConfigField::CustomFrequencies)
+            .expect("CustomFrequencies field should exist");
+        state.freq_idx = 1;
+
+        let action = state.compute_action(false);
+
+        match action {
+            AppAction::SetFreqList(freqs) => {
+                assert!(freqs.is_empty());
+                assert_eq!(state.freq_idx, 0);
+            }
+            other => panic!("expected SetFreqList, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn load_tui_band_presets_always_keeps_custom_choice_last() {
         let (presets, status) = load_tui_band_presets(None);
 
