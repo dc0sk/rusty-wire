@@ -1,4 +1,11 @@
 diameter_mm,length_factor
-1.0,1.008
-2.0,1.000
-4.0,0.992
+# Template values derived from model: F(d) = 1 - 0.011542 * ln(d / 2.0)
+# Span: 1.0 mm .. 4.0 mm at 0.5 mm intervals (7 data points)
+# Replace with real NEC sweep data when available.
+1.0,1.008000
+1.5,1.003320
+2.0,1.000000
+2.5,0.997424
+3.0,0.995320
+3.5,0.993541
+4.0,0.992000
