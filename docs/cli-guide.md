@@ -34,7 +34,7 @@ It supports:
   - Full-wave loop circumference
   - Full-wave loop square-side estimate
   - OCFD leg split estimates (33/67 and 20/80)
-  - Trap dipole total and per-element estimates
+  - Trap dipole total/per-element estimates with trap-frequency, placement, and pairing guidance notes
 - Non-resonant search constraints in either meters (default) or feet
 - Multiple local optima displayed for the active non-resonant search window
 - Multiple equally-optimal wire lengths displayed in ascending order when ties occur

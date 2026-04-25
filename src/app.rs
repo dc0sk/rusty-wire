@@ -1597,6 +1597,9 @@ pub fn resonant_compromise_narrative(results: &AppResults) -> ResonantCompromise
         Some(AntennaModel::OffCenterFedDipole) => {
             "Closest combined compromises to resonant points (tuner-assisted OCFD guidance):"
         }
+        Some(AntennaModel::TrapDipole) => {
+            "Closest combined compromises to resonant points (trap dipole guidance):"
+        }
         _ => "Closest combined compromises to resonant points:",
     };
 
@@ -1625,6 +1628,20 @@ pub fn resonant_compromise_narrative(results: &AppResults) -> ResonantCompromise
     ) {
         notes.push(
             "OCFD mode: each compromise line shows a total wire length; leg splits are listed directly below.",
+        );
+    }
+    if matches!(results.config.antenna_model, Some(AntennaModel::TrapDipole)) {
+        notes.push(
+            "Trap mode: each compromise line is total tip-to-tip wire; each element is half that value.",
+        );
+        notes.push(
+            "Trap frequency/components: tune each trap near the upper-band resonance (for example, around 14 MHz for 40m/20m or around 7 MHz for 80m/40m) and target high unloaded Q with low-loss capacitors.",
+        );
+        notes.push(
+            "Physical placement: start with traps positioned at the upper-band element endpoint and trim symmetrically from both outer ends.",
+        );
+        notes.push(
+            "Common pairings: 40m/20m and 80m/40m are the most practical starting configurations for two-trap builds.",
         );
     }
 
@@ -3439,6 +3456,34 @@ mod tests {
             .notes
             .iter()
             .any(|note| note.contains("OCFD mode")));
+    }
+
+    #[test]
+    fn resonant_compromise_narrative_includes_trap_dipole_guidance_notes() {
+        let config = AppConfig {
+            antenna_model: Some(AntennaModel::TrapDipole),
+            ..AppConfig::default()
+        };
+        let results = run_calculation(config);
+
+        let narrative = resonant_compromise_narrative(&results);
+        assert!(narrative.heading.contains("trap dipole guidance"));
+        assert!(narrative
+            .notes
+            .iter()
+            .any(|note| note.contains("Trap mode")));
+        assert!(narrative
+            .notes
+            .iter()
+            .any(|note| note.contains("Trap frequency/components")));
+        assert!(narrative
+            .notes
+            .iter()
+            .any(|note| note.contains("Physical placement")));
+        assert!(narrative
+            .notes
+            .iter()
+            .any(|note| note.contains("Common pairings")));
     }
 
     #[test]
