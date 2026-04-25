@@ -1247,6 +1247,10 @@ mod tests {
         KeyEvent::new(code, KeyModifiers::NONE)
     }
 
+    fn press_with_modifiers(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
+        KeyEvent::new(code, modifiers)
+    }
+
     #[test]
     fn hint_text_for_config_focus_matches_documented_keybindings() {
         let text = hint_text(Focus::Config, false);
@@ -1485,6 +1489,76 @@ mod tests {
             state.app.config.band_indices,
             crate::app::DEFAULT_BAND_SELECTION
         );
+    }
+
+    #[test]
+    fn checklist_j_and_k_move_cursor_with_bounds() {
+        let mut state = TuiState::new(None);
+        state.show_band_checklist = true;
+        state.band_checklist_items = vec![
+            (1, "160m".to_string(), false),
+            (2, "80m".to_string(), false),
+            (3, "60m".to_string(), false),
+        ];
+
+        state.handle_key(press(KeyCode::Char('j')));
+        assert_eq!(state.band_checklist_cursor, 1);
+
+        state.handle_key(press(KeyCode::Char('j')));
+        assert_eq!(state.band_checklist_cursor, 2);
+
+        state.handle_key(press(KeyCode::Char('j')));
+        assert_eq!(state.band_checklist_cursor, 2);
+
+        state.handle_key(press(KeyCode::Char('k')));
+        assert_eq!(state.band_checklist_cursor, 1);
+
+        state.handle_key(press(KeyCode::Char('k')));
+        assert_eq!(state.band_checklist_cursor, 0);
+
+        state.handle_key(press(KeyCode::Char('k')));
+        assert_eq!(state.band_checklist_cursor, 0);
+    }
+
+    #[test]
+    fn checklist_space_toggles_current_item_checked_state() {
+        let mut state = TuiState::new(None);
+        state.show_band_checklist = true;
+        state.band_checklist_items =
+            vec![(1, "160m".to_string(), false), (2, "80m".to_string(), true)];
+        state.band_checklist_cursor = 0;
+
+        state.handle_key(press(KeyCode::Char(' ')));
+        assert!(state.band_checklist_items[0].2);
+
+        state.handle_key(press(KeyCode::Char(' ')));
+        assert!(!state.band_checklist_items[0].2);
+    }
+
+    #[test]
+    fn checklist_q_closes_overlay_without_quitting() {
+        let mut state = TuiState::new(None);
+        state.show_band_checklist = true;
+        state.band_checklist_items = vec![(1, "160m".to_string(), false)];
+
+        state.handle_key(press(KeyCode::Char('q')));
+
+        assert!(!state.show_band_checklist);
+        assert!(!state.quit);
+    }
+
+    #[test]
+    fn checklist_ctrl_c_sets_quit_flag() {
+        let mut state = TuiState::new(None);
+        state.show_band_checklist = true;
+        state.band_checklist_items = vec![(1, "160m".to_string(), false)];
+
+        state.handle_key(press_with_modifiers(
+            KeyCode::Char('c'),
+            KeyModifiers::CONTROL,
+        ));
+
+        assert!(state.quit);
     }
 
     #[test]

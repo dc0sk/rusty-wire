@@ -30,6 +30,7 @@ All notable changes to Rusty Wire are documented here.
 - **TUI preset-transition coverage**: added tests for named-band preset cycling, custom-band fallback reuse, frequency preset forward/backward wrap behavior, and the `Use bands` reset path.
 - **TUI focus/scroll coverage**: added tests for `Tab` focus switching, config-field navigation wrap behavior, and results-panel line/page scrolling with saturating bounds.
 - **TUI run/enter behavior coverage**: added tests for Enter opening the custom-band checklist only in the config/bands/custom path, Enter-triggered recalculation elsewhere, and `r` recalculation resetting results scroll.
+- **TUI checklist key-alias coverage**: added tests for checklist `j/k` cursor movement bounds, space-bar toggle behavior, `q` cancel handling, and overlay `Ctrl-C` quit behavior.
 
 ### Changed
 - **Roadmap sequencing**: captured `advise` feature direction (candidate ranking for wire length + balun/unun choice with efficiency-style metadata) and marked balun optimizer groundwork as the prerequisite milestone.
