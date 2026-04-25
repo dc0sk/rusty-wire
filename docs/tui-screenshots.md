@@ -2,6 +2,8 @@
 
 Use this checklist when preparing or refreshing TUI screenshots for docs and releases.
 
+Keep only the canonical PNG set in this directory. Delete scratch captures or superseded alternates before committing.
+
 ## Canonical Image Paths
 
 Store screenshots in:
@@ -30,7 +32,7 @@ Store screenshots in:
 
 4. `04-about-popup.png`
 - Info popup opened via `i` or `?`
-- Popup must show: version, author, GitHub URL, license
+- Popup must show: version, author, GitHub URL, license, platform
 
 5. `05-results-scroll.png`
 - Results panel focused
@@ -46,7 +48,7 @@ Store screenshots in:
 ## Capture Notes
 
 - Prefer 120x30 or larger terminal size for consistent framing.
-- Keep a light background for readability in markdown renderers.
 - Redact local file paths or shell history if visible.
-- Re-capture after any TUI layout, keybinding, or info-popup content change.
+- Re-capture after any TUI layout, keybinding, built-in preset label, or info-popup content change.
 - Regenerate the HTML gallery with `cargo run --bin tui-doc-snapshots`, then capture each section by id (`01-default-layout` through `05-results-scroll`) into the canonical PNG paths.
+- The HTML gallery already provides the framed presentation layer for capture; do not keep separate ad-hoc screenshot variants once the canonical five PNGs have been refreshed.

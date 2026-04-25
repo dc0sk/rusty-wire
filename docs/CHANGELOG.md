@@ -13,10 +13,11 @@ All notable changes to Rusty Wire are documented here.
   - Esc-without-popup quit behavior
 
 ## [Unreleased]
+- **TUI documentation screenshots refreshed**: regenerated the five canonical PNGs from `tui-doc-snapshots` after the recent TUI metadata changes; the About popup capture now includes the `Platform` line and `docs/tui-screenshots.md` now documents the canonical-only screenshot set.
 - **`--verbose` and `--dry-run` CLI inspection flags**: added a resolved-run summary for normal execution (`--verbose`) and a validation-only preview path (`--dry-run`) that skips calculations and exports while still rejecting invalid configurations.
 - **60m band preset**: added 60m (5 MHz WRC-15 segment) to the TUI's "160m–10m + 60m (10 bands)" built-in preset; the preset previously omitted 60m despite the band being defined in the band table.
 - **Platform info in `--info` and About popup**: `--info` and the TUI About popup now show `Platform: <os>/<arch>` alongside version, author, GitHub URL, and license.
-- **TUI screenshot refresh tooling**: added `tui-doc-snapshots` to render a deterministic HTML gallery for the five canonical TUI documentation screenshots; README and CLI guide now reference non-placeholder screenshot embeds.
+- **TUI screenshot refresh tooling**: added `tui-doc-snapshots` to render a deterministic HTML gallery for the five canonical TUI documentation screenshots; README and CLI guide reference those canonical embeds.
 - **NEC template CSV expanded**: `docs/data/nec_conductor_reference.csv` grows from 3 to 7 data points (1.0–4.0 mm at 0.5 mm intervals); adds comment header; regression script updated to verify row count.
 - **CI regression runner**: added `scripts/test-all.sh` to run the full suite (format gate, compile gate, cargo test, ITU bands, multi-optima, NEC calibration) with a single command.
 - **NEC calibration hardening**: `scripts/calibrate-conductor-model.sh` now tolerates blank lines and `#` comments in CSV inputs while preserving strict malformed-row validation.
