@@ -99,6 +99,17 @@ const BAND_PRESETS: &[(&str, &[usize])] = &[
     ("Custom…", &[] as &[usize]), // sentinel — opens band-checklist overlay
 ];
 
+/// Named frequency presets for explicit multi-frequency runs.
+const FREQUENCY_PRESETS: &[(&str, &[f64])] = &[
+    ("Use bands", &[] as &[f64]), // sentinel: revert to band-based selection
+    ("3.5 MHz", &[3.5]),
+    ("7.074 MHz", &[7.074]),
+    ("14.074 MHz", &[14.074]),
+    ("3.5, 7.0 MHz", &[3.5, 7.0]),
+    ("7.0, 14.0 MHz", &[7.0, 14.0]),
+    ("3.5, 7.0, 14.0 MHz", &[3.5, 7.0, 14.0]),
+];
+
 // ---------------------------------------------------------------------------
 // TUI-local types
 // ---------------------------------------------------------------------------
@@ -117,6 +128,7 @@ enum ConfigField {
     AntennaModel,
     ItuRegion,
     Bands,
+    CustomFrequencies,
     VelocityFactor,
     TransformerRatio,
     Units,
@@ -134,6 +146,7 @@ impl ConfigField {
         Self::AntennaModel,
         Self::ItuRegion,
         Self::Bands,
+        Self::CustomFrequencies,
         Self::VelocityFactor,
         Self::TransformerRatio,
         Self::Units,
@@ -151,6 +164,7 @@ impl ConfigField {
             Self::AntennaModel => "Antenna",
             Self::ItuRegion => "ITU Region",
             Self::Bands => "Bands",
+            Self::CustomFrequencies => "Frequencies",
             Self::VelocityFactor => "Vel. Factor",
             Self::TransformerRatio => "Transformer",
             Self::Units => "Units",
@@ -188,6 +202,8 @@ struct TuiState {
     conductor_idx: usize,
     /// Index into `STEP_PRESETS`.
     step_idx: usize,
+    /// Index into `FREQUENCY_PRESETS`.
+    freq_idx: usize,
     /// Vertical scroll offset for the results panel.
     results_scroll: u16,
     /// Whether the project-info popup is visible.
@@ -258,6 +274,7 @@ impl TuiState {
             ground_idx,
             conductor_idx,
             step_idx,
+            freq_idx: 0, // "Use bands" (empty list means revert to band selection)
             results_scroll: 0,
             show_info_popup: false,
             quit: false,
@@ -311,6 +328,7 @@ impl TuiState {
                             BAND_PRESETS[self.band_preset_idx].0.into()
                         }
                     }
+                    ConfigField::CustomFrequencies => FREQUENCY_PRESETS[self.freq_idx].0.into(),
                     ConfigField::VelocityFactor => format!("{:.2}", VF_PRESETS[self.vf_idx]),
                     ConfigField::TransformerRatio => {
                         TRANSFORMER_RATIOS[self.ratio_idx].as_label().into()
@@ -417,6 +435,23 @@ impl TuiState {
                     BAND_PRESETS[self.band_preset_idx].1.to_vec()
                 };
                 AppAction::SetBandIndices(indices)
+            }
+            ConfigField::CustomFrequencies => {
+                if forward {
+                    self.freq_idx = (self.freq_idx + 1) % FREQUENCY_PRESETS.len();
+                } else {
+                    self.freq_idx = self
+                        .freq_idx
+                        .checked_sub(1)
+                        .unwrap_or(FREQUENCY_PRESETS.len() - 1);
+                }
+                // First preset (index 0) has empty list — revert to band selection
+                let freqs = FREQUENCY_PRESETS[self.freq_idx].1;
+                if freqs.is_empty() {
+                    AppAction::SetFreqList(Vec::new())
+                } else {
+                    AppAction::SetFreqList(freqs.to_vec())
+                }
             }
             ConfigField::VelocityFactor => {
                 if forward {

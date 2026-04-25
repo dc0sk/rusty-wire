@@ -56,14 +56,14 @@ rusty-wire --interactive
 It lets you:
 - List all available bands
 - Select one or multiple bands
-- Choose calculation mode
+- Choose calculation mode (resonant or non-resonant)
+- Set explicit frequencies as an alternative to band selection
 - Set velocity factor
 - Set standard antenna height (7 m / 10 m / 12 m)
 - Set ground class (poor / average / good)
 - Set conductor diameter in millimeters (1.0 to 4.0 mm)
 - Choose transformer ratio
 - Configure non-resonant wire windows interactively
-- Export results as CSV (`e`) or JSON (`E`) directly from the TUI
 - Export results as CSV (`e`), JSON (`E`), Markdown (`m`), or plain text (`t`) directly from the TUI
 
 **TUI keybindings:**
