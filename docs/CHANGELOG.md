@@ -14,6 +14,7 @@ All notable changes to Rusty Wire are documented here.
 - **Ground-class model**: added `--ground poor|average|good` to CLI and interactive flows, propagating into skip-distance modeling.
 - **Conductor-diameter model**: added `--conductor-mm <value>` (range `1.0..=4.0`, metric-only) to CLI and interactive flows, propagating into first-order impedance/length correction.
 - **NEC calibration workflow scaffolding**: added `scripts/calibrate-conductor-model.sh`, `docs/data/nec_conductor_reference.csv`, and `docs/nec-calibration.md` to standardize fitting conductor-diameter correction constants from reference sweeps.
+- **Optional advise validation flag**: added `--validate-with-fnec` for `--advise` runs to attempt per-candidate cross-tool checks via `fnec-rust` when `fnec` is available in `PATH`.
 
 ### Changed
 - **Roadmap sequencing**: captured `advise` feature direction (candidate ranking for wire length + balun/unun choice with efficiency-style metadata) and marked balun optimizer groundwork as the prerequisite milestone.

@@ -573,6 +573,26 @@ fn advise_markdown_export_writes_md_file() {
 }
 
 #[test]
+fn advise_with_fnec_validation_flag_succeeds() {
+    let output = binary()
+        .args([
+            "--advise",
+            "--validate-with-fnec",
+            "--bands",
+            "40m,20m",
+            "--antenna",
+            "efhw",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Advise candidates:"));
+    assert!(stdout.contains("fnec:"));
+}
+
+#[test]
 fn invalid_wire_window_inverted_shows_structured_error() {
     // Passing a min larger than max should produce a structured AppError through execute_request_checked.
     let output = binary()

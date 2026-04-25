@@ -150,6 +150,10 @@ struct Cli {
     /// Print ranked wire + balun/unun advise candidates for the selected setup
     #[arg(long)]
     advise: bool,
+
+    /// Validate advise candidates with fnec-rust when available in PATH
+    #[arg(long)]
+    validate_with_fnec: bool,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -520,6 +524,7 @@ pub fn run_from_args(args: &[String]) -> bool {
         conductor_diameter_mm: cli.conductor_mm,
         custom_freq_mhz: cli.freq,
         freq_list_mhz: cli.freq_list.unwrap_or_default(),
+        validate_with_fnec: cli.validate_with_fnec,
     };
 
     // Velocity sweep overrides single-run output
@@ -626,6 +631,14 @@ fn print_advise_candidates(
             "    score {:.2}  correction shift {:.2}%",
             candidate.score, candidate.average_length_shift_pct
         );
+        if let Some(note) = &candidate.validation_note {
+            let status = if candidate.validated {
+                "validated"
+            } else {
+                "not-validated"
+            };
+            println!("    fnec: {status} ({note})");
+        }
     }
 
     println!();
@@ -1238,6 +1251,7 @@ fn calculate_selected_bands_with_defaults(
         conductor_diameter_mm,
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
+        validate_with_fnec: false,
     };
 
     let results = match execute_request_checked(AppRequest::new(config)) {
@@ -1345,6 +1359,7 @@ fn quick_calculation_with_defaults(
         conductor_diameter_mm,
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
+        validate_with_fnec: false,
     };
 
     let results = match execute_request_checked(AppRequest::new(config)) {
@@ -1802,6 +1817,7 @@ mod tests {
             conductor_diameter_mm: DEFAULT_CONDUCTOR_DIAMETER_MM,
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
+            validate_with_fnec: false,
         };
 
         // Assert the formatter input mapping separately since this function prints to stdout.
