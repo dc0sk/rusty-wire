@@ -11,7 +11,6 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 - `--freq-list <f1,f2,...>` — multiple explicit frequencies in one run
 - `advise` mode: user provides a target band set and gets ranked wire-length + balun/unun candidates with compact scoring metadata (including estimated efficiency and tradeoff hints)
 - `advise` validation pass with `fnec-rust`: for top-ranked candidates, run a cross-check sweep to flag configurations that are unlikely to be thermally/efficiency sustainable in practical operation
-- `--verbose` / `--dry-run` flags
 - YAML and HTML export targets
 - Persistent user preferences file (default units, region, mode)
 

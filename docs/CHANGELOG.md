@@ -13,6 +13,7 @@ All notable changes to Rusty Wire are documented here.
   - Esc-without-popup quit behavior
 
 ## [Unreleased]
+- **`--verbose` and `--dry-run` CLI inspection flags**: added a resolved-run summary for normal execution (`--verbose`) and a validation-only preview path (`--dry-run`) that skips calculations and exports while still rejecting invalid configurations.
 - **60m band preset**: added 60m (5 MHz WRC-15 segment) to the TUI's "160m–10m + 60m (10 bands)" built-in preset; the preset previously omitted 60m despite the band being defined in the band table.
 - **Platform info in `--info` and About popup**: `--info` and the TUI About popup now show `Platform: <os>/<arch>` alongside version, author, GitHub URL, and license.
 - **TUI screenshot refresh tooling**: added `tui-doc-snapshots` to render a deterministic HTML gallery for the five canonical TUI documentation screenshots; README and CLI guide now reference non-placeholder screenshot embeds.

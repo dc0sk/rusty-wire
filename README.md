@@ -51,6 +51,8 @@ equal-tie support.
 
 - `--quiet` — suppresses the results table; non-resonant mode prints one compact
   recommendation line, resonant mode exits silently. Designed for shell scripting.
+- `--verbose` — print the resolved run configuration before executing.
+- `--dry-run` — validate inputs and print the resolved run without calculating or exporting.
 - `--bands-preset <name>` — load a named band set from a TOML config file.
 - `--bands-config <path>` — override preset file path (default: `bands.toml`).
 - `--advise` — print ranked wire + balun/unun candidates with efficiency-style metrics.
@@ -169,6 +171,12 @@ rusty-wire --advise --bands 40m,20m --antenna efhw --export markdown --output ad
 ```bash
 rusty-wire --mode non-resonant --bands 40m,20m --wire-min 10 --wire-max 35 --quiet
 # → e.g.:  20.35 m  (66.76 ft)
+```
+
+**Inspect the resolved run without executing it:**
+```bash
+rusty-wire --mode non-resonant --bands 40m,20m --wire-min 10 --wire-max 35 --dry-run
+rusty-wire --bands 40m --verbose
 ```
 
 **Export to CSV and Markdown for a field notebook:**
