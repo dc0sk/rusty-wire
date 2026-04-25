@@ -46,8 +46,9 @@ Regression guard:
 This verifies the template fit constants and parser behavior before changing model constants.
 
 Current template output (`docs/data/nec_conductor_reference.csv`):
+- 7 data points at 0.5 mm intervals from 1.0 mm to 4.0 mm
 - `k = 0.011542`
-- `RMSE = 0.000000`
+- `RMSE ≈ 0.000000` (model and template are consistent by construction)
 - observed-span clamp suggestion: `0.992000 .. 1.008000`
 
 ## Apply Results

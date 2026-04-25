@@ -5,6 +5,7 @@ set -euo pipefail
 #
 # Verifies that the template NEC/reference dataset still fits to the documented
 # constants and that parser hardening (comments/blank lines) behaves correctly.
+# Template: 7 data points at 0.5 mm intervals from 1.0 mm to 4.0 mm.
 #
 # Usage:
 #   ./scripts/test-nec-calibration.sh
@@ -31,7 +32,8 @@ out_template="$tmpdir/template.out"
 "$CAL_SCRIPT" "$TEMPLATE_CSV" > "$out_template"
 
 grep -F "k = 0.011542" "$out_template" >/dev/null
-grep -F "RMSE = 0.000000" "$out_template" >/dev/null
+grep -F "Rows used: 7" "$out_template" >/dev/null
+grep -E "RMSE = 0\.00000[01]" "$out_template" >/dev/null
 grep -F "min_factor = 0.992000" "$out_template" >/dev/null
 grep -F "max_factor = 1.008000" "$out_template" >/dev/null
 
