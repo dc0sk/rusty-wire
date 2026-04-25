@@ -228,7 +228,7 @@ Current conductor-diameter correction for resonant-length estimation
 (metric-only input, default baseline $d_0=2.0\,\mathrm{mm}$):
 
 $$
-F_d(d) = \operatorname{clamp}\left(1 - 0.012\ln\left(\frac{d}{d_0}\right),\,0.97,\,1.03\right),\quad d\in[1.0,4.0]\,\mathrm{mm}
+F_d(d) = \operatorname{clamp}\left(1 - 0.011542\ln\left(\frac{d}{d_0}\right),\,0.97,\,1.03\right),\quad d\in[1.0,4.0]\,\mathrm{mm}
 $$
 
 $$

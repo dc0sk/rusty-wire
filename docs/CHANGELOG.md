@@ -21,6 +21,7 @@ All notable changes to Rusty Wire are documented here.
 - **Practical-limits first mitigation**: skip-distance summaries now include first-order height-aware scaling for 7 m, 10 m, and 12 m antenna heights.
 - **Practical-limits extension**: skip-distance summaries now also include first-order ground-class scaling (poor/average/good).
 - **Practical-limits extension**: resonant-length estimates now include first-order conductor-diameter correction around a 2.0 mm baseline.
+- **Conductor calibration refinement**: updated conductor-diameter logarithmic coefficient to `0.011542` from the current reference sweep dataset.
 
 ## [2.5.2] - 2026-04-21
 
