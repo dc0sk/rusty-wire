@@ -1782,6 +1782,36 @@ mod tests {
     }
 
     #[test]
+    fn prompt_wire_length_window_invalid_metric_input_falls_back_to_defaults() {
+        let mut input = Cursor::new(b"\n30\n10\n".to_vec());
+        let mut output = Vec::new();
+
+        let (min_m, max_m, units) =
+            prompt_wire_length_window_with_default(&mut input, &mut output, Some(9.0), Some(27.0));
+
+        assert_eq!(units, UnitSystem::Metric);
+        assert!((min_m - 9.0).abs() < 1e-9);
+        assert!((max_m - 27.0).abs() < 1e-9);
+        let rendered = String::from_utf8(output).expect("output should be utf-8");
+        assert!(rendered.contains("Invalid wire length window, using defaults 9.0-27.0 m."));
+    }
+
+    #[test]
+    fn prompt_wire_length_window_invalid_feet_input_falls_back_to_defaults() {
+        let mut input = Cursor::new(b"ft\n80\n40\n".to_vec());
+        let mut output = Vec::new();
+
+        let (min_m, max_m, units) =
+            prompt_wire_length_window_with_default(&mut input, &mut output, Some(9.0), Some(27.0));
+
+        assert_eq!(units, UnitSystem::Imperial);
+        assert!((min_m - 9.0).abs() < 1e-9);
+        assert!((max_m - 27.0).abs() < 1e-9);
+        let rendered = String::from_utf8(output).expect("output should be utf-8");
+        assert!(rendered.contains("Invalid wire length window, using defaults 9.0-27.0 m."));
+    }
+
+    #[test]
     fn cli_transformer_selection_recommended_resolves_by_mode_and_antenna() {
         assert_eq!(
             CliTransformerSelection::Recommended.resolve(CalcMode::Resonant, None),
@@ -2150,6 +2180,71 @@ mod tests {
         let d = prompt_conductor_diameter_with_default(&mut input, &mut output, Some(3.0));
 
         assert!((d - 3.0).abs() < 1e-9);
+    }
+
+    // --- prompt_display_units_with_default ---
+
+    #[test]
+    fn prompt_display_units_empty_uses_default_value() {
+        let mut input = Cursor::new(b"\n".to_vec());
+        let mut output = Vec::new();
+
+        let units = prompt_display_units_with_default(
+            &mut input,
+            &mut output,
+            UnitSystem::Both,
+            Some(UnitSystem::Metric),
+        );
+
+        assert_eq!(units, UnitSystem::Metric);
+        let rendered = String::from_utf8(output).expect("output should be utf-8");
+        assert!(rendered.contains("Select display units (m/ft/both) [m]: "));
+    }
+
+    #[test]
+    fn prompt_display_units_accepts_both_keyword() {
+        let mut input = Cursor::new(b"both\n".to_vec());
+        let mut output = Vec::new();
+
+        let units =
+            prompt_display_units_with_default(&mut input, &mut output, UnitSystem::Metric, None);
+
+        assert_eq!(units, UnitSystem::Both);
+    }
+
+    #[test]
+    fn prompt_display_units_unknown_input_falls_back_to_auto_units() {
+        let mut input = Cursor::new(b"yards\n".to_vec());
+        let mut output = Vec::new();
+
+        let units =
+            prompt_display_units_with_default(&mut input, &mut output, UnitSystem::Imperial, None);
+
+        assert_eq!(units, UnitSystem::Imperial);
+    }
+
+    // --- prompt_itu_region ---
+
+    #[test]
+    fn prompt_itu_region_accepts_region_three() {
+        let mut input = Cursor::new(b"3\n".to_vec());
+        let mut output = Vec::new();
+
+        let region = prompt_itu_region(&mut input, &mut output);
+
+        assert_eq!(region, ITURegion::Region3);
+    }
+
+    #[test]
+    fn prompt_itu_region_invalid_input_falls_back_to_default() {
+        let mut input = Cursor::new(b"9\n".to_vec());
+        let mut output = Vec::new();
+
+        let region = prompt_itu_region(&mut input, &mut output);
+
+        assert_eq!(region, ITURegion::Region1);
+        let rendered = String::from_utf8(output).expect("output should be utf-8");
+        assert!(rendered.contains("Invalid region. Using default Region 1."));
     }
 
     // --- prompt_antenna_model_with_default (trap aliases) ---
