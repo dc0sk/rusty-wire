@@ -57,8 +57,10 @@ equal-tie support.
 - `--validate-with-fnec` — when used with `--advise`, run optional cross-tool validation via `fnec-rust` (if available in `PATH`) and print per-candidate status notes.
 - `--fnec-pass-max-mismatch` and `--fnec-reject-min-mismatch` — configure pass/warn/reject thresholds for advise validation when `--validate-with-fnec` is enabled.
 - Advise exports (`--advise --export ...`) now include `validated`, `validation_status`, and `validation_note` fields in CSV/JSON/Markdown/TXT output.
-- `--freq <MHz>` — compute wire lengths for any explicit frequency without
+- `--freq <MHz>` — compute wire lengths for a single explicit frequency without
   touching the band database.
+- `--freq-list <f1,f2,...>` — compute wire lengths for multiple explicit frequencies
+  in a single invocation; each produces its own labelled result.
 - `--velocity-sweep <v1,v2,...>` — run the same configuration at multiple
   velocity factors and print a side-by-side comparison table.
 - `--height 7|10|12` — select standard antenna height model (meters) used for
@@ -130,6 +132,11 @@ rusty-wire --mode non-resonant --bands 40m,20m,15m --wire-min-ft 30 --wire-max-f
 **Single explicit frequency (no band selection needed):**
 ```bash
 rusty-wire --freq 7.074 --antenna dipole
+```
+
+**Multiple explicit frequencies in one run:**
+```bash
+rusty-wire --freq-list 3.650,7.074,14.074 --antenna dipole
 ```
 
 **Compare three velocity factors side by side:**
