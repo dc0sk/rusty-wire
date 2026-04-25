@@ -13,6 +13,7 @@ All notable changes to Rusty Wire are documented here.
   - Esc-without-popup quit behavior
 
 ## [Unreleased]
+- **CI regression runner**: added `scripts/test-all.sh` to run the full suite (format gate, compile gate, cargo test, ITU bands, multi-optima, NEC calibration) with a single command.
 - **NEC calibration hardening**: `scripts/calibrate-conductor-model.sh` now tolerates blank lines and `#` comments in CSV inputs while preserving strict malformed-row validation.
 - **NEC calibration regression script**: added `scripts/test-nec-calibration.sh` to lock template fit constants (`k = 0.011542`, `RMSE = 0.000000`) and validate parser behavior.
 - **Docs/version sync**: updated README and CLI guide version labels to 2.6.0.
