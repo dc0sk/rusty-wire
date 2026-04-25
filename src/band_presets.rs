@@ -7,16 +7,65 @@ struct BandPresetFile {
     presets: Option<HashMap<String, Vec<String>>>,
 }
 
-pub fn load_preset_selection(path: &str, preset_name: &str) -> Result<String, String> {
+fn read_preset_map(path: &str) -> Result<HashMap<String, Vec<String>>, String> {
     let file_text = fs::read_to_string(path)
         .map_err(|err| format!("failed to read preset config '{path}': {err}"))?;
 
     let parsed: BandPresetFile = toml::from_str(&file_text)
         .map_err(|err| format!("failed to parse preset config '{path}': {err}"))?;
 
-    let presets = parsed
+    parsed
         .presets
-        .ok_or_else(|| format!("preset config '{path}' does not define a [presets] table"))?;
+        .ok_or_else(|| format!("preset config '{path}' does not define a [presets] table"))
+}
+
+fn normalize_preset_tokens(
+    tokens: &[String],
+    preset_name: &str,
+    path: &str,
+) -> Result<String, String> {
+    if tokens.is_empty() {
+        return Err(format!(
+            "preset '{preset_name}' in '{path}' has no band entries"
+        ));
+    }
+
+    let normalized: Vec<String> = tokens
+        .iter()
+        .map(|token| token.trim())
+        .filter(|token| !token.is_empty())
+        .map(|token| token.to_string())
+        .collect();
+
+    if normalized.is_empty() {
+        return Err(format!(
+            "preset '{preset_name}' in '{path}' has only empty band entries"
+        ));
+    }
+
+    Ok(normalized.join(","))
+}
+
+pub(crate) fn load_named_presets(path: &str) -> Result<Vec<(String, String)>, String> {
+    let presets = read_preset_map(path)?;
+    let mut named: Vec<(String, String)> = presets
+        .into_iter()
+        .map(|(name, tokens)| {
+            let normalized = normalize_preset_tokens(&tokens, &name, path)?;
+            Ok((name, normalized))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    named.sort_by(|left, right| {
+        left.0
+            .to_ascii_lowercase()
+            .cmp(&right.0.to_ascii_lowercase())
+    });
+    Ok(named)
+}
+
+pub fn load_preset_selection(path: &str, preset_name: &str) -> Result<String, String> {
+    let presets = read_preset_map(path)?;
 
     let requested = preset_name.trim();
     if requested.is_empty() {
@@ -41,26 +90,7 @@ pub fn load_preset_selection(path: &str, preset_name: &str) -> Result<String, St
             )
         })?;
 
-    if entry.is_empty() {
-        return Err(format!(
-            "preset '{requested}' in '{path}' has no band entries"
-        ));
-    }
-
-    let tokens: Vec<String> = entry
-        .iter()
-        .map(|token| token.trim())
-        .filter(|token| !token.is_empty())
-        .map(|token| token.to_string())
-        .collect();
-
-    if tokens.is_empty() {
-        return Err(format!(
-            "preset '{requested}' in '{path}' has only empty band entries"
-        ));
-    }
-
-    Ok(tokens.join(","))
+    normalize_preset_tokens(entry, requested, path)
 }
 
 #[cfg(test)]
@@ -140,6 +170,32 @@ portable = ["40m", "20m"]
         let err = load_preset_selection(config_path.to_str().unwrap(), "unknown")
             .expect_err("unknown preset should fail");
         assert!(err.contains("Available presets"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_named_presets_returns_sorted_normalized_entries() {
+        let dir = temp_test_dir("preset-loader-list");
+        let config_path = dir.join("bands.toml");
+        write_file(
+            &config_path,
+            r#"
+[presets]
+zulu = ["40m", "20m"]
+Alpha = [" 80m-10m "]
+"#,
+        );
+
+        let presets =
+            load_named_presets(config_path.to_str().unwrap()).expect("named presets should load");
+        assert_eq!(
+            presets,
+            vec![
+                ("Alpha".to_string(), "80m-10m".to_string()),
+                ("zulu".to_string(), "40m,20m".to_string()),
+            ]
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

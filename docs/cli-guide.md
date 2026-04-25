@@ -55,7 +55,7 @@ rusty-wire --interactive
 
 It lets you:
 - List all available bands
-- Select one or multiple bands
+- Select one or multiple bands, including named presets loaded from `bands.toml` when present
 - Choose calculation mode (resonant or non-resonant)
 - Set explicit frequencies as an alternative to band selection
 - Set velocity factor
@@ -65,6 +65,8 @@ It lets you:
 - Choose transformer ratio
 - Configure non-resonant wire windows interactively
 - Export results as CSV (`e`), JSON (`E`), Markdown (`m`), or plain text (`t`) directly from the TUI
+
+When a `bands.toml` file exists in the current working directory, the TUI adds its named presets to the `Bands` field alongside the built-in preset list and the `Custom…` checklist option.
 
 **TUI keybindings:**
 

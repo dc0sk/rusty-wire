@@ -40,6 +40,7 @@
 
 use std::io::{self, Stdout};
 use std::panic;
+use std::path::Path;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::execute;
@@ -54,9 +55,10 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use ratatui::Terminal;
 
 use crate::app::{
-    apply_action, band_listing_view, results_display_document, AntennaModel, AppAction, AppState,
-    CalcMode, ExportFormat, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
+    apply_action, band_listing_view, parse_band_selection, results_display_document, AntennaModel,
+    AppAction, AppState, CalcMode, ExportFormat, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
 };
+use crate::band_presets::load_named_presets;
 use crate::bands::ITURegion;
 use crate::calculations::{GroundClass, TransformerRatio};
 use crate::export::{default_output_name, export_results};
@@ -90,14 +92,15 @@ const TRANSFORMER_RATIOS: &[TransformerRatio] = &[
 ///
 /// Indices are 1-based.  All selected indices exist across all three regions
 /// (they are the common HF amateur allocations).
-const BAND_PRESETS: &[(&str, &[usize])] = &[
-    ("40m–10m (7 bands)", &[4, 5, 6, 7, 8, 9, 10]),
-    ("80m–10m (8 bands)", &[2, 4, 5, 6, 7, 8, 9, 10]),
-    ("160m–10m (9 bands)", &[1, 2, 4, 5, 6, 7, 8, 9, 10]),
-    ("20m–10m (5 bands)", &[6, 7, 8, 9, 10]),
-    ("Contest 80/40/20/15/10", &[2, 4, 6, 8, 10]),
-    ("Custom…", &[] as &[usize]), // sentinel — opens band-checklist overlay
+const BUILTIN_BAND_PRESETS: &[(&str, &str)] = &[
+    ("40m–10m (7 bands)", "40m,30m,20m,17m,15m,12m,10m"),
+    ("80m–10m (8 bands)", "80m,40m,30m,20m,17m,15m,12m,10m"),
+    ("160m–10m (9 bands)", "160m,80m,40m,30m,20m,17m,15m,12m,10m"),
+    ("20m–10m (5 bands)", "20m,17m,15m,12m,10m"),
+    ("Contest 80/40/20/15/10", "80m,40m,20m,15m,10m"),
 ];
+
+const DEFAULT_BAND_PRESET_CONFIG: &str = "bands.toml";
 
 /// Named frequency presets for explicit multi-frequency runs.
 const FREQUENCY_PRESETS: &[(&str, &[f64])] = &[
@@ -119,6 +122,32 @@ const FREQUENCY_PRESETS: &[(&str, &[f64])] = &[
 enum Focus {
     Config,
     Results,
+}
+
+#[derive(Debug, Clone)]
+struct BandPresetChoice {
+    label: String,
+    selection: Option<String>,
+}
+
+impl BandPresetChoice {
+    fn named(label: impl Into<String>, selection: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            selection: Some(selection.into()),
+        }
+    }
+
+    fn custom() -> Self {
+        Self {
+            label: "Custom…".to_string(),
+            selection: None,
+        }
+    }
+
+    fn is_custom(&self) -> bool {
+        self.selection.is_none()
+    }
 }
 
 /// Editable fields shown in the configuration panel.
@@ -184,7 +213,9 @@ struct TuiState {
     focus: Focus,
     /// Index into `ConfigField::ALL`.
     field_idx: usize,
-    /// Index into `BAND_PRESETS`.
+    /// Available built-in and TOML-loaded band presets.
+    band_presets: Vec<BandPresetChoice>,
+    /// Index into `band_presets`.
     band_preset_idx: usize,
     /// Index into `VF_PRESETS`.
     vf_idx: usize,
@@ -218,13 +249,14 @@ struct TuiState {
     band_checklist_cursor: usize,
     /// Last confirmed custom band selection (empty until user confirms once).
     custom_band_indices: Vec<usize>,
-    /// Status message shown in the hints bar after an export attempt.
+    /// Status message shown in the hints bar.
     export_status: Option<String>,
 }
 
 impl TuiState {
     fn new() -> Self {
         let app = AppState::default();
+        let (band_presets, preset_status) = load_tui_band_presets();
         // Derive preset indices from the default AppConfig values.
         let vf = app.config.velocity_factor;
         let vf_idx = VF_PRESETS
@@ -265,7 +297,8 @@ impl TuiState {
             app,
             focus: Focus::Config,
             field_idx: 0,
-            band_preset_idx: 0, // 40m–10m default
+            band_presets,
+            band_preset_idx: 0,
             vf_idx,
             ratio_idx,
             wire_min_idx,
@@ -282,8 +315,12 @@ impl TuiState {
             band_checklist_items: Vec::new(),
             band_checklist_cursor: 0,
             custom_band_indices: Vec::new(),
-            export_status: None,
+            export_status: preset_status,
         }
+    }
+
+    fn current_band_preset(&self) -> &BandPresetChoice {
+        &self.band_presets[self.band_preset_idx]
     }
 
     fn current_field(&self) -> ConfigField {
@@ -317,7 +354,7 @@ impl TuiState {
                         ITURegion::Region3 => "3 (Asia-Pac)".into(),
                     },
                     ConfigField::Bands => {
-                        if self.band_preset_idx == BAND_PRESETS.len() - 1 {
+                        if self.current_band_preset().is_custom() {
                             // Custom sentinel
                             if self.custom_band_indices.is_empty() {
                                 "Custom…".into()
@@ -325,7 +362,7 @@ impl TuiState {
                                 format!("Custom ({} bands)", self.custom_band_indices.len())
                             }
                         } else {
-                            BAND_PRESETS[self.band_preset_idx].0.into()
+                            self.current_band_preset().label.clone()
                         }
                     }
                     ConfigField::CustomFrequencies => FREQUENCY_PRESETS[self.freq_idx].0.into(),
@@ -416,25 +453,41 @@ impl TuiState {
             }
             ConfigField::Bands => {
                 if forward {
-                    self.band_preset_idx = (self.band_preset_idx + 1) % BAND_PRESETS.len();
+                    self.band_preset_idx = (self.band_preset_idx + 1) % self.band_presets.len();
                 } else {
                     self.band_preset_idx = self
                         .band_preset_idx
                         .checked_sub(1)
-                        .unwrap_or(BAND_PRESETS.len() - 1);
+                        .unwrap_or(self.band_presets.len() - 1);
                 }
-                // Custom sentinel (last entry) has an empty slice — use the
-                // confirmed custom selection, or fall back to the current bands.
-                let indices = if self.band_preset_idx == BAND_PRESETS.len() - 1 {
-                    if !self.custom_band_indices.is_empty() {
+                // Custom sentinel opens the checklist; keep the last confirmed
+                // custom selection, or fall back to the current active bands.
+                if self.current_band_preset().is_custom() {
+                    let indices = if !self.custom_band_indices.is_empty() {
                         self.custom_band_indices.clone()
                     } else {
                         current_band_indices
+                    };
+                    AppAction::SetBandIndices(indices)
+                } else if let Some(selection) = self.current_band_preset().selection.as_deref() {
+                    match parse_band_selection(selection, region) {
+                        Ok(indices) => AppAction::SetBandIndices(indices),
+                        Err(err) => {
+                            self.export_status = Some(format!(
+                                "Preset '{}' is invalid for Region {}: {err}",
+                                self.current_band_preset().label,
+                                region.short_name()
+                            ));
+                            AppAction::SetBandIndices(current_band_indices)
+                        }
                     }
                 } else {
-                    BAND_PRESETS[self.band_preset_idx].1.to_vec()
-                };
-                AppAction::SetBandIndices(indices)
+                    if !self.custom_band_indices.is_empty() {
+                        AppAction::SetBandIndices(self.custom_band_indices.clone())
+                    } else {
+                        AppAction::SetBandIndices(current_band_indices)
+                    }
+                }
             }
             ConfigField::CustomFrequencies => {
                 if forward {
@@ -694,7 +747,7 @@ impl TuiState {
                 // the band-checklist instead of running a calculation.
                 if self.focus == Focus::Config
                     && self.current_field() == ConfigField::Bands
-                    && self.band_preset_idx == BAND_PRESETS.len() - 1
+                    && self.current_band_preset().is_custom()
                 {
                     self.open_band_checklist();
                 } else {
@@ -1148,4 +1201,31 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     restore_terminal(&mut terminal)?;
     Ok(())
+}
+
+fn load_tui_band_presets() -> (Vec<BandPresetChoice>, Option<String>) {
+    let mut presets: Vec<BandPresetChoice> = BUILTIN_BAND_PRESETS
+        .iter()
+        .map(|(label, selection)| BandPresetChoice::named(*label, *selection))
+        .collect();
+    let mut status = None;
+
+    if Path::new(DEFAULT_BAND_PRESET_CONFIG).exists() {
+        match load_named_presets(DEFAULT_BAND_PRESET_CONFIG) {
+            Ok(named) => {
+                presets.extend(named.into_iter().map(|(name, selection)| {
+                    BandPresetChoice::named(format!("Preset: {name}"), selection)
+                }));
+            }
+            Err(err) => {
+                status = Some(format!(
+                    "Ignored {} preset file: {err}",
+                    DEFAULT_BAND_PRESET_CONFIG
+                ));
+            }
+        }
+    }
+
+    presets.push(BandPresetChoice::custom());
+    (presets, status)
 }
