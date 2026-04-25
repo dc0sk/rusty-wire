@@ -219,6 +219,9 @@ pub const DEFAULT_NON_RESONANT_CONFIG: NonResonantSearchConfig = NonResonantSear
 pub const DEFAULT_CONDUCTOR_DIAMETER_MM: f64 = 2.0;
 pub const MIN_CONDUCTOR_DIAMETER_MM: f64 = 1.0;
 pub const MAX_CONDUCTOR_DIAMETER_MM: f64 = 4.0;
+pub const CONDUCTOR_DIAMETER_LOG_COEFF: f64 = 0.012;
+pub const CONDUCTOR_DIAMETER_MIN_FACTOR: f64 = 0.97;
+pub const CONDUCTOR_DIAMETER_MAX_FACTOR: f64 = 1.03;
 
 impl fmt::Display for WireCalculation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -486,7 +489,8 @@ fn conductor_diameter_correction_factor(conductor_diameter_mm: f64) -> f64 {
     let d_mm = conductor_diameter_mm
         .clamp(MIN_CONDUCTOR_DIAMETER_MM, MAX_CONDUCTOR_DIAMETER_MM)
         .max(0.1);
-    (1.0 - 0.012 * (d_mm / DEFAULT_CONDUCTOR_DIAMETER_MM).ln()).clamp(0.97, 1.03)
+    (1.0 - CONDUCTOR_DIAMETER_LOG_COEFF * (d_mm / DEFAULT_CONDUCTOR_DIAMETER_MM).ln())
+        .clamp(CONDUCTOR_DIAMETER_MIN_FACTOR, CONDUCTOR_DIAMETER_MAX_FACTOR)
 }
 
 /// Calculate the most distant reachable distance by averaging skip distances
