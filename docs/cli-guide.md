@@ -168,6 +168,7 @@ You can always override with an explicit ratio.
 
 - `--export <csv,json,markdown,txt>` One or more formats
 - `--output <file>` Output path (single format uses this name; multiple formats use per-format filenames)
+- Advise exports include validation metadata fields: `validated` and `validation_note`
 
 Path safety:
 - Absolute paths are rejected.

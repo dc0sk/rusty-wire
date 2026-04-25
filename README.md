@@ -55,6 +55,7 @@ equal-tie support.
 - `--bands-config <path>` — override preset file path (default: `bands.toml`).
 - `--advise` — print ranked wire + balun/unun candidates with efficiency-style metrics.
 - `--validate-with-fnec` — when used with `--advise`, run optional cross-tool validation via `fnec-rust` (if available in `PATH`) and print per-candidate status notes.
+- Advise exports (`--advise --export ...`) now include `validated` and `validation_note` fields in CSV/JSON/Markdown/TXT output.
 - `--freq <MHz>` — compute wire lengths for any explicit frequency without
   touching the band database.
 - `--velocity-sweep <v1,v2,...>` — run the same configuration at multiple

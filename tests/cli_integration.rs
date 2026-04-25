@@ -593,6 +593,37 @@ fn advise_with_fnec_validation_flag_succeeds() {
 }
 
 #[test]
+fn advise_json_export_includes_validation_fields() {
+    let dir = temp_test_dir("advise-json-validation-export");
+    let output = binary()
+        .current_dir(&dir)
+        .args([
+            "--advise",
+            "--validate-with-fnec",
+            "--bands",
+            "40m,20m",
+            "--antenna",
+            "efhw",
+            "--export",
+            "json",
+            "--output",
+            "advise.json",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Exported advise results to advise.json"));
+
+    let json = fs::read_to_string(dir.join("advise.json")).expect("failed to read json export");
+    assert!(json.contains("\"validated\":"));
+    assert!(json.contains("\"validation_note\":"));
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn invalid_wire_window_inverted_shows_structured_error() {
     // Passing a min larger than max should produce a structured AppError through execute_request_checked.
     let output = binary()
