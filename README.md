@@ -206,7 +206,7 @@ For formulas and optimizer objective functions see [docs/math.md](docs/math.md).
 ## Testing
 
 ```bash
-# Full unit + integration suite (253 tests)
+# Full unit + integration suite (260 tests)
 cargo test
 
 # Regression scripts
