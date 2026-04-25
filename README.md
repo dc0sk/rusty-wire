@@ -228,9 +228,10 @@ cargo run --bin tui
 ```
 
 The TUI provides a two-panel layout — configuration on the left, results on the
-right — and requires no command-line flags. All nine settings cycle through
-presets with ←/→; results scroll with ↑↓ or PgUp/PgDn. Press `r` to
-recalculate, `q` to quit.
+right — and requires no command-line flags. Configuration fields cycle through
+presets with ←/→; results scroll with ↑↓ or PgUp/PgDn. If a `bands.toml` file
+is present in the current working directory, its named presets are added to the
+`Bands` field automatically. Press `r` to recalculate, `q` to quit.
 
 Screenshot capture and placement checklist: [docs/tui-screenshots.md](docs/tui-screenshots.md).
 
