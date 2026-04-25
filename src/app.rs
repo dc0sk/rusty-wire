@@ -185,6 +185,10 @@ pub struct AdviseCandidate {
     pub mismatch_loss_db: f64,
     pub average_length_shift_pct: f64,
     pub score: f64,
+    /// Whether fnec-rust validation was performed (if available).
+    pub validated: bool,
+    /// Optional validation note (e.g., cross-check result or reason skipped).
+    pub validation_note: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -279,10 +283,30 @@ pub fn build_advise_candidates(config: &AppConfig, limit: usize) -> AdviseView {
                 mismatch_loss_db: ranked.mismatch_loss_db,
                 average_length_shift_pct: ranked.average_length_shift_pct,
                 score: ranked.score,
+                validated: false,
+                validation_note: None,
             });
         }
     }
 
+    // Optionally validate candidates with fnec-rust.
+    if config.validate_with_fnec {
+        for candidate in &mut candidates {
+            // Use first selected band center as a representative frequency.
+            if let Some(&band_idx) = config.band_indices.first() {
+                if let Some(band) = get_band_by_index_for_region(band_idx, config.itu_region) {
+                    let result = crate::fnec_validation::validate_candidate(
+                        candidate.recommended_length_m,
+                        band.freq_center_mhz,
+                        config.antenna_height_m,
+                        "/tmp",
+                    );
+                    candidate.validated = result.validated;
+                    candidate.validation_note = result.validation_note;
+                }
+            }
+        }
+    }
     AdviseView {
         assumed_feedpoint_ohm: optimizer.assumed_feedpoint_ohm,
         candidates,
@@ -556,6 +580,8 @@ pub struct AppConfig {
     /// Multiple explicit frequencies in MHz; when non-empty, bypasses band selection.
     /// Takes precedence over `custom_freq_mhz` if both are set.
     pub freq_list_mhz: Vec<f64>,
+    /// Whether to validate advise candidates using fnec-rust (if available).
+    pub validate_with_fnec: bool,
 }
 
 impl Default for AppConfig {
@@ -576,6 +602,7 @@ impl Default for AppConfig {
             conductor_diameter_mm: DEFAULT_CONDUCTOR_DIAMETER_MM,
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
+            validate_with_fnec: false,
         }
     }
 }

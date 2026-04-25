@@ -113,6 +113,7 @@ rusty-wire --interactive
 - `--bands-preset <name>` Named band preset loaded from TOML
 - `--bands-config <path>` Preset config path (default: `bands.toml`)
 - `--advise` Print ranked wire + balun/unun candidates with efficiency-style metrics
+- `--validate-with-fnec` With `--advise`, attempt optional fnec-rust cross-validation (if `fnec` is available in `PATH`) and print per-candidate status notes
 - `--mode <resonant|non-resonant>` Calculation mode (default: `resonant`)
 - `--velocity <value>` Velocity factor, valid range `0.50..=1.00` (default: `0.95`)
 - `--height <7|10|12>` Standard antenna height in meters used for height-aware skip estimates (default: `10`)
@@ -236,6 +237,8 @@ Advise mode (ranked wire + balun/unun candidates):
 ```bash
 rusty-wire --advise --bands 40m,20m,15m --antenna efhw
 rusty-wire --advise --bands-preset portable --bands-config ./profiles/bands.toml
+# Optional fnec-rust validation notes for top candidates
+rusty-wire --advise --validate-with-fnec --bands 40m,20m --antenna efhw
 # Export advise report as Markdown
 rusty-wire --advise --bands 40m,20m --antenna efhw --export markdown --output advise.md
 ```
