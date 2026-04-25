@@ -1307,6 +1307,84 @@ mod tests {
     }
 
     #[test]
+    fn open_band_checklist_prefers_existing_custom_selection() {
+        let mut state = TuiState::new(None);
+        state.custom_band_indices = vec![2, 5];
+
+        state.open_band_checklist();
+
+        assert!(state.show_band_checklist);
+        let checked = state
+            .band_checklist_items
+            .iter()
+            .filter(|(_, _, checked)| *checked)
+            .map(|(idx, _, _)| *idx)
+            .collect::<Vec<usize>>();
+        assert_eq!(checked, vec![2, 5]);
+    }
+
+    #[test]
+    fn checklist_enter_updates_custom_selection_and_app_band_indices() {
+        let mut state = TuiState::new(None);
+        state.show_band_checklist = true;
+        state.band_checklist_items = vec![
+            (1, "160m".to_string(), false),
+            (2, "80m".to_string(), true),
+            (3, "60m".to_string(), true),
+        ];
+
+        state.handle_key(press(KeyCode::Enter));
+
+        assert!(!state.show_band_checklist);
+        assert_eq!(state.custom_band_indices, vec![2, 3]);
+        assert_eq!(state.app.config.band_indices, vec![2, 3]);
+    }
+
+    #[test]
+    fn checklist_escape_closes_without_changing_existing_selection() {
+        let mut state = TuiState::new(None);
+        state.custom_band_indices = vec![4, 6];
+        state.show_band_checklist = true;
+        state.band_checklist_items = vec![
+            (4, "40m".to_string(), true),
+            (5, "30m".to_string(), false),
+            (6, "20m".to_string(), true),
+        ];
+
+        state.handle_key(press(KeyCode::Esc));
+
+        assert!(!state.show_band_checklist);
+        assert_eq!(state.custom_band_indices, vec![4, 6]);
+        assert_eq!(
+            state.app.config.band_indices,
+            crate::app::DEFAULT_BAND_SELECTION
+        );
+    }
+
+    #[test]
+    fn try_export_without_results_sets_warning_status() {
+        let mut state = TuiState::new(None);
+
+        state.try_export(ExportFormat::Csv);
+
+        assert_eq!(
+            state.export_status.as_deref(),
+            Some("No results to export — run a calculation first (r).")
+        );
+    }
+
+    #[test]
+    fn next_keypress_clears_export_status_before_handling_action() {
+        let mut state = TuiState::new(None);
+        state.export_status = Some("Exported → rusty-wire-results.csv".to_string());
+
+        state.handle_key(press(KeyCode::Char('i')));
+
+        assert!(state.export_status.is_none());
+        assert!(state.show_info_popup);
+    }
+
+    #[test]
     fn load_tui_band_presets_always_keeps_custom_choice_last() {
         let (presets, status) = load_tui_band_presets(None);
 
