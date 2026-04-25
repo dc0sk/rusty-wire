@@ -235,6 +235,8 @@ $$
 L_{\text{corrected}} = L_{\text{impedance-corrected}}\cdot F_d(d)
 $$
 
+The template calibration CSV in [nec_conductor_reference.csv](nec-calibration.md) fits the current slope constant exactly (`k = 0.011542`) at 1.0 mm, 2.0 mm, and 4.0 mm. The runtime clamp remains intentionally broader than that observed span (`0.97 .. 1.03` instead of `0.992 .. 1.008`) until real NEC sweep data is committed.
+
 For mission-critical designs, use Rusty Wire results as initial conditions and validate with NEC simulation and on-air/instrument measurements.
 
 For the practical calibration workflow (data format and fitting script), see [nec-calibration.md](nec-calibration.md).

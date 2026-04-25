@@ -1056,6 +1056,34 @@ mod tests {
     }
 
     #[test]
+    fn conductor_diameter_correction_matches_template_reference_points() {
+        assert!((conductor_diameter_correction_factor(1.0) - 1.008).abs() < 1e-6);
+        assert!((conductor_diameter_correction_factor(2.0) - 1.000).abs() < 1e-12);
+        assert!((conductor_diameter_correction_factor(4.0) - 0.992).abs() < 1e-6);
+    }
+
+    #[test]
+    fn conductor_diameter_correction_is_monotonic_over_supported_range() {
+        let thin = conductor_diameter_correction_factor(1.0);
+        let baseline = conductor_diameter_correction_factor(2.0);
+        let thick = conductor_diameter_correction_factor(4.0);
+
+        assert!(thin > baseline);
+        assert!(baseline > thick);
+    }
+
+    #[test]
+    fn conductor_diameter_runtime_clamp_is_broader_than_template_span() {
+        let thin = conductor_diameter_correction_factor(MIN_CONDUCTOR_DIAMETER_MM);
+        let thick = conductor_diameter_correction_factor(MAX_CONDUCTOR_DIAMETER_MM);
+
+        assert!(thin >= 1.008);
+        assert!(thick <= 0.992);
+        assert_eq!(CONDUCTOR_DIAMETER_MIN_FACTOR, 0.97);
+        assert_eq!(CONDUCTOR_DIAMETER_MAX_FACTOR, 1.03);
+    }
+
+    #[test]
     fn calculate_for_band_unit_conversion() {
         let band = sample_band();
         let result = calculate_for_band_with_velocity(
