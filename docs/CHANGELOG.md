@@ -5,6 +5,7 @@ All notable changes to Rusty Wire are documented here.
 ## [Unreleased]
 
 ### Added
+- **TUI export**: press `e` to export the current results as CSV (`rusty-wire-results.csv`) or `E` for JSON (`rusty-wire-results.json`) directly from the TUI; a status message is shown in the hints bar after each export attempt.
 - **Custom band presets via TOML**: added `--bands-preset <name>` to resolve named band sets from a config file with optional `--bands-config <path>` override (default: `bands.toml`). Presets reuse the existing band-token parser, so entries can include both names and ranges.
 - **Balun optimizer app-layer foundation**: added `optimize_transformer_candidates(&AppConfig)` with ranked transformer candidates and per-candidate metadata (target impedance, mismatch factor, estimated efficiency, mismatch loss, and correction-shift penalty score). This is the prerequisite API for upcoming `advise` mode.
 - **`--advise` CLI mode**: added ranked advise output that combines recommended wire length with balun/unun ratio candidates for the selected bands, including efficiency estimate, mismatch loss, clearance, and overall score.

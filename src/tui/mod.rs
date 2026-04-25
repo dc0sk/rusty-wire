@@ -28,6 +28,8 @@
 //! | `←` / `h` | Decrease selected field value |
 //! | `→` / `l` | Increase selected field value |
 //! | `r` / `Enter` | Run calculation |
+//! | `e` | Export results as CSV (`rusty-wire-results.csv`) |
+//! | `E` | Export results as JSON (`rusty-wire-results.json`) |
 //! | `i` / `?` | Toggle project info popup |
 //! | `Tab` | Toggle focus between config and results panels |
 //! | `q` / `Esc` | Quit |
@@ -51,10 +53,11 @@ use ratatui::Terminal;
 
 use crate::app::{
     apply_action, band_listing_view, results_display_document, AntennaModel, AppAction, AppState,
-    CalcMode, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
+    CalcMode, ExportFormat, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
 };
 use crate::bands::ITURegion;
 use crate::calculations::{GroundClass, TransformerRatio};
+use crate::export::{default_output_name, export_results};
 
 // ---------------------------------------------------------------------------
 // Preset tables — values the user cycles through with ←/→
@@ -191,6 +194,8 @@ struct TuiState {
     band_checklist_cursor: usize,
     /// Last confirmed custom band selection (empty until user confirms once).
     custom_band_indices: Vec<usize>,
+    /// Status message shown in the hints bar after an export attempt.
+    export_status: Option<String>,
 }
 
 impl TuiState {
@@ -247,6 +252,7 @@ impl TuiState {
             band_checklist_items: Vec::new(),
             band_checklist_cursor: 0,
             custom_band_indices: Vec::new(),
+            export_status: None,
         }
     }
 
@@ -478,6 +484,32 @@ impl TuiState {
         self.dispatch(AppAction::RunCalculation);
     }
 
+    /// Export the current results to a file.  Sets `export_status` with either
+    /// a success message ("Exported to <file>") or an error message.
+    fn try_export(&mut self, format: ExportFormat) {
+        let Some(ref results) = self.app.results else {
+            self.export_status = Some("No results to export — run a calculation first (r).".into());
+            return;
+        };
+        let filename = default_output_name(format);
+        match export_results(
+            format,
+            filename,
+            &results.calculations,
+            results.recommendation.as_ref(),
+            results.config.units,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
+        ) {
+            Ok(()) => {
+                self.export_status = Some(format!("Exported → {filename}"));
+            }
+            Err(err) => {
+                self.export_status = Some(format!("Export failed: {err}"));
+            }
+        }
+    }
+
     /// Open the band-checklist overlay, initialising items from the current
     /// custom selection (or the active band indices when no custom exists yet).
     fn open_band_checklist(&mut self) {
@@ -503,6 +535,8 @@ impl TuiState {
         if key.kind != KeyEventKind::Press {
             return;
         }
+        // Clear any previous export status on the next keypress.
+        self.export_status = None;
 
         // Band-checklist overlay intercepts all keys.
         if self.show_band_checklist {
@@ -573,6 +607,14 @@ impl TuiState {
             }
             KeyCode::Char('r') => {
                 self.run_calculation();
+                return;
+            }
+            KeyCode::Char('e') => {
+                self.try_export(ExportFormat::Csv);
+                return;
+            }
+            KeyCode::Char('E') => {
+                self.try_export(ExportFormat::Json);
                 return;
             }
             KeyCode::Enter => {
@@ -854,12 +896,26 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
 }
 
 fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
+    if let Some(ref status) = state.export_status {
+        let style = if status.starts_with("Export failed") || status.starts_with("No results") {
+            Style::default().fg(Color::Red)
+        } else {
+            Style::default().fg(Color::Green)
+        };
+        f.render_widget(Paragraph::new(status.as_str()).style(style), area);
+        return;
+    }
+
     let text = if state.show_band_checklist {
         " ↑↓/jk:move  Space:toggle  Enter:confirm  Esc/q:cancel"
     } else {
         match state.focus {
-            Focus::Config => " ↑↓/jk:select  ←→/hl:change  r:run  i:info  Tab:→results  q:quit",
-            Focus::Results => " ↑↓/jk:scroll  PgUp/Dn:page  r:run  i:info  Tab:→config   q:quit",
+            Focus::Config => {
+                " ↑↓/jk:select  ←→/hl:change  r:run  e:csv  E:json  i:info  Tab:→results  q:quit"
+            }
+            Focus::Results => {
+                " ↑↓/jk:scroll  PgUp/Dn:page  r:run  e:csv  E:json  i:info  Tab:→config   q:quit"
+            }
         }
     };
     let para = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
