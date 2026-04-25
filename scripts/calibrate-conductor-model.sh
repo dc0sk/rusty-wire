@@ -26,7 +26,7 @@ if [[ ! -f "$DATA_FILE" ]]; then
   exit 1
 fi
 
-if ! head -n 1 "$DATA_FILE" | grep -Eq '^diameter_mm,length_factor$'; then
+if ! head -n 1 "$DATA_FILE" | grep -Eq '^[[:space:]]*diameter_mm[[:space:]]*,[[:space:]]*length_factor[[:space:]]*$'; then
   echo "Error: CSV header must be exactly: diameter_mm,length_factor" >&2
   exit 1
 fi
@@ -39,15 +39,29 @@ BEGIN {
   min_d = 1e9
   max_d = 0.0
 }
+function trim(s,    t) {
+  t = s
+  gsub(/^[[:space:]]+|[[:space:]]+$/, "", t)
+  return t
+}
 NR == 1 { next }
 {
+  # Allow empty lines and comment lines.
+  raw = $0
+  if (raw ~ /^[[:space:]]*$/) {
+    next
+  }
+  if (raw ~ /^[[:space:]]*#/) {
+    next
+  }
+
   if (NF != 2) {
     printf("Error: malformed row %d\n", NR) > "/dev/stderr"
     exit 2
   }
 
-  d = $1 + 0.0
-  y = $2 + 0.0
+  d = trim($1) + 0.0
+  y = trim($2) + 0.0
 
   if (d <= 0.0) {
     printf("Error: diameter must be > 0 at row %d\n", NR) > "/dev/stderr"

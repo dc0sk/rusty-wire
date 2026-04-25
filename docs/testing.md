@@ -5,6 +5,7 @@ Rusty Wire uses three test layers:
 - Rust tests via `cargo test` (unit + integration)
 - `scripts/test-itu-region-bands.sh` for region-band regression checks
 - `scripts/test-multi-optima.sh` for non-resonant multi-optima regression sweeps
+- `scripts/test-nec-calibration.sh` for conductor-calibration regression checks
 
 ## Primary Command
 
@@ -79,6 +80,20 @@ Run:
 ```
 
 Checks listed ranges for Regions 1, 2, and 3.
+
+## Script: NEC Calibration Regression
+
+Run:
+
+```bash
+./scripts/test-nec-calibration.sh
+```
+
+Checks:
+
+- template dataset fit stays at documented values (`k = 0.011542`, `RMSE = 0.000000`)
+- parser accepts blank lines and `#` comment lines in calibration CSV input
+- malformed rows are rejected with non-zero exit
 
 ### Multi-optima sweep
 
