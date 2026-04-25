@@ -41,6 +41,12 @@ Integration tests live in `tests/cli_integration.rs` and validate real binary be
 
 These tests are intentionally high-level so that clap parsing and the real CLI flow are both covered.
 
+## Future Validation Idea
+
+- Add an advise-mode cross-tool validation script that calls `fnec-rust` for the top-ranked wire + transformer candidates.
+- Record per-candidate sustainability status (for example: validated, warning, rejected) based on agreed efficiency/thermal thresholds.
+- Use this as a regression guard when optimizer scoring weights or practical-limit coefficients are changed.
+
 ## Script: Multi-Optima Sweep
 
 Run:
