@@ -254,9 +254,9 @@ struct TuiState {
 }
 
 impl TuiState {
-    fn new() -> Self {
+    fn new(band_preset_config: Option<&str>) -> Self {
         let app = AppState::default();
-        let (band_presets, preset_status) = load_tui_band_presets();
+        let (band_presets, preset_status) = load_tui_band_presets(band_preset_config);
         // Derive preset indices from the default AppConfig values.
         let vf = app.config.velocity_factor;
         let vf_idx = VF_PRESETS
@@ -1170,7 +1170,7 @@ fn restore_terminal(terminal: &mut Term) -> Result<(), Box<dyn std::error::Error
 ///
 /// Sets up the crossterm/ratatui terminal, runs the event loop until the
 /// user quits, then restores the terminal.
-pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(band_preset_config: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
     // Panic hook: always restore the terminal before printing the panic message.
     let original_hook = panic::take_hook();
     panic::set_hook(Box::new(move |info| {
@@ -1180,7 +1180,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     }));
 
     let mut terminal = setup_terminal()?;
-    let mut state = TuiState::new();
+    let mut state = TuiState::new(band_preset_config);
 
     // Run an initial calculation so the results panel is populated immediately.
     state.run_calculation();
@@ -1203,25 +1203,26 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn load_tui_band_presets() -> (Vec<BandPresetChoice>, Option<String>) {
+fn load_tui_band_presets(
+    band_preset_config: Option<&str>,
+) -> (Vec<BandPresetChoice>, Option<String>) {
     let mut presets: Vec<BandPresetChoice> = BUILTIN_BAND_PRESETS
         .iter()
         .map(|(label, selection)| BandPresetChoice::named(*label, *selection))
         .collect();
     let mut status = None;
+    let preset_path = band_preset_config.unwrap_or(DEFAULT_BAND_PRESET_CONFIG);
+    let should_attempt_load = band_preset_config.is_some() || Path::new(preset_path).exists();
 
-    if Path::new(DEFAULT_BAND_PRESET_CONFIG).exists() {
-        match load_named_presets(DEFAULT_BAND_PRESET_CONFIG) {
+    if should_attempt_load {
+        match load_named_presets(preset_path) {
             Ok(named) => {
                 presets.extend(named.into_iter().map(|(name, selection)| {
                     BandPresetChoice::named(format!("Preset: {name}"), selection)
                 }));
             }
             Err(err) => {
-                status = Some(format!(
-                    "Ignored {} preset file: {err}",
-                    DEFAULT_BAND_PRESET_CONFIG
-                ));
+                status = Some(format!("Ignored {preset_path} preset file: {err}"));
             }
         }
     }

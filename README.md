@@ -225,13 +225,17 @@ See [docs/testing.md](docs/testing.md) for the complete test strategy.
 cargo run --bin tui
 # or, after cargo build --release:
 ./target/release/rusty-wire-tui
+# load named presets from an alternate file:
+cargo run --bin tui -- --bands-config ./profiles/bands.toml
 ```
 
 The TUI provides a two-panel layout — configuration on the left, results on the
-right — and requires no command-line flags. Configuration fields cycle through
-presets with ←/→; results scroll with ↑↓ or PgUp/PgDn. If a `bands.toml` file
-is present in the current working directory, its named presets are added to the
-`Bands` field automatically. Press `r` to recalculate, `q` to quit.
+right — and requires no command-line flags for the default experience.
+Configuration fields cycle through presets with ←/→; results scroll with ↑↓ or
+PgUp/PgDn. If a `bands.toml` file is present in the current working directory,
+its named presets are added to the `Bands` field automatically. You can also
+override the preset file at startup with `--bands-config <path>`. Press `r` to
+recalculate, `q` to quit.
 
 Screenshot capture and placement checklist: [docs/tui-screenshots.md](docs/tui-screenshots.md).
 
