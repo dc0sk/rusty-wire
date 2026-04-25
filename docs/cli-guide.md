@@ -64,6 +64,7 @@ It lets you:
 - Choose transformer ratio
 - Configure non-resonant wire windows interactively
 - Export results as CSV (`e`) or JSON (`E`) directly from the TUI
+- Export results as CSV (`e`), JSON (`E`), Markdown (`m`), or plain text (`t`) directly from the TUI
 
 **TUI keybindings:**
 
@@ -76,6 +77,8 @@ It lets you:
 | `r` / `Enter` | Run calculation |
 | `e` | Export results as CSV (`rusty-wire-results.csv`) |
 | `E` | Export results as JSON (`rusty-wire-results.json`) |
+| `m` | Export results as Markdown (`rusty-wire-results.md`) |
+| `t` | Export results as plain text (`rusty-wire-results.txt`) |
 | `i` / `?` | Toggle project info popup |
 | `Tab` | Toggle focus between config and results panels |
 | `PgUp` / `PgDn` | Scroll results (results panel focused) |
