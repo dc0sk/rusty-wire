@@ -7,6 +7,12 @@ Rusty Wire uses three test layers:
 - `scripts/test-multi-optima.sh` for non-resonant multi-optima regression sweeps
 - `scripts/test-nec-calibration.sh` for conductor-calibration regression checks
 
+All of the above can be run together:
+
+```bash
+./scripts/test-all.sh
+```
+
 ## Primary Command
 
 ```bash
@@ -109,7 +115,13 @@ Environment variables for the sweep script:
 
 ## Recommended Workflow
 
-Default pre-push verification:
+Full suite (format + compile + unit + all regression scripts):
+
+```bash
+./scripts/test-all.sh
+```
+
+Default pre-push verification (Rust only):
 
 ```bash
 cargo fmt
@@ -137,4 +149,11 @@ When changing non-resonant optimization behavior:
 ```bash
 cargo test
 ./scripts/test-multi-optima.sh
+```
+
+When changing conductor-diameter correction constants:
+
+```bash
+cargo test
+./scripts/test-nec-calibration.sh
 ```

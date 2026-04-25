@@ -206,10 +206,13 @@ For formulas and optimizer objective functions see [docs/math.md](docs/math.md).
 ## Testing
 
 ```bash
-# Full unit + integration suite (296 tests)
+# Full suite — format gate, compile gate, unit tests, all regression scripts
+./scripts/test-all.sh
+
+# Unit + integration suite only (296 tests)
 cargo test
 
-# Regression scripts
+# Individual regression scripts
 ./scripts/test-multi-optima.sh
 ./scripts/test-itu-region-bands.sh
 ./scripts/test-nec-calibration.sh
