@@ -1370,6 +1370,69 @@ mod tests {
     }
 
     #[test]
+    fn enter_on_custom_bands_opens_checklist_instead_of_running() {
+        let mut state = TuiState::new(None);
+        state.focus = Focus::Config;
+        state.field_idx = ConfigField::ALL
+            .iter()
+            .position(|field| *field == ConfigField::Bands)
+            .expect("Bands field should exist");
+        state.band_preset_idx = state.band_presets.len() - 1;
+        state.results_scroll = 7;
+
+        state.handle_key(press(KeyCode::Enter));
+
+        assert!(state.show_band_checklist);
+        assert_eq!(state.results_scroll, 7);
+    }
+
+    #[test]
+    fn enter_on_non_custom_field_runs_calculation_and_resets_scroll() {
+        let mut state = TuiState::new(None);
+        state.focus = Focus::Config;
+        state.field_idx = ConfigField::ALL
+            .iter()
+            .position(|field| *field == ConfigField::Mode)
+            .expect("Mode field should exist");
+        state.results_scroll = 9;
+
+        state.handle_key(press(KeyCode::Enter));
+
+        assert!(!state.show_band_checklist);
+        assert_eq!(state.results_scroll, 0);
+        assert!(state.app.results.is_some());
+    }
+
+    #[test]
+    fn enter_in_results_focus_runs_calculation_even_if_custom_bands_selected() {
+        let mut state = TuiState::new(None);
+        state.focus = Focus::Results;
+        state.field_idx = ConfigField::ALL
+            .iter()
+            .position(|field| *field == ConfigField::Bands)
+            .expect("Bands field should exist");
+        state.band_preset_idx = state.band_presets.len() - 1;
+        state.results_scroll = 6;
+
+        state.handle_key(press(KeyCode::Enter));
+
+        assert!(!state.show_band_checklist);
+        assert_eq!(state.results_scroll, 0);
+        assert!(state.app.results.is_some());
+    }
+
+    #[test]
+    fn r_key_runs_calculation_and_resets_scroll() {
+        let mut state = TuiState::new(None);
+        state.results_scroll = 11;
+
+        state.handle_key(press(KeyCode::Char('r')));
+
+        assert_eq!(state.results_scroll, 0);
+        assert!(state.app.results.is_some());
+    }
+
+    #[test]
     fn open_band_checklist_prefers_existing_custom_selection() {
         let mut state = TuiState::new(None);
         state.custom_band_indices = vec![2, 5];
