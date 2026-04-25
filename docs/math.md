@@ -237,6 +237,8 @@ $$
 
 For mission-critical designs, use Rusty Wire results as initial conditions and validate with NEC simulation and on-air/instrument measurements.
 
+For the practical calibration workflow (data format and fitting script), see [nec-calibration.md](nec-calibration.md).
+
 ## References
 
 1. ARRL Antenna Book (latest editions): practical dipole, loop, EFHW, OCFD, and inverted-V design constants.
