@@ -16,10 +16,36 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+pub const DEFAULT_FNEC_PASS_MAX_MISMATCH: f64 = 0.25;
+pub const DEFAULT_FNEC_REJECT_MIN_MISMATCH: f64 = 0.60;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValidationStatus {
+    Passed,
+    Warning,
+    Rejected,
+    Skipped,
+    Error,
+}
+
+impl ValidationStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ValidationStatus::Passed => "passed",
+            ValidationStatus::Warning => "warning",
+            ValidationStatus::Rejected => "rejected",
+            ValidationStatus::Skipped => "skipped",
+            ValidationStatus::Error => "error",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ValidationResult {
     /// Whether validation ran successfully.
     pub validated: bool,
+    /// Structured validation status.
+    pub status: ValidationStatus,
     /// Human-readable validation note (e.g., warning or success message).
     pub validation_note: Option<String>,
 }
@@ -29,6 +55,7 @@ impl ValidationResult {
     pub fn success(note: impl Into<String>) -> Self {
         Self {
             validated: true,
+            status: ValidationStatus::Passed,
             validation_note: Some(note.into()),
         }
     }
@@ -37,6 +64,16 @@ impl ValidationResult {
     pub fn warning(note: impl Into<String>) -> Self {
         Self {
             validated: true,
+            status: ValidationStatus::Warning,
+            validation_note: Some(note.into()),
+        }
+    }
+
+    /// Create a rejected validation result (candidate failed threshold policy).
+    pub fn rejected(note: impl Into<String>) -> Self {
+        Self {
+            validated: true,
+            status: ValidationStatus::Rejected,
             validation_note: Some(note.into()),
         }
     }
@@ -45,6 +82,7 @@ impl ValidationResult {
     pub fn skipped(reason: impl Into<String>) -> Self {
         Self {
             validated: false,
+            status: ValidationStatus::Skipped,
             validation_note: Some(reason.into()),
         }
     }
@@ -53,8 +91,23 @@ impl ValidationResult {
     pub fn error(error_msg: impl Into<String>) -> Self {
         Self {
             validated: false,
+            status: ValidationStatus::Error,
             validation_note: Some(error_msg.into()),
         }
+    }
+}
+
+fn classify_mismatch(
+    mismatch: f64,
+    pass_max_mismatch: f64,
+    reject_min_mismatch: f64,
+) -> ValidationStatus {
+    if mismatch >= reject_min_mismatch {
+        ValidationStatus::Rejected
+    } else if mismatch <= pass_max_mismatch {
+        ValidationStatus::Passed
+    } else {
+        ValidationStatus::Warning
     }
 }
 
@@ -129,11 +182,14 @@ fn generate_dipole_nec_deck(
 ///
 /// # Returns
 /// ValidationResult with status and optional note.
-pub fn validate_candidate(
+/// Validate using caller-provided mismatch thresholds.
+pub fn validate_candidate_with_thresholds(
     length_m: f64,
     frequency_mhz: f64,
     height_m: f64,
     temp_dir: &str,
+    pass_max_mismatch: f64,
+    reject_min_mismatch: f64,
 ) -> ValidationResult {
     // Check if fnec is available
     if !fnec_available() {
@@ -182,10 +238,17 @@ pub fn validate_candidate(
             im,
             mismatch
         );
-        if mismatch > 0.5 {
-            ValidationResult::warning(format!("High mismatch: {}", note))
-        } else {
-            ValidationResult::success(note)
+        match classify_mismatch(mismatch, pass_max_mismatch, reject_min_mismatch) {
+            ValidationStatus::Passed => ValidationResult::success(note),
+            ValidationStatus::Warning => {
+                ValidationResult::warning(format!("Moderate mismatch: {}", note))
+            }
+            ValidationStatus::Rejected => {
+                ValidationResult::rejected(format!("Rejected due to high mismatch: {}", note))
+            }
+            ValidationStatus::Skipped | ValidationStatus::Error => {
+                ValidationResult::error("unexpected validation status")
+            }
         }
     } else {
         ValidationResult::warning("Could not parse impedance from fnec output".to_string())
@@ -252,6 +315,7 @@ mod tests {
     fn test_validation_result_success() {
         let result = ValidationResult::success("Test success");
         assert!(result.validated);
+        assert_eq!(result.status, ValidationStatus::Passed);
         assert_eq!(result.validation_note, Some("Test success".to_string()));
     }
 
@@ -259,7 +323,31 @@ mod tests {
     fn test_validation_result_skipped() {
         let result = ValidationResult::skipped("fnec not found");
         assert!(!result.validated);
+        assert_eq!(result.status, ValidationStatus::Skipped);
         assert!(result.validation_note.is_some());
+    }
+
+    #[test]
+    fn test_validation_result_rejected() {
+        let result = ValidationResult::rejected("Rejected");
+        assert!(result.validated);
+        assert_eq!(result.status, ValidationStatus::Rejected);
+    }
+
+    #[test]
+    fn test_classify_mismatch_thresholds() {
+        assert_eq!(
+            classify_mismatch(0.10, 0.25, 0.60),
+            ValidationStatus::Passed
+        );
+        assert_eq!(
+            classify_mismatch(0.40, 0.25, 0.60),
+            ValidationStatus::Warning
+        );
+        assert_eq!(
+            classify_mismatch(0.70, 0.25, 0.60),
+            ValidationStatus::Rejected
+        );
     }
 
     #[test]

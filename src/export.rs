@@ -774,13 +774,17 @@ pub fn to_txt(
 
 pub fn to_advise_csv(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
     let mut out = String::from(
-        "rank,ratio,recommended_length_m,recommended_length_ft,clearance_pct,estimated_efficiency_pct,mismatch_loss_db,average_length_shift_pct,score,validated,validation_note,assumed_feedpoint_ohm\n",
+        "rank,ratio,recommended_length_m,recommended_length_ft,clearance_pct,estimated_efficiency_pct,mismatch_loss_db,average_length_shift_pct,score,validated,validation_status,validation_note,assumed_feedpoint_ohm\n",
     );
     for (idx, c) in candidates.iter().enumerate() {
         let note = c.validation_note.as_deref().unwrap_or("");
         let escaped_note = csv_escape(note);
+        let status = c
+            .validation_status
+            .map(|value| value.as_str())
+            .unwrap_or("");
         out.push_str(&format!(
-            "{},{},{:.2},{:.2},{:.2},{:.2},{:.3},{:.2},{:.2},{},\"{}\",{:.0}\n",
+            "{},{},{:.2},{:.2},{:.2},{:.2},{:.3},{:.2},{:.2},{},\"{}\",\"{}\",{:.0}\n",
             idx + 1,
             c.ratio.as_label(),
             c.recommended_length_m,
@@ -791,6 +795,7 @@ pub fn to_advise_csv(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate])
             c.average_length_shift_pct,
             c.score,
             c.validated,
+            status,
             escaped_note,
             assumed_feedpoint_ohm,
         ));
@@ -812,8 +817,12 @@ pub fn to_advise_json(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]
             .as_ref()
             .map(|note| format!("\"{}\"", json_escape(note)))
             .unwrap_or_else(|| "null".to_string());
+        let status_json = c
+            .validation_status
+            .map(|status| format!("\"{}\"", status.as_str()))
+            .unwrap_or_else(|| "null".to_string());
         out.push_str(&format!(
-            "    {{\"rank\": {}, \"ratio\": \"{}\", \"recommended_length_m\": {:.2}, \"recommended_length_ft\": {:.2}, \"clearance_pct\": {:.2}, \"estimated_efficiency_pct\": {:.2}, \"mismatch_loss_db\": {:.3}, \"average_length_shift_pct\": {:.2}, \"score\": {:.2}, \"validated\": {}, \"validation_note\": {}}}{}\n",
+            "    {{\"rank\": {}, \"ratio\": \"{}\", \"recommended_length_m\": {:.2}, \"recommended_length_ft\": {:.2}, \"clearance_pct\": {:.2}, \"estimated_efficiency_pct\": {:.2}, \"mismatch_loss_db\": {:.3}, \"average_length_shift_pct\": {:.2}, \"score\": {:.2}, \"validated\": {}, \"validation_status\": {}, \"validation_note\": {}}}{}\n",
             idx + 1,
             c.ratio.as_label(),
             c.recommended_length_m,
@@ -824,6 +833,7 @@ pub fn to_advise_json(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]
             c.average_length_shift_pct,
             c.score,
             c.validated,
+            status_json,
             note_json,
             comma,
         ));
@@ -838,9 +848,13 @@ pub fn to_advise_markdown(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandid
         "Assumed feedpoint impedance: {:.0} ohm\n\n",
         assumed_feedpoint_ohm
     ));
-    out.push_str("| Rank | Ratio | Wire (m) | Wire (ft) | Clearance (%) | Efficiency (%) | Mismatch Loss (dB) | Shift (%) | Score | Validated | Validation Note |\n");
-    out.push_str("|------|-------|----------|-----------|---------------|----------------|--------------------|-----------|-------|-----------|-----------------|\n");
+    out.push_str("| Rank | Ratio | Wire (m) | Wire (ft) | Clearance (%) | Efficiency (%) | Mismatch Loss (dB) | Shift (%) | Score | Validated | Validation Status | Validation Note |\n");
+    out.push_str("|------|-------|----------|-----------|---------------|----------------|--------------------|-----------|-------|-----------|-------------------|-----------------|\n");
     for (idx, c) in candidates.iter().enumerate() {
+        let status = c
+            .validation_status
+            .map(|value| value.as_str())
+            .unwrap_or("");
         let note = c
             .validation_note
             .as_deref()
@@ -848,7 +862,7 @@ pub fn to_advise_markdown(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandid
             .replace('|', "\\|")
             .replace('\n', " ");
         out.push_str(&format!(
-            "| {} | {} | {:.2} | {:.2} | {:.2} | {:.2} | {:.3} | {:.2} | {:.2} | {} | {} |\n",
+            "| {} | {} | {:.2} | {:.2} | {:.2} | {:.2} | {:.3} | {:.2} | {:.2} | {} | {} | {} |\n",
             idx + 1,
             c.ratio.as_label(),
             c.recommended_length_m,
@@ -859,6 +873,7 @@ pub fn to_advise_markdown(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandid
             c.average_length_shift_pct,
             c.score,
             if c.validated { "yes" } else { "no" },
+            status,
             note,
         ));
     }
@@ -892,6 +907,9 @@ pub fn to_advise_txt(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate])
             "    fnec validated {}\n",
             if c.validated { "yes" } else { "no" }
         ));
+        if let Some(status) = c.validation_status {
+            out.push_str(&format!("    fnec status: {}\n", status.as_str()));
+        }
         if let Some(note) = &c.validation_note {
             out.push_str(&format!("    fnec note: {}\n", note.replace('\n', " ")));
         }
@@ -1039,6 +1057,7 @@ mod tests {
     use super::*;
     use crate::app::ExportFormat;
     use crate::calculations::TransformerRatio;
+    use crate::fnec_validation::ValidationStatus;
 
     #[test]
     fn validate_export_path_accepts_relative_paths() {
@@ -1092,6 +1111,7 @@ mod tests {
                 average_length_shift_pct: 1.4,
                 score: 94.7,
                 validated: true,
+                validation_status: Some(ValidationStatus::Passed),
                 validation_note: Some("NEC cross-check OK".to_string()),
             },
             AdviseCandidate {
@@ -1104,6 +1124,7 @@ mod tests {
                 average_length_shift_pct: 1.9,
                 score: 89.1,
                 validated: false,
+                validation_status: Some(ValidationStatus::Skipped),
                 validation_note: Some("fnec-rust not found in PATH".to_string()),
             },
         ]
@@ -1114,9 +1135,10 @@ mod tests {
         let csv = to_advise_csv(450.0, &sample_advise_candidates());
 
         assert!(csv.contains("validated"));
+        assert!(csv.contains("validation_status"));
         assert!(csv.contains("validation_note"));
-        assert!(csv.contains("true,\"NEC cross-check OK\""));
-        assert!(csv.contains("false,\"fnec-rust not found in PATH\""));
+        assert!(csv.contains("true,\"passed\",\"NEC cross-check OK\""));
+        assert!(csv.contains("false,\"skipped\",\"fnec-rust not found in PATH\""));
     }
 
     #[test]
@@ -1125,6 +1147,8 @@ mod tests {
 
         assert!(json.contains("\"validated\": true"));
         assert!(json.contains("\"validated\": false"));
+        assert!(json.contains("\"validation_status\": \"passed\""));
+        assert!(json.contains("\"validation_status\": \"skipped\""));
         assert!(json.contains("\"validation_note\": \"NEC cross-check OK\""));
         assert!(json.contains("\"validation_note\": \"fnec-rust not found in PATH\""));
     }
@@ -1133,9 +1157,9 @@ mod tests {
     fn advise_markdown_includes_validation_columns() {
         let markdown = to_advise_markdown(450.0, &sample_advise_candidates());
 
-        assert!(markdown.contains("| Validated | Validation Note |"));
+        assert!(markdown.contains("| Validated | Validation Status | Validation Note |"));
         assert!(markdown.contains("| 1 | 1:9"));
-        assert!(markdown.contains("| yes | NEC cross-check OK |"));
+        assert!(markdown.contains("| yes | passed | NEC cross-check OK |"));
     }
 
     #[test]
@@ -1144,6 +1168,7 @@ mod tests {
 
         assert!(txt.contains("fnec validated yes"));
         assert!(txt.contains("fnec validated no"));
+        assert!(txt.contains("fnec status: passed"));
         assert!(txt.contains("fnec note: NEC cross-check OK"));
     }
 }

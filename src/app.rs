@@ -187,6 +187,8 @@ pub struct AdviseCandidate {
     pub score: f64,
     /// Whether fnec-rust validation was performed (if available).
     pub validated: bool,
+    /// Structured validation status for pass/warn/reject handling.
+    pub validation_status: Option<crate::fnec_validation::ValidationStatus>,
     /// Optional validation note (e.g., cross-check result or reason skipped).
     pub validation_note: Option<String>,
 }
@@ -257,6 +259,20 @@ pub fn optimize_transformer_candidates(config: &AppConfig) -> TransformerOptimiz
 }
 
 pub fn build_advise_candidates(config: &AppConfig, limit: usize) -> AdviseView {
+    build_advise_candidates_with_thresholds(
+        config,
+        limit,
+        crate::fnec_validation::DEFAULT_FNEC_PASS_MAX_MISMATCH,
+        crate::fnec_validation::DEFAULT_FNEC_REJECT_MIN_MISMATCH,
+    )
+}
+
+pub fn build_advise_candidates_with_thresholds(
+    config: &AppConfig,
+    limit: usize,
+    pass_max_mismatch: f64,
+    reject_min_mismatch: f64,
+) -> AdviseView {
     let optimizer = optimize_transformer_candidates(config);
     let non_res_cfg = NonResonantSearchConfig {
         min_len_m: config.wire_min_m,
@@ -284,6 +300,7 @@ pub fn build_advise_candidates(config: &AppConfig, limit: usize) -> AdviseView {
                 average_length_shift_pct: ranked.average_length_shift_pct,
                 score: ranked.score,
                 validated: false,
+                validation_status: None,
                 validation_note: None,
             });
         }
@@ -295,13 +312,16 @@ pub fn build_advise_candidates(config: &AppConfig, limit: usize) -> AdviseView {
             // Use first selected band center as a representative frequency.
             if let Some(&band_idx) = config.band_indices.first() {
                 if let Some(band) = get_band_by_index_for_region(band_idx, config.itu_region) {
-                    let result = crate::fnec_validation::validate_candidate(
+                    let result = crate::fnec_validation::validate_candidate_with_thresholds(
                         candidate.recommended_length_m,
                         band.freq_center_mhz,
                         config.antenna_height_m,
                         "/tmp",
+                        pass_max_mismatch,
+                        reject_min_mismatch,
                     );
                     candidate.validated = result.validated;
+                    candidate.validation_status = Some(result.status);
                     candidate.validation_note = result.validation_note;
                 }
             }

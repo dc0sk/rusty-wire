@@ -618,9 +618,50 @@ fn advise_json_export_includes_validation_fields() {
 
     let json = fs::read_to_string(dir.join("advise.json")).expect("failed to read json export");
     assert!(json.contains("\"validated\":"));
+    assert!(json.contains("\"validation_status\":"));
     assert!(json.contains("\"validation_note\":"));
 
     let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn advise_rejects_invalid_fnec_pass_threshold_range() {
+    let output = binary()
+        .args([
+            "--advise",
+            "--bands",
+            "40m,20m",
+            "--fnec-pass-max-mismatch",
+            "1.2",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("--fnec-pass-max-mismatch must be between 0.0 and 1.0"));
+}
+
+#[test]
+fn advise_rejects_invalid_fnec_threshold_order() {
+    let output = binary()
+        .args([
+            "--advise",
+            "--bands",
+            "40m,20m",
+            "--fnec-pass-max-mismatch",
+            "0.7",
+            "--fnec-reject-min-mismatch",
+            "0.6",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains(
+        "--fnec-pass-max-mismatch (0.700) must be less than --fnec-reject-min-mismatch (0.600)"
+    ));
 }
 
 #[test]
