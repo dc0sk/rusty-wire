@@ -221,7 +221,7 @@ F_g(\mathrm{poor}) = 0.88,\quad F_g(\mathrm{average}) = 1.00,\quad F_g(\mathrm{g
 $$
 
 $$
-	ext{skip}_{\min,\max} = F_h\cdot F_g\cdot \text{skip}^{\text{band-table}}_{\min,\max}
+\text{skip}_{\min,\max} = F_h\cdot F_g\cdot \text{skip}^{\text{band-table}}_{\min,\max}
 $$
 
 Current conductor-diameter correction for resonant-length estimation
