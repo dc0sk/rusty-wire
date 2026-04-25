@@ -4,6 +4,11 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+### Test Coverage
+- **PR #48**: TUI global key-event guards (2 lib tests)
+  - Non-Press event rejection (Release events ignored)
+  - Esc-without-popup quit behavior
+
 ### Added
 - **TUI export**: press `e` (CSV), `E` (JSON), `m` (Markdown), or `t` (plain text) to export results directly from the TUI; a status message is shown in the hints bar after each export attempt.
 - **TUI step-size config field**: the `Step` field in the TUI config panel lets you cycle through search-step presets (0.01, 0.02, 0.05, 0.10, 0.25, 0.50, 1.00 m) with ←/→, matching the CLI `--step` flag.
