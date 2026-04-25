@@ -28,6 +28,7 @@ All notable changes to Rusty Wire are documented here.
 - **TUI regression coverage**: added tests for documented hints-bar keybinding text, About popup metadata content, info-popup toggle/close behavior, and preservation of the trailing `Custom…` band-preset entry.
 - **TUI checklist/export-status coverage**: added tests for custom-band checklist seeding, confirm/cancel behavior, no-results export warnings, and clearing the status banner on the next keypress.
 - **TUI preset-transition coverage**: added tests for named-band preset cycling, custom-band fallback reuse, frequency preset forward/backward wrap behavior, and the `Use bands` reset path.
+- **TUI focus/scroll coverage**: added tests for `Tab` focus switching, config-field navigation wrap behavior, and results-panel line/page scrolling with saturating bounds.
 
 ### Changed
 - **Roadmap sequencing**: captured `advise` feature direction (candidate ranking for wire length + balun/unun choice with efficiency-style metadata) and marked balun optimizer groundwork as the prerequisite milestone.
