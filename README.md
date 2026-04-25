@@ -243,9 +243,9 @@ recalculate, `q` to quit.
 
 Screenshot capture and placement checklist: [docs/tui-screenshots.md](docs/tui-screenshots.md).
 
-![TUI default layout placeholder](docs/images/tui/01-default-layout.png)
+![TUI default layout](docs/images/tui/01-default-layout.png)
 
-![TUI about popup placeholder](docs/images/tui/04-about-popup.png)
+![TUI about popup](docs/images/tui/04-about-popup.png)
 
 | Key | Action |
 |-----|--------|
