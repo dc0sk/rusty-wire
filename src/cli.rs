@@ -1981,4 +1981,77 @@ mod tests {
         // Export prompt should appear (confirming calculation completed)
         assert!(rendered.contains("Export results?"));
     }
+
+    #[test]
+    fn run_interactive_with_io_reuses_last_defaults_on_followup_quick_calculation() {
+        let input_bytes = concat!(
+            "\n",
+            "3\n",
+            "20m\n",
+            "2\n",
+            "e\n",
+            "0.85\n",
+            "12\n",
+            "good\n",
+            "3.5\n",
+            "1:49\n",
+            "\n",
+            "9\n",
+            "27\n",
+            "m\n",
+            "none\n",
+            "3\n",
+            "\n",
+            "\n",
+            "\n",
+            "\n",
+            "\n",
+            "\n",
+            "\n",
+            "\n",
+            "\n",
+            "\n",
+            "\n",
+            "none\n",
+            "6\n"
+        );
+        let mut input = Cursor::new(input_bytes.as_bytes().to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Enter one band (e.g. 20m) [20m]: "));
+        assert!(rendered.contains("Select calculation mode (1-2) [2]: "));
+        assert!(rendered.contains("Select antenna model (d/e/l/v/o/t) [e]: "));
+        assert!(rendered.contains("Enter velocity factor (0.5-1.0) [0.85]: "));
+        assert!(rendered.contains("Antenna height in meters (7/10/12) [12]: "));
+        assert!(rendered.contains("Ground class (poor/average/good) [good]: "));
+        assert!(rendered.contains("Conductor diameter in mm (1.0-4.0) [3.5]: "));
+        assert!(rendered.contains("Enter transformer ratio (e.g. 1:9, recommended) [1:49]: "));
+        assert!(rendered.contains("Wire min length in meters (Enter for 9.0): "));
+        assert!(rendered.contains("Wire max length in meters (Enter for 27.0): "));
+        assert!(rendered.contains("Select display units (m/ft/both) [m]: "));
+    }
+
+    #[test]
+    fn interactive_export_prompt_requires_at_least_one_format_when_only_commas() {
+        let mut input = Cursor::new(b" , , \n".to_vec());
+        let mut output = Vec::new();
+        let results = AppResults {
+            calculations: Vec::new(),
+            recommendation: None,
+            optima: Vec::new(),
+            window_optima: Vec::new(),
+            resonant_compromises: Vec::new(),
+            config: AppConfig::default(),
+            skipped_band_indices: Vec::new(),
+        };
+
+        let exports = interactive_export_prompt(&mut input, &mut output, &results);
+
+        assert!(exports.is_empty());
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("--export requires at least one format; skipping export."));
+    }
 }
