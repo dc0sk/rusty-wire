@@ -13,6 +13,7 @@ All notable changes to Rusty Wire are documented here.
   - Esc-without-popup quit behavior
 
 ## [Unreleased]
+- **TUI screenshot refresh tooling**: added `tui-doc-snapshots` to render a deterministic HTML gallery for the five canonical TUI documentation screenshots; README and CLI guide now reference non-placeholder screenshot embeds.
 - **NEC template CSV expanded**: `docs/data/nec_conductor_reference.csv` grows from 3 to 7 data points (1.0–4.0 mm at 0.5 mm intervals); adds comment header; regression script updated to verify row count.
 - **CI regression runner**: added `scripts/test-all.sh` to run the full suite (format gate, compile gate, cargo test, ITU bands, multi-optima, NEC calibration) with a single command.
 - **NEC calibration hardening**: `scripts/calibrate-conductor-model.sh` now tolerates blank lines and `#` comments in CSV inputs while preserving strict malformed-row validation.

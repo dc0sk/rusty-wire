@@ -49,3 +49,4 @@ Store screenshots in:
 - Keep a light background for readability in markdown renderers.
 - Redact local file paths or shell history if visible.
 - Re-capture after any TUI layout, keybinding, or info-popup content change.
+- Regenerate the HTML gallery with `cargo run --bin tui-doc-snapshots`, then capture each section by id (`01-default-layout` through `05-results-scroll`) into the canonical PNG paths.

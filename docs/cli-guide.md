@@ -88,11 +88,11 @@ When a `bands.toml` file exists in the current working directory, the TUI adds i
 
 For TUI documentation screenshots (exact capture list and where to place each image), see [tui-screenshots.md](tui-screenshots.md).
 
-![TUI trap dipole results placeholder](images/tui/02-trap-dipole-results.png)
+![TUI trap dipole results](images/tui/02-trap-dipole-results.png)
 
-![TUI non-resonant window placeholder](images/tui/03-non-resonant-window.png)
+![TUI non-resonant window](images/tui/03-non-resonant-window.png)
 
-![TUI results scroll placeholder](images/tui/05-results-scroll.png)
+![TUI results scroll](images/tui/05-results-scroll.png)
 
 ### Interactive Mode: Per-Session Defaults
 

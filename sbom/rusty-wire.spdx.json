@@ -50,6 +50,20 @@
         "SOURCE",
         "TEXT"
       ]
+    },
+    {
+      "SPDXID": "SPDXRef-File-tui-doc-snapshots",
+      "checksums": [
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "0ccd961036d594bb111ac0b71d773862429dab23"
+        }
+      ],
+      "fileName": "./Cargo.lock",
+      "fileTypes": [
+        "SOURCE",
+        "TEXT"
+      ]
     }
   ],
   "name": "rusty-wire",
@@ -1603,6 +1617,11 @@
       "spdxElementId": "SPDXRef-DOCUMENT"
     },
     {
+      "relatedSpdxElement": "SPDXRef-File-tui-doc-snapshots",
+      "relationshipType": "DESCRIBES",
+      "spdxElementId": "SPDXRef-DOCUMENT"
+    },
+    {
       "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.6.0",
       "relationshipType": "GENERATED_FROM",
       "spdxElementId": "SPDXRef-File-rusty-wire"
@@ -1616,6 +1635,11 @@
       "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.6.0",
       "relationshipType": "GENERATED_FROM",
       "spdxElementId": "SPDXRef-File-tui"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.6.0",
+      "relationshipType": "GENERATED_FROM",
+      "spdxElementId": "SPDXRef-File-tui-doc-snapshots"
     },
     {
       "relatedSpdxElement": "SPDXRef-Package-anstyle-1.0.14",

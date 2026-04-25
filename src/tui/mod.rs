@@ -38,6 +38,8 @@
 //! | `Ctrl-C` | Quit |
 //! | `PgUp` / `PgDn` | Scroll results (results panel focused) |
 
+use std::fmt::Write as _;
+use std::fs;
 use std::io::{self, Stdout};
 use std::panic;
 use std::path::Path;
@@ -47,7 +49,8 @@ use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
-use ratatui::backend::CrosstermBackend;
+use ratatui::backend::{CrosstermBackend, TestBackend};
+use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -1155,6 +1158,12 @@ fn render_band_checklist(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
 
 type Term = Terminal<CrosstermBackend<Stdout>>;
 
+struct DocSnapshot {
+    id: &'static str,
+    title: &'static str,
+    html: String,
+}
+
 fn setup_terminal() -> Result<Term, Box<dyn std::error::Error>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -1209,6 +1218,214 @@ pub fn run(band_preset_config: Option<&str>) -> Result<(), Box<dyn std::error::E
 
     restore_terminal(&mut terminal)?;
     Ok(())
+}
+
+/// Render the canonical TUI documentation snapshots to a single HTML gallery.
+///
+/// The generated page is intended for deterministic browser-based PNG capture.
+/// Each snapshot is wrapped in a `<section>` whose `id` matches the canonical
+/// filename stem from `docs/tui-screenshots.md`.
+pub fn write_doc_snapshots_html(output_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let snapshots = vec![
+        DocSnapshot {
+            id: "01-default-layout",
+            title: "Default Layout",
+            html: render_state_html(&build_default_snapshot_state())?,
+        },
+        DocSnapshot {
+            id: "02-trap-dipole-results",
+            title: "Trap Dipole Results",
+            html: render_state_html(&build_trap_dipole_snapshot_state())?,
+        },
+        DocSnapshot {
+            id: "03-non-resonant-window",
+            title: "Non-resonant Window",
+            html: render_state_html(&build_non_resonant_snapshot_state())?,
+        },
+        DocSnapshot {
+            id: "04-about-popup",
+            title: "About Popup",
+            html: render_state_html(&build_about_popup_snapshot_state())?,
+        },
+        DocSnapshot {
+            id: "05-results-scroll",
+            title: "Results Scroll",
+            html: render_state_html(&build_scrolled_results_snapshot_state())?,
+        },
+    ];
+
+    let mut page = String::new();
+    page.push_str(
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Rusty Wire TUI Doc Snapshots</title>\n<style>\n:root { color-scheme: light; }\nbody { margin: 0; padding: 32px; background: linear-gradient(180deg, #f6f4ef 0%, #ece7dc 100%); font-family: \"IBM Plex Sans\", \"Segoe UI\", sans-serif; color: #1f2328; }\nh1 { margin: 0 0 8px; font-size: 28px; }\np { margin: 0 0 24px; max-width: 72ch; line-height: 1.5; }\n.gallery { display: grid; gap: 28px; }\n.snapshot-card { padding: 20px; background: rgba(255,255,255,0.82); border: 1px solid rgba(15,23,42,0.08); border-radius: 18px; box-shadow: 0 16px 40px rgba(15,23,42,0.10); width: fit-content; }\n.snapshot-card h2 { margin: 0 0 12px; font-size: 16px; font-weight: 600; letter-spacing: 0.02em; }\n.terminal { display: inline-block; background: #1f1f1f; border-radius: 10px; box-shadow: 0 16px 32px rgba(0,0,0,0.24); overflow: hidden; }\n.screen { margin: 0; background: #1f1f1f; color: #d4d4d4; font: 20px/1.15 \"DejaVu Sans Mono\", \"Liberation Mono\", monospace; white-space: pre; }\n.line { display: block; height: 1.15em; }\n</style>\n</head>\n<body>\n<h1>Rusty Wire TUI Documentation Snapshots</h1>\n<p>Open this file in the integrated browser and capture each section by id to refresh the canonical PNG assets under <code>docs/images/tui</code>.</p>\n<div class=\"gallery\">\n",
+    );
+
+    for snapshot in snapshots {
+        writeln!(
+            page,
+            "<section class=\"snapshot-card\" id=\"{}\">\n<h2>{}</h2>\n<div class=\"terminal\">\n<pre class=\"screen\">{}</pre>\n</div>\n</section>",
+            snapshot.id, snapshot.title, snapshot.html
+        )?;
+    }
+
+    page.push_str("</div>\n</body>\n</html>\n");
+
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(output_path, page)?;
+    Ok(())
+}
+
+fn build_default_snapshot_state() -> TuiState {
+    let mut state = TuiState::new(None);
+    state.run_calculation();
+    state
+}
+
+fn build_trap_dipole_snapshot_state() -> TuiState {
+    let mut state = TuiState::new(None);
+    state.dispatch(AppAction::SetAntennaModel(Some(AntennaModel::TrapDipole)));
+    state.run_calculation();
+    state
+}
+
+fn build_non_resonant_snapshot_state() -> TuiState {
+    let mut state = TuiState::new(None);
+    state.band_preset_idx = 3;
+    let indices = parse_band_selection(BUILTIN_BAND_PRESETS[3].1, state.app.config.itu_region)
+        .expect("built-in band preset should parse");
+    state.dispatch(AppAction::SetBandIndices(indices));
+    state.dispatch(AppAction::SetAntennaModel(Some(
+        AntennaModel::EndFedHalfWave,
+    )));
+    state.dispatch(AppAction::SetMode(CalcMode::NonResonant));
+    state.run_calculation();
+    state.results_scroll = 28;
+    state
+}
+
+fn build_about_popup_snapshot_state() -> TuiState {
+    let mut state = TuiState::new(None);
+    state.show_info_popup = true;
+    state
+}
+
+fn build_scrolled_results_snapshot_state() -> TuiState {
+    let mut state = build_default_snapshot_state();
+    state.focus = Focus::Results;
+    state.results_scroll = 12;
+    state
+}
+
+fn render_state_html(state: &TuiState) -> Result<String, Box<dyn std::error::Error>> {
+    let width = 120;
+    let height = 30;
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend)?;
+    terminal.draw(|frame| render(frame, state))?;
+    Ok(buffer_to_html(terminal.backend().buffer(), width, height))
+}
+
+fn buffer_to_html(buffer: &Buffer, width: u16, height: u16) -> String {
+    let mut out = String::new();
+
+    for y in 0..height {
+        out.push_str("<span class=\"line\">");
+        for x in 0..width {
+            let cell = &buffer[(x, y)];
+            let style = cell.style();
+            let mut css = format!("color:{};", fg_color_to_css(style.fg));
+            if let Some(bg) = bg_color_to_css(style.bg) {
+                write!(css, "background:{bg};").expect("css rendering should not fail");
+            }
+            if style.add_modifier.contains(Modifier::BOLD) {
+                css.push_str("font-weight:700;");
+            }
+            if style.add_modifier.contains(Modifier::ITALIC) {
+                css.push_str("font-style:italic;");
+            }
+            if style.add_modifier.contains(Modifier::UNDERLINED) {
+                css.push_str("text-decoration:underline;");
+            }
+
+            write!(
+                out,
+                "<span style=\"{}\">{}</span>",
+                css,
+                escape_html(cell.symbol())
+            )
+            .expect("html rendering should not fail");
+        }
+        out.push_str("</span>\n");
+    }
+
+    out
+}
+
+fn fg_color_to_css(color: Option<Color>) -> String {
+    match color.unwrap_or(Color::Reset) {
+        Color::Reset => "#d4d4d4".to_string(),
+        Color::Black => "#1f1f1f".to_string(),
+        Color::Red => "#f87171".to_string(),
+        Color::Green => "#6ee7b7".to_string(),
+        Color::Yellow => "#facc15".to_string(),
+        Color::Blue => "#60a5fa".to_string(),
+        Color::Magenta => "#f472b6".to_string(),
+        Color::Cyan => "#67e8f9".to_string(),
+        Color::Gray => "#9ca3af".to_string(),
+        Color::DarkGray => "#6b7280".to_string(),
+        Color::LightRed => "#fca5a5".to_string(),
+        Color::LightGreen => "#a7f3d0".to_string(),
+        Color::LightYellow => "#fde68a".to_string(),
+        Color::LightBlue => "#93c5fd".to_string(),
+        Color::LightMagenta => "#f9a8d4".to_string(),
+        Color::LightCyan => "#a5f3fc".to_string(),
+        Color::White => "#f3f4f6".to_string(),
+        Color::Rgb(r, g, b) => format!("#{r:02x}{g:02x}{b:02x}"),
+        Color::Indexed(_) => "#d4d4d4".to_string(),
+    }
+}
+
+fn bg_color_to_css(color: Option<Color>) -> Option<String> {
+    match color.unwrap_or(Color::Reset) {
+        Color::Reset => None,
+        other => Some(match other {
+            Color::Reset => unreachable!(),
+            Color::Black => "#1f1f1f".to_string(),
+            Color::Red => "#7f1d1d".to_string(),
+            Color::Green => "#14532d".to_string(),
+            Color::Yellow => "#713f12".to_string(),
+            Color::Blue => "#1d4ed8".to_string(),
+            Color::Magenta => "#831843".to_string(),
+            Color::Cyan => "#155e75".to_string(),
+            Color::Gray => "#4b5563".to_string(),
+            Color::DarkGray => "#374151".to_string(),
+            Color::LightRed => "#991b1b".to_string(),
+            Color::LightGreen => "#166534".to_string(),
+            Color::LightYellow => "#854d0e".to_string(),
+            Color::LightBlue => "#1d4ed8".to_string(),
+            Color::LightMagenta => "#9d174d".to_string(),
+            Color::LightCyan => "#0f766e".to_string(),
+            Color::White => "#6b7280".to_string(),
+            Color::Rgb(r, g, b) => format!("#{r:02x}{g:02x}{b:02x}"),
+            Color::Indexed(_) => "#1f1f1f".to_string(),
+        }),
+    }
+}
+
+fn escape_html(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
 }
 
 fn load_tui_band_presets(
