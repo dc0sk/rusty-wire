@@ -10,6 +10,7 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 - `--transformer-sweep <r1,r2,...>` — like `--velocity-sweep` but over transformer ratios
 - `--freq-list <f1,f2,...>` — multiple explicit frequencies in one run
 - `advise` mode: user provides a target band set and gets ranked wire-length + balun/unun candidates with compact scoring metadata (including estimated efficiency and tradeoff hints)
+- `advise` validation pass with `fnec-rust`: for top-ranked candidates, run a cross-check sweep to flag configurations that are unlikely to be thermally/efficiency sustainable in practical operation
 - `--verbose` / `--dry-run` flags
 - Expand `--info` metadata output with optional runtime/build details
 - YAML and HTML export targets
@@ -48,6 +49,7 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 - Hybrid / multi-section models
 - Ranked transformer recommendation for EFHW (compare 1:49, 1:56, 1:64)
 - Balun/unun optimizer engine: score candidate transformer ratios against selected bands and feed assumptions; this should be implemented before `advise` mode
+- Sustainability gating for advise output: integrate an optional `fnec-rust` verification step that marks candidates as validated, warning, or rejected based on configurable thresholds
 
 ## Practical Limits Follow-up
 
