@@ -114,6 +114,8 @@ rusty-wire --interactive
 - `--bands-config <path>` Preset config path (default: `bands.toml`)
 - `--advise` Print ranked wire + balun/unun candidates with efficiency-style metrics
 - `--validate-with-fnec` With `--advise`, attempt optional fnec-rust cross-validation (if `fnec` is available in `PATH`) and print per-candidate status notes
+- `--fnec-pass-max-mismatch <value>` With `--advise --validate-with-fnec`, mismatch factor at or below this value is marked `passed` (range `0.0..=1.0`, default `0.25`)
+- `--fnec-reject-min-mismatch <value>` With `--advise --validate-with-fnec`, mismatch factor at or above this value is marked `rejected` (range `0.0..=1.0`, default `0.60`)
 - `--mode <resonant|non-resonant>` Calculation mode (default: `resonant`)
 - `--velocity <value>` Velocity factor, valid range `0.50..=1.00` (default: `0.95`)
 - `--height <7|10|12>` Standard antenna height in meters used for height-aware skip estimates (default: `10`)
@@ -168,7 +170,7 @@ You can always override with an explicit ratio.
 
 - `--export <csv,json,markdown,txt>` One or more formats
 - `--output <file>` Output path (single format uses this name; multiple formats use per-format filenames)
-- Advise exports include validation metadata fields: `validated` and `validation_note`
+- Advise exports include validation metadata fields: `validated`, `validation_status`, and `validation_note`
 
 Path safety:
 - Absolute paths are rejected.

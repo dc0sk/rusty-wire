@@ -6,13 +6,13 @@
 /// imports from the core modules that this file needs are for display helpers.
 use crate::app::{
     band_label_for_index, band_listing_display_lines, band_listing_view, build_advise_candidates,
-    execute_request_checked, format_quiet_summary, parse_band_selection, parse_single_band_token,
-    recommended_transformer_ratio, recommended_transformer_ratio_fallback_message,
-    resolve_wire_window_inputs, results_display_document, validate_velocity_sweep,
-    velocity_sweep_display_lines, velocity_sweep_view, AntennaModel, AppConfig, AppRequest,
-    AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_ANTENNA_HEIGHT_M,
-    DEFAULT_BAND_SELECTION, DEFAULT_CONDUCTOR_DIAMETER_MM, DEFAULT_GROUND_CLASS,
-    DEFAULT_ITU_REGION, FEET_TO_METERS,
+    build_advise_candidates_with_thresholds, execute_request_checked, format_quiet_summary,
+    parse_band_selection, parse_single_band_token, recommended_transformer_ratio,
+    recommended_transformer_ratio_fallback_message, resolve_wire_window_inputs,
+    results_display_document, validate_velocity_sweep, velocity_sweep_display_lines,
+    velocity_sweep_view, AntennaModel, AppConfig, AppRequest, AppResults, CalcMode, ExportFormat,
+    UnitSystem, DEFAULT_ANTENNA_HEIGHT_M, DEFAULT_BAND_SELECTION, DEFAULT_CONDUCTOR_DIAMETER_MM,
+    DEFAULT_GROUND_CLASS, DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
 use crate::band_presets::load_preset_selection;
 use crate::bands::{ITURegion, ALL_REGIONS};
@@ -22,6 +22,7 @@ use crate::calculations::{
 };
 use crate::export::{default_advise_output_name, export_advise};
 use crate::export::{default_output_name, export_results, validate_export_path};
+use crate::fnec_validation::{DEFAULT_FNEC_PASS_MAX_MISMATCH, DEFAULT_FNEC_REJECT_MIN_MISMATCH};
 use clap::Parser;
 use std::io::{self, BufRead, Write};
 
@@ -154,6 +155,14 @@ struct Cli {
     /// Validate advise candidates with fnec-rust when available in PATH
     #[arg(long)]
     validate_with_fnec: bool,
+
+    /// Maximum mismatch factor considered a pass for fnec validation (0.0..=1.0)
+    #[arg(long, default_value_t = DEFAULT_FNEC_PASS_MAX_MISMATCH)]
+    fnec_pass_max_mismatch: f64,
+
+    /// Minimum mismatch factor considered rejected for fnec validation (0.0..=1.0)
+    #[arg(long, default_value_t = DEFAULT_FNEC_REJECT_MIN_MISMATCH)]
+    fnec_reject_min_mismatch: f64,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -508,6 +517,29 @@ pub fn run_from_args(args: &[String]) -> bool {
     let antenna_model = cli.antenna.map(AntennaModel::from);
     let transformer_ratio = cli.transformer.resolve(mode, antenna_model);
 
+    if !(0.0..=1.0).contains(&cli.fnec_pass_max_mismatch) {
+        eprintln!(
+            "Error: --fnec-pass-max-mismatch must be between 0.0 and 1.0 (got {:.3})",
+            cli.fnec_pass_max_mismatch
+        );
+        return false;
+    }
+    if !(0.0..=1.0).contains(&cli.fnec_reject_min_mismatch) {
+        eprintln!(
+            "Error: --fnec-reject-min-mismatch must be between 0.0 and 1.0 (got {:.3})",
+            cli.fnec_reject_min_mismatch
+        );
+        return false;
+    }
+    if cli.fnec_pass_max_mismatch >= cli.fnec_reject_min_mismatch {
+        eprintln!(
+            "Error: --fnec-pass-max-mismatch ({:.3}) must be less than --fnec-reject-min-mismatch ({:.3})",
+            cli.fnec_pass_max_mismatch,
+            cli.fnec_reject_min_mismatch
+        );
+        return false;
+    }
+
     let config = AppConfig {
         band_indices: bands,
         velocity_factor: cli.velocity,
@@ -533,7 +565,13 @@ pub fn run_from_args(args: &[String]) -> bool {
     }
 
     if cli.advise {
-        return print_advise_candidates(&config, &export_formats, cli.output.as_deref());
+        return print_advise_candidates(
+            &config,
+            &export_formats,
+            cli.output.as_deref(),
+            cli.fnec_pass_max_mismatch,
+            cli.fnec_reject_min_mismatch,
+        );
     }
 
     let results = match execute_request_checked(AppRequest::new(config)) {
@@ -592,13 +630,24 @@ fn print_advise_candidates(
     config: &AppConfig,
     export_formats: &[ExportFormat],
     single_output: Option<&str>,
+    fnec_pass_max_mismatch: f64,
+    fnec_reject_min_mismatch: f64,
 ) -> bool {
     if let Err(err) = execute_request_checked(AppRequest::new(config.clone())) {
         eprintln!("Error: {err}");
         return false;
     }
 
-    let view = build_advise_candidates(config, 5);
+    let view = if config.validate_with_fnec {
+        build_advise_candidates_with_thresholds(
+            config,
+            5,
+            fnec_pass_max_mismatch,
+            fnec_reject_min_mismatch,
+        )
+    } else {
+        build_advise_candidates(config, 5)
+    };
     if view.candidates.is_empty() {
         eprintln!("Error: no advise candidates available for the current selection.");
         return false;
@@ -632,11 +681,14 @@ fn print_advise_candidates(
             candidate.score, candidate.average_length_shift_pct
         );
         if let Some(note) = &candidate.validation_note {
-            let status = if candidate.validated {
-                "validated"
-            } else {
-                "not-validated"
-            };
+            let status = candidate
+                .validation_status
+                .map(|value| value.as_str())
+                .unwrap_or(if candidate.validated {
+                    "validated"
+                } else {
+                    "not-validated"
+                });
             println!("    fnec: {status} ({note})");
         }
     }
