@@ -1205,6 +1205,13 @@ fn print_project_info(output: &mut dyn Write) {
     writeln!(output, "  GitHub: {PROJECT_URL}").expect("failed to write project info url");
     writeln!(output, "  License: {}", env!("CARGO_PKG_LICENSE"))
         .expect("failed to write project info license");
+    writeln!(
+        output,
+        "  Platform: {}/{}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    )
+    .expect("failed to write project info platform");
 }
 
 fn calculate_selected_bands_with_defaults(
@@ -1756,6 +1763,7 @@ mod tests {
         assert!(rendered.contains("Author:"));
         assert!(rendered.contains("GitHub:"));
         assert!(rendered.contains("License:"));
+        assert!(rendered.contains("Platform:"));
     }
 
     #[test]
