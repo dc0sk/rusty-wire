@@ -63,7 +63,23 @@ It lets you:
 - Set conductor diameter in millimeters (1.0 to 4.0 mm)
 - Choose transformer ratio
 - Configure non-resonant wire windows interactively
-- Export results and print an equivalent CLI command
+- Export results as CSV (`e`) or JSON (`E`) directly from the TUI
+
+**TUI keybindings:**
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Select previous config field |
+| `↓` / `j` | Select next config field |
+| `←` / `h` | Decrease selected field value |
+| `→` / `l` | Increase selected field value |
+| `r` / `Enter` | Run calculation |
+| `e` | Export results as CSV (`rusty-wire-results.csv`) |
+| `E` | Export results as JSON (`rusty-wire-results.json`) |
+| `i` / `?` | Toggle project info popup |
+| `Tab` | Toggle focus between config and results panels |
+| `PgUp` / `PgDn` | Scroll results (results panel focused) |
+| `q` / `Esc` | Quit |
 
 For TUI documentation screenshots (exact capture list and where to place each image), see [tui-screenshots.md](tui-screenshots.md).
 
