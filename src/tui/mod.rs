@@ -30,6 +30,8 @@
 //! | `r` / `Enter` | Run calculation |
 //! | `e` | Export results as CSV (`rusty-wire-results.csv`) |
 //! | `E` | Export results as JSON (`rusty-wire-results.json`) |
+//! | `m` | Export results as Markdown (`rusty-wire-results.md`) |
+//! | `t` | Export results as plain text (`rusty-wire-results.txt`) |
 //! | `i` / `?` | Toggle project info popup |
 //! | `Tab` | Toggle focus between config and results panels |
 //! | `q` / `Esc` | Quit |
@@ -69,6 +71,7 @@ const WIRE_MAX_PRESETS: &[f64] = &[20.0, 25.0, 30.0, 35.0, 40.0, 50.0, 60.0, 80.
 const CONDUCTOR_DIAMETER_PRESETS: &[f64] = &[1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
 const GROUND_CLASS_PRESETS: &[GroundClass] =
     &[GroundClass::Poor, GroundClass::Average, GroundClass::Good];
+const STEP_PRESETS: &[f64] = &[0.01, 0.02, 0.05, 0.10, 0.25, 0.50, 1.00];
 const PROJECT_URL: &str = env!("CARGO_PKG_REPOSITORY");
 const TRANSFORMER_RATIOS: &[TransformerRatio] = &[
     TransformerRatio::R1To1,
@@ -122,6 +125,7 @@ enum ConfigField {
     AntennaHeight,
     GroundClassField,
     ConductorDiameter,
+    StepSize,
 }
 
 impl ConfigField {
@@ -138,6 +142,7 @@ impl ConfigField {
         Self::AntennaHeight,
         Self::GroundClassField,
         Self::ConductorDiameter,
+        Self::StepSize,
     ];
 
     fn label(self) -> &'static str {
@@ -154,6 +159,7 @@ impl ConfigField {
             Self::AntennaHeight => "Height",
             Self::GroundClassField => "Ground",
             Self::ConductorDiameter => "Conductor",
+            Self::StepSize => "Step",
         }
     }
 }
@@ -180,6 +186,8 @@ struct TuiState {
     ground_idx: usize,
     /// Index into `CONDUCTOR_DIAMETER_PRESETS`.
     conductor_idx: usize,
+    /// Index into `STEP_PRESETS`.
+    step_idx: usize,
     /// Vertical scroll offset for the results panel.
     results_scroll: u16,
     /// Whether the project-info popup is visible.
@@ -233,6 +241,10 @@ impl TuiState {
             .iter()
             .position(|&v| (v - app.config.conductor_diameter_mm).abs() < 1e-9)
             .unwrap_or(2); // 2.0 mm
+        let step_idx = STEP_PRESETS
+            .iter()
+            .position(|&v| (v - app.config.step_m).abs() < 1e-9)
+            .unwrap_or(2); // 0.05 m
         Self {
             app,
             focus: Focus::Config,
@@ -245,6 +257,7 @@ impl TuiState {
             height_idx,
             ground_idx,
             conductor_idx,
+            step_idx,
             results_scroll: 0,
             show_info_popup: false,
             quit: false,
@@ -323,6 +336,14 @@ impl TuiState {
                     },
                     ConfigField::ConductorDiameter => {
                         format!("{:.1} mm", CONDUCTOR_DIAMETER_PRESETS[self.conductor_idx])
+                    }
+                    ConfigField::StepSize => {
+                        let s = STEP_PRESETS[self.step_idx];
+                        if s < 0.1 {
+                            format!("{:.2} m", s)
+                        } else {
+                            format!("{:.2} m", s)
+                        }
                     }
                 };
                 let selected = i == self.field_idx && self.focus == Focus::Config;
@@ -472,6 +493,14 @@ impl TuiState {
                 }
                 AppAction::SetConductorDiameter(CONDUCTOR_DIAMETER_PRESETS[self.conductor_idx])
             }
+            ConfigField::StepSize => {
+                if forward {
+                    self.step_idx = (self.step_idx + 1).min(STEP_PRESETS.len() - 1);
+                } else if self.step_idx > 0 {
+                    self.step_idx -= 1;
+                }
+                AppAction::SetStep(STEP_PRESETS[self.step_idx])
+            }
         }
     }
 
@@ -615,6 +644,14 @@ impl TuiState {
             }
             KeyCode::Char('E') => {
                 self.try_export(ExportFormat::Json);
+                return;
+            }
+            KeyCode::Char('m') => {
+                self.try_export(ExportFormat::Markdown);
+                return;
+            }
+            KeyCode::Char('t') => {
+                self.try_export(ExportFormat::Txt);
                 return;
             }
             KeyCode::Enter => {
@@ -911,10 +948,10 @@ fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     } else {
         match state.focus {
             Focus::Config => {
-                " ↑↓/jk:select  ←→/hl:change  r:run  e:csv  E:json  i:info  Tab:→results  q:quit"
+                " ↑↓/jk:select  ←→/hl:change  r:run  e:csv  E:json  m:md  t:txt  i:info  Tab:→results  q:quit"
             }
             Focus::Results => {
-                " ↑↓/jk:scroll  PgUp/Dn:page  r:run  e:csv  E:json  i:info  Tab:→config   q:quit"
+                " ↑↓/jk:scroll  PgUp/Dn:page  r:run  e:csv  E:json  m:md  t:txt  i:info  Tab:→config   q:quit"
             }
         }
     };
