@@ -7,6 +7,8 @@ All notable changes to Rusty Wire are documented here.
 ### Added
 - **TUI export**: press `e` (CSV), `E` (JSON), `m` (Markdown), or `t` (plain text) to export results directly from the TUI; a status message is shown in the hints bar after each export attempt.
 - **TUI step-size config field**: the `Step` field in the TUI config panel lets you cycle through search-step presets (0.01, 0.02, 0.05, 0.10, 0.25, 0.50, 1.00 m) with ←/→, matching the CLI `--step` flag.
+- **TUI explicit frequency selection**: the `Frequencies` field in the TUI config panel lets you cycle through frequency presets (single frequencies or multi-frequency sets like "3.5, 7.0, 14.0 MHz") with ←/→, matching the CLI `--freq` and `--freq-list` flags.
+- **`--freq-list <f1,f2,...>` flag**: compute wire lengths for multiple explicit frequencies in a single invocation, bypassing band selection entirely. Each frequency produces its own labelled result row.
 - **Custom band presets via TOML**: added `--bands-preset <name>` to resolve named band sets from a config file with optional `--bands-config <path>` override (default: `bands.toml`). Presets reuse the existing band-token parser, so entries can include both names and ranges.
 - **Balun optimizer app-layer foundation**: added `optimize_transformer_candidates(&AppConfig)` with ranked transformer candidates and per-candidate metadata (target impedance, mismatch factor, estimated efficiency, mismatch loss, and correction-shift penalty score). This is the prerequisite API for upcoming `advise` mode.
 - **`--advise` CLI mode**: added ranked advise output that combines recommended wire length with balun/unun ratio candidates for the selected bands, including efficiency estimate, mismatch loss, clearance, and overall score.
