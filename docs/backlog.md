@@ -8,7 +8,6 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 ## CLI / Analysis
 
 - `--transformer-sweep <r1,r2,...>` — like `--velocity-sweep` but over transformer ratios
-- `--freq-list <f1,f2,...>` — multiple explicit frequencies in one run
 - `advise` mode: user provides a target band set and gets ranked wire-length + balun/unun candidates with compact scoring metadata (including estimated efficiency and tradeoff hints)
 - `advise` validation pass with `fnec-rust`: for top-ranked candidates, run a cross-check sweep to flag configurations that are unlikely to be thermally/efficiency sustainable in practical operation
 - YAML and HTML export targets
@@ -16,7 +15,7 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## TUI (2.x, `ratatui`)
 
-- **Band selection refinement**: the current preset list omits 60m and other region-specific bands. A "Custom" preset that opens a band-checklist panel where the user can tick individual bands — similar to a multi-select dialog — would replace the fixed preset table for advanced users.
+- **Band selection refinement**: expand region-specific preset coverage and add a "Custom" preset that opens a band-checklist panel where the user can tick individual bands — similar to a multi-select dialog — replacing the fixed preset table for advanced users.
 - Live recalculation as inputs change (with debounce for non-resonant search)
 - Collapsible result panels per antenna model
 - Visual highlighting of recommended transformer ratio and skipped bands
