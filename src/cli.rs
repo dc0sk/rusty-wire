@@ -1985,35 +1985,9 @@ mod tests {
     #[test]
     fn run_interactive_with_io_reuses_last_defaults_on_followup_quick_calculation() {
         let input_bytes = concat!(
-            "\n",
-            "3\n",
-            "20m\n",
-            "2\n",
-            "e\n",
-            "0.85\n",
-            "12\n",
-            "good\n",
-            "3.5\n",
-            "1:49\n",
-            "\n",
-            "9\n",
-            "27\n",
-            "m\n",
-            "none\n",
-            "3\n",
-            "\n",
-            "\n",
-            "\n",
-            "\n",
-            "\n",
-            "\n",
-            "\n",
-            "\n",
-            "\n",
-            "\n",
-            "\n",
-            "none\n",
-            "6\n"
+            "\n", "3\n", "20m\n", "2\n", "e\n", "0.85\n", "12\n", "good\n", "3.5\n", "1:49\n",
+            "\n", "9\n", "27\n", "m\n", "none\n", "3\n", "\n", "\n", "\n", "\n", "\n", "\n", "\n",
+            "\n", "\n", "\n", "\n", "none\n", "6\n"
         );
         let mut input = Cursor::new(input_bytes.as_bytes().to_vec());
         let mut output = Vec::new();
@@ -2053,5 +2027,161 @@ mod tests {
         assert!(exports.is_empty());
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
         assert!(rendered.contains("--export requires at least one format; skipping export."));
+    }
+
+    // --- prompt_calc_mode_with_default ---
+
+    #[test]
+    fn prompt_calc_mode_empty_with_non_resonant_default_returns_non_resonant() {
+        let mut input = Cursor::new(b"\n".to_vec());
+        let mut output = Vec::new();
+
+        let mode =
+            prompt_calc_mode_with_default(&mut input, &mut output, Some(CalcMode::NonResonant));
+
+        assert_eq!(mode, CalcMode::NonResonant);
+        let rendered = String::from_utf8(output).expect("output should be utf-8");
+        assert!(rendered.contains("[2]: "));
+    }
+
+    #[test]
+    fn prompt_calc_mode_unknown_input_falls_back_to_resonant() {
+        let mut input = Cursor::new(b"xyz\n".to_vec());
+        let mut output = Vec::new();
+
+        let mode = prompt_calc_mode_with_default(&mut input, &mut output, None);
+
+        assert_eq!(mode, CalcMode::Resonant);
+    }
+
+    // --- prompt_velocity_factor_with_default ---
+
+    #[test]
+    fn prompt_velocity_factor_valid_value_is_accepted() {
+        let mut input = Cursor::new(b"0.75\n".to_vec());
+        let mut output = Vec::new();
+
+        let vf = prompt_velocity_factor_with_default(&mut input, &mut output, None);
+
+        assert!((vf - 0.75).abs() < 1e-9);
+    }
+
+    #[test]
+    fn prompt_velocity_factor_out_of_range_falls_back_to_default() {
+        let mut input = Cursor::new(b"2.0\n".to_vec());
+        let mut output = Vec::new();
+
+        let vf = prompt_velocity_factor_with_default(&mut input, &mut output, Some(0.85));
+
+        assert!((vf - 0.85).abs() < 1e-9);
+    }
+
+    // --- prompt_antenna_height_with_default ---
+
+    #[test]
+    fn prompt_antenna_height_valid_seven_is_accepted() {
+        let mut input = Cursor::new(b"7\n".to_vec());
+        let mut output = Vec::new();
+
+        let h = prompt_antenna_height_with_default(&mut input, &mut output, None);
+
+        assert!((h - 7.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn prompt_antenna_height_invalid_input_falls_back_to_default() {
+        let mut input = Cursor::new(b"rooftop\n".to_vec());
+        let mut output = Vec::new();
+
+        let h = prompt_antenna_height_with_default(&mut input, &mut output, Some(10.0));
+
+        assert!((h - 10.0).abs() < 1e-9);
+    }
+
+    // --- prompt_ground_class_with_default ---
+
+    #[test]
+    fn prompt_ground_class_poor_is_accepted() {
+        let mut input = Cursor::new(b"poor\n".to_vec());
+        let mut output = Vec::new();
+
+        let gc = prompt_ground_class_with_default(&mut input, &mut output, None);
+
+        assert_eq!(gc, GroundClass::Poor);
+    }
+
+    #[test]
+    fn prompt_ground_class_average_is_accepted() {
+        let mut input = Cursor::new(b"average\n".to_vec());
+        let mut output = Vec::new();
+
+        let gc = prompt_ground_class_with_default(&mut input, &mut output, None);
+
+        assert_eq!(gc, GroundClass::Average);
+    }
+
+    #[test]
+    fn prompt_ground_class_unknown_input_falls_back_to_default() {
+        let mut input = Cursor::new(b"swamp\n".to_vec());
+        let mut output = Vec::new();
+
+        let gc = prompt_ground_class_with_default(&mut input, &mut output, Some(GroundClass::Poor));
+
+        assert_eq!(gc, GroundClass::Poor);
+    }
+
+    // --- prompt_conductor_diameter_with_default ---
+
+    #[test]
+    fn prompt_conductor_diameter_valid_value_is_accepted() {
+        let mut input = Cursor::new(b"2.5\n".to_vec());
+        let mut output = Vec::new();
+
+        let d = prompt_conductor_diameter_with_default(&mut input, &mut output, None);
+
+        assert!((d - 2.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn prompt_conductor_diameter_out_of_range_falls_back_to_default() {
+        let mut input = Cursor::new(b"0.1\n".to_vec());
+        let mut output = Vec::new();
+
+        let d = prompt_conductor_diameter_with_default(&mut input, &mut output, Some(3.0));
+
+        assert!((d - 3.0).abs() < 1e-9);
+    }
+
+    // --- prompt_antenna_model_with_default (trap aliases) ---
+
+    #[test]
+    fn prompt_antenna_model_accepts_trap_short_alias() {
+        let mut input = Cursor::new(b"t\n".to_vec());
+        let mut output = Vec::new();
+
+        let model = prompt_antenna_model_with_default(&mut input, &mut output, None);
+
+        assert_eq!(model, Some(AntennaModel::TrapDipole));
+    }
+
+    #[test]
+    fn prompt_antenna_model_accepts_trap_word_alias() {
+        let mut input = Cursor::new(b"trap\n".to_vec());
+        let mut output = Vec::new();
+
+        let model = prompt_antenna_model_with_default(&mut input, &mut output, None);
+
+        assert_eq!(model, Some(AntennaModel::TrapDipole));
+    }
+
+    #[test]
+    fn prompt_antenna_model_unknown_input_falls_back_to_default() {
+        let mut input = Cursor::new(b"yagi\n".to_vec());
+        let mut output = Vec::new();
+
+        let model =
+            prompt_antenna_model_with_default(&mut input, &mut output, Some(AntennaModel::Dipole));
+
+        assert_eq!(model, Some(AntennaModel::Dipole));
     }
 }
