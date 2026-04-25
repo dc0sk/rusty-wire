@@ -1885,4 +1885,48 @@ mod tests {
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
         assert!(rendered.contains("Available bands in Region 1"));
     }
+
+    #[test]
+    fn run_interactive_with_io_invalid_menu_option_shows_error() {
+        // Select default region, enter invalid option "9", then exit
+        let mut input = Cursor::new(b"\n9\n6\n".to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Invalid option. Try again."));
+    }
+
+    #[test]
+    fn run_interactive_with_io_multi_band_calculation_completes() {
+        // Default region → option 2 → bands 40m,20m → all defaults → no export → exit
+        let input_bytes = b"\n2\n40m,20m\n\n\n\n\n\n\n\n\nnone\n6\n";
+        let mut input = Cursor::new(input_bytes.to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        // Prompt sequence for bands should appear
+        assert!(rendered.contains("Enter bands"));
+        // Export prompt should appear (confirming we reached end of calculation flow)
+        assert!(rendered.contains("Export results?"));
+    }
+
+    #[test]
+    fn run_interactive_with_io_quick_calculation_happy_path() {
+        // Default region → option 3 → 20m band → all defaults → no export → exit
+        let input_bytes = b"\n3\n20m\n\n\n\n\n\n\n\n\nnone\n6\n";
+        let mut input = Cursor::new(input_bytes.to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        // Quick calc prompts single band
+        assert!(rendered.contains("Enter one band"));
+        // Export prompt should appear (confirming calculation completed)
+        assert!(rendered.contains("Export results?"));
+    }
 }
