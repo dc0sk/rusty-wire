@@ -19,7 +19,7 @@ amateur and shortwave bands. It covers six antenna models, recommends transforme
 automatically, and fits comfortably into shell scripts as well as interactive
 planning sessions.
 
-**2.5.2: trap dipole implementation restored · 3.x roadmap: desktop GUI (`iced`)**
+**2.6.0: expanded regression coverage for TUI key guards and antenna-model guidance · 3.x roadmap: desktop GUI (`iced`)**
 
 ---
 
