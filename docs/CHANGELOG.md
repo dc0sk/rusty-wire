@@ -27,6 +27,7 @@ All notable changes to Rusty Wire are documented here.
 - **Interactive prompt coverage expansion**: added direct unit tests for remaining prompt helpers, including invalid wire-window fallback handling, display-unit defaults and fallback behavior, and ITU region selection validation.
 - **TUI regression coverage**: added tests for documented hints-bar keybinding text, About popup metadata content, info-popup toggle/close behavior, and preservation of the trailing `Custom…` band-preset entry.
 - **TUI checklist/export-status coverage**: added tests for custom-band checklist seeding, confirm/cancel behavior, no-results export warnings, and clearing the status banner on the next keypress.
+- **TUI preset-transition coverage**: added tests for named-band preset cycling, custom-band fallback reuse, frequency preset forward/backward wrap behavior, and the `Use bands` reset path.
 
 ### Changed
 - **Roadmap sequencing**: captured `advise` feature direction (candidate ranking for wire length + balun/unun choice with efficiency-style metadata) and marked balun optimizer groundwork as the prerequisite milestone.
