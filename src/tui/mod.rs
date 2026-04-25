@@ -1031,20 +1031,24 @@ fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         return;
     }
 
-    let text = if state.show_band_checklist {
-        " ↑↓/jk:move  Space:toggle  Enter:confirm  Esc/q:cancel"
-    } else {
-        match state.focus {
-            Focus::Config => {
-                " ↑↓/jk:select  ←→/hl:change  r:run  e:csv  E:json  m:md  t:txt  i:info  Tab:→results  q:quit"
-            }
-            Focus::Results => {
-                " ↑↓/jk:scroll  PgUp/Dn:page  r:run  e:csv  E:json  m:md  t:txt  i:info  Tab:→config   q:quit"
-            }
-        }
-    };
+    let text = hint_text(state.focus, state.show_band_checklist);
     let para = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
     f.render_widget(para, area);
+}
+
+fn hint_text(focus: Focus, show_band_checklist: bool) -> &'static str {
+    if show_band_checklist {
+        return " ↑↓/jk:move  Space:toggle  Enter:confirm  Esc/q:cancel";
+    }
+
+    match focus {
+        Focus::Config => {
+            " ↑↓/jk:select  ←→/hl:change  r:run  e:csv  E:json  m:md  t:txt  i:info  Tab:→results  q:quit"
+        }
+        Focus::Results => {
+            " ↑↓/jk:scroll  PgUp/Dn:page  r:run  e:csv  E:json  m:md  t:txt  i:info  Tab:→config   q:quit"
+        }
+    }
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
@@ -1076,7 +1080,17 @@ fn render_info_popup(f: &mut ratatui::Frame, area: Rect) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
 
-    let lines = vec![
+    let lines = info_popup_lines();
+
+    let para = Paragraph::new(lines)
+        .block(block)
+        .style(Style::default().fg(Color::White).bg(Color::Black))
+        .wrap(Wrap { trim: true });
+    f.render_widget(para, popup_area);
+}
+
+fn info_popup_lines() -> Vec<Line<'static>> {
+    vec![
         Line::from(format!("Version: {}", env!("CARGO_PKG_VERSION"))),
         Line::from(format!("Author: {}", env!("CARGO_PKG_AUTHORS"))),
         Line::from(format!("GitHub: {PROJECT_URL}")),
@@ -1086,13 +1100,7 @@ fn render_info_popup(f: &mut ratatui::Frame, area: Rect) {
             "Press i, ?, or Esc to close.",
             Style::default().fg(Color::DarkGray),
         )),
-    ];
-
-    let para = Paragraph::new(lines)
-        .block(block)
-        .style(Style::default().fg(Color::White).bg(Color::Black))
-        .wrap(Wrap { trim: true });
-    f.render_widget(para, popup_area);
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -1229,4 +1237,80 @@ fn load_tui_band_presets(
 
     presets.push(BandPresetChoice::custom());
     (presets, status)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn press(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn hint_text_for_config_focus_matches_documented_keybindings() {
+        let text = hint_text(Focus::Config, false);
+
+        assert!(text.contains("e:csv"));
+        assert!(text.contains("E:json"));
+        assert!(text.contains("m:md"));
+        assert!(text.contains("t:txt"));
+        assert!(text.contains("i:info"));
+        assert!(text.contains("Tab:→results"));
+    }
+
+    #[test]
+    fn hint_text_for_results_focus_mentions_scroll_and_tab_back() {
+        let text = hint_text(Focus::Results, false);
+
+        assert!(text.contains("↑↓/jk:scroll"));
+        assert!(text.contains("PgUp/Dn:page"));
+        assert!(text.contains("Tab:→config"));
+    }
+
+    #[test]
+    fn hint_text_for_band_checklist_matches_overlay_controls() {
+        let text = hint_text(Focus::Config, true);
+
+        assert!(text.contains("Space:toggle"));
+        assert!(text.contains("Enter:confirm"));
+        assert!(text.contains("Esc/q:cancel"));
+    }
+
+    #[test]
+    fn info_popup_lines_include_required_project_metadata() {
+        let lines = info_popup_lines()
+            .into_iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<String>>();
+
+        assert!(lines.iter().any(|line| line.starts_with("Version:")));
+        assert!(lines.iter().any(|line| line.starts_with("Author:")));
+        assert!(lines.iter().any(|line| line.starts_with("GitHub:")));
+        assert!(lines.iter().any(|line| line.starts_with("License:")));
+        assert!(lines
+            .iter()
+            .any(|line| line.contains("Press i, ?, or Esc to close.")));
+    }
+
+    #[test]
+    fn handle_key_toggles_and_closes_info_popup() {
+        let mut state = TuiState::new(None);
+
+        state.handle_key(press(KeyCode::Char('i')));
+        assert!(state.show_info_popup);
+        assert!(!state.quit);
+
+        state.handle_key(press(KeyCode::Esc));
+        assert!(!state.show_info_popup);
+        assert!(!state.quit);
+    }
+
+    #[test]
+    fn load_tui_band_presets_always_keeps_custom_choice_last() {
+        let (presets, status) = load_tui_band_presets(None);
+
+        assert!(status.is_none());
+        assert!(presets.last().is_some_and(BandPresetChoice::is_custom));
+    }
 }

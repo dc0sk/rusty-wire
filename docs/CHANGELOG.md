@@ -25,6 +25,7 @@ All notable changes to Rusty Wire are documented here.
 - **Advise export validation metadata**: advise exports now include `validated`, `validation_status`, and `validation_note` fields in CSV/JSON/Markdown/TXT outputs for each candidate.
 - **Trap dipole resonant guidance notes**: resonant compromise output now includes trap build notes covering total-vs-element interpretation, trap frequency/component tuning targets, physical trap placement, and common 40m/20m and 80m/40m pairings.
 - **Interactive prompt coverage expansion**: added direct unit tests for remaining prompt helpers, including invalid wire-window fallback handling, display-unit defaults and fallback behavior, and ITU region selection validation.
+- **TUI regression coverage**: added tests for documented hints-bar keybinding text, About popup metadata content, info-popup toggle/close behavior, and preservation of the trailing `Custom…` band-preset entry.
 
 ### Changed
 - **Roadmap sequencing**: captured `advise` feature direction (candidate ranking for wire length + balun/unun choice with efficiency-style metadata) and marked balun optimizer groundwork as the prerequisite milestone.
