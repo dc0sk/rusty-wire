@@ -212,6 +212,7 @@ cargo test
 # Regression scripts
 ./scripts/test-multi-optima.sh
 ./scripts/test-itu-region-bands.sh
+./scripts/test-nec-calibration.sh
 ```
 
 See [docs/testing.md](docs/testing.md) for the complete test strategy.

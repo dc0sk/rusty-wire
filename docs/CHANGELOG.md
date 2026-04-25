@@ -13,6 +13,8 @@ All notable changes to Rusty Wire are documented here.
   - Esc-without-popup quit behavior
 
 ## [Unreleased]
+- **NEC calibration hardening**: `scripts/calibrate-conductor-model.sh` now tolerates blank lines and `#` comments in CSV inputs while preserving strict malformed-row validation.
+- **NEC calibration regression script**: added `scripts/test-nec-calibration.sh` to lock template fit constants (`k = 0.011542`, `RMSE = 0.000000`) and validate parser behavior.
 - **Docs/version sync**: updated README and CLI guide version labels to 2.6.0.
 - **TUI warning cleanup**: removed non-test unused import warning by scoping `KeyEventState` usage to tests.
 - **TUI export**: press `e` (CSV), `E` (JSON), `m` (Markdown), or `t` (plain text) to export results directly from the TUI; a status message is shown in the hints bar after each export attempt.

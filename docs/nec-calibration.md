@@ -16,6 +16,7 @@ diameter_mm,length_factor
 Definitions:
 - diameter_mm: physical conductor diameter in millimeters
 - length_factor: resonant length multiplier relative to the 2.0 mm baseline at the same setup
+- blank lines and lines starting with `#` are ignored by the calibration script
 
 Example:
 - if a 4.0 mm conductor resonates at 99.2% of the 2.0 mm length, use 0.992
@@ -35,6 +36,14 @@ The script prints:
   - d0 fixed at 2.0 mm
 - RMSE and max absolute error
 - suggested clamp bounds over your observed diameter span
+
+Regression guard:
+
+```bash
+./scripts/test-nec-calibration.sh
+```
+
+This verifies the template fit constants and parser behavior before changing model constants.
 
 Current template output (`docs/data/nec_conductor_reference.csv`):
 - `k = 0.011542`
