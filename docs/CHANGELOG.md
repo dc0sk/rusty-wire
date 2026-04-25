@@ -23,6 +23,7 @@ All notable changes to Rusty Wire are documented here.
 - **Optional advise validation flag**: added `--validate-with-fnec` for `--advise` runs to attempt per-candidate cross-tool checks via `fnec-rust` when `fnec` is available in `PATH`.
 - **Configurable advise validation thresholds**: added `--fnec-pass-max-mismatch` and `--fnec-reject-min-mismatch` to classify fnec validation outcomes as passed, warning, or rejected.
 - **Advise export validation metadata**: advise exports now include `validated`, `validation_status`, and `validation_note` fields in CSV/JSON/Markdown/TXT outputs for each candidate.
+- **Trap dipole resonant guidance notes**: resonant compromise output now includes trap build notes covering total-vs-element interpretation, trap frequency/component tuning targets, physical trap placement, and common 40m/20m and 80m/40m pairings.
 
 ### Changed
 - **Roadmap sequencing**: captured `advise` feature direction (candidate ranking for wire length + balun/unun choice with efficiency-style metadata) and marked balun optimizer groundwork as the prerequisite milestone.

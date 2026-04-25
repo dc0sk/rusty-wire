@@ -34,7 +34,7 @@ planning sessions.
 | End-fed half-wave | `efhw` | Total EFHW wire length |
 | Full-wave loop | `loop` | Circumference and square-side estimate |
 | Off-center-fed dipole | `ocfd` | 33/67 and 20/80 leg splits, optimised feedpoint |
-| Trap dipole | `trap-dipole` | Trap total and per-element guidance |
+| Trap dipole | `trap-dipole` | Trap total/per-element plus build guidance notes |
 
 Omit `--antenna` to show all six models at once.
 
@@ -206,7 +206,7 @@ For formulas and optimizer objective functions see [docs/math.md](docs/math.md).
 ## Testing
 
 ```bash
-# Full unit + integration suite (182 tests)
+# Full unit + integration suite (253 tests)
 cargo test
 
 # Regression scripts
