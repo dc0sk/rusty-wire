@@ -42,7 +42,7 @@ use std::io::{self, Stdout};
 use std::panic;
 use std::path::Path;
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -1251,6 +1251,15 @@ mod tests {
         KeyEvent::new(code, modifiers)
     }
 
+    fn key_event_with_kind(code: KeyCode, kind: KeyEventKind) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::NONE,
+            kind,
+            state: KeyEventState::NONE,
+        }
+    }
+
     #[test]
     fn hint_text_for_config_focus_matches_documented_keybindings() {
         let text = hint_text(Focus::Config, false);
@@ -1689,5 +1698,35 @@ mod tests {
 
         assert!(status.is_none());
         assert!(presets.last().is_some_and(BandPresetChoice::is_custom));
+    }
+
+    #[test]
+    fn non_press_key_events_are_ignored() {
+        let mut state = TuiState::new(None);
+        state.export_status = Some("Previous status".to_string());
+
+        // Release event should not clear export status or change state
+        state.handle_key(key_event_with_kind(
+            KeyCode::Char('q'),
+            KeyEventKind::Release,
+        ));
+
+        assert_eq!(
+            state.export_status.as_deref(),
+            Some("Previous status"),
+            "Release events should not clear export_status"
+        );
+        assert!(!state.quit, "Release events should not trigger quit");
+    }
+
+    #[test]
+    fn esc_without_info_popup_sets_quit_flag() {
+        let mut state = TuiState::new(None);
+
+        // Esc with no popup should quit
+        state.handle_key(press(KeyCode::Esc));
+
+        assert!(state.quit);
+        assert!(!state.show_info_popup);
     }
 }
