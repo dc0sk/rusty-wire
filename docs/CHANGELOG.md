@@ -5,6 +5,9 @@ All notable changes to Rusty Wire are documented here.
 ## [Unreleased]
 
 ### Test Coverage
+- **PR #49**: Antenna-model metadata coverage (5 lib tests)
+  - Transformer ratio explanations: dipole, inverted-V, trap dipole, full-wave loop, OCFD
+  - Impedance expectations for each model
 - **PR #48**: TUI global key-event guards (2 lib tests)
   - Non-Press event rejection (Release events ignored)
   - Esc-without-popup quit behavior

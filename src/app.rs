@@ -4231,4 +4231,50 @@ mod state_machine_tests {
         assert!(state.results.is_some());
         assert!(state.error.is_none());
     }
+
+    #[test]
+    fn transformer_ratio_explanation_dipole_returns_1to1() {
+        let expl = transformer_ratio_explanation(CalcMode::Resonant, Some(AntennaModel::Dipole));
+        assert_eq!(expl.ratio, TransformerRatio::R1To1);
+        assert!(expl.reason.contains("50"));
+        assert!(expl.reason.contains("1:1"));
+    }
+
+    #[test]
+    fn transformer_ratio_explanation_inverted_v_returns_1to1() {
+        let expl =
+            transformer_ratio_explanation(CalcMode::Resonant, Some(AntennaModel::InvertedVDipole));
+        assert_eq!(expl.ratio, TransformerRatio::R1To1);
+        assert!(expl.reason.contains("50"));
+        assert!(expl.reason.contains("1:1"));
+    }
+
+    #[test]
+    fn transformer_ratio_explanation_trap_dipole_returns_1to1() {
+        let expl =
+            transformer_ratio_explanation(CalcMode::Resonant, Some(AntennaModel::TrapDipole));
+        assert_eq!(expl.ratio, TransformerRatio::R1To1);
+        assert!(expl.reason.contains("Trap"));
+        assert!(expl.reason.contains("1:1"));
+    }
+
+    #[test]
+    fn transformer_ratio_explanation_full_wave_loop_returns_1to1() {
+        let expl =
+            transformer_ratio_explanation(CalcMode::Resonant, Some(AntennaModel::FullWaveLoop));
+        assert_eq!(expl.ratio, TransformerRatio::R1To1);
+        assert!(expl.reason.contains("100"));
+        assert!(expl.reason.contains("choke"));
+    }
+
+    #[test]
+    fn transformer_ratio_explanation_ocfd_returns_1to4() {
+        let expl = transformer_ratio_explanation(
+            CalcMode::Resonant,
+            Some(AntennaModel::OffCenterFedDipole),
+        );
+        assert_eq!(expl.ratio, TransformerRatio::R1To4);
+        assert!(expl.reason.contains("200"));
+        assert!(expl.reason.contains("1:4"));
+    }
 }
