@@ -1307,6 +1307,69 @@ mod tests {
     }
 
     #[test]
+    fn tab_toggles_focus_between_config_and_results() {
+        let mut state = TuiState::new(None);
+
+        assert_eq!(state.focus, Focus::Config);
+        state.handle_key(press(KeyCode::Tab));
+        assert_eq!(state.focus, Focus::Results);
+
+        state.handle_key(press(KeyCode::Tab));
+        assert_eq!(state.focus, Focus::Config);
+    }
+
+    #[test]
+    fn config_down_moves_to_next_field_and_wraps() {
+        let mut state = TuiState::new(None);
+
+        state.handle_key(press(KeyCode::Down));
+        assert_eq!(state.field_idx, 1);
+
+        state.field_idx = ConfigField::ALL.len() - 1;
+        state.handle_key(press(KeyCode::Down));
+        assert_eq!(state.field_idx, 0);
+    }
+
+    #[test]
+    fn config_up_wraps_to_last_field() {
+        let mut state = TuiState::new(None);
+
+        state.handle_key(press(KeyCode::Up));
+
+        assert_eq!(state.field_idx, ConfigField::ALL.len() - 1);
+    }
+
+    #[test]
+    fn results_scroll_keys_update_scroll_with_saturation() {
+        let mut state = TuiState::new(None);
+        state.focus = Focus::Results;
+
+        state.handle_key(press(KeyCode::Down));
+        assert_eq!(state.results_scroll, 1);
+
+        state.handle_key(press(KeyCode::Up));
+        assert_eq!(state.results_scroll, 0);
+
+        state.handle_key(press(KeyCode::Up));
+        assert_eq!(state.results_scroll, 0);
+    }
+
+    #[test]
+    fn results_page_keys_scroll_by_ten_with_saturation() {
+        let mut state = TuiState::new(None);
+        state.focus = Focus::Results;
+
+        state.handle_key(press(KeyCode::PageDown));
+        assert_eq!(state.results_scroll, 10);
+
+        state.handle_key(press(KeyCode::PageUp));
+        assert_eq!(state.results_scroll, 0);
+
+        state.handle_key(press(KeyCode::PageUp));
+        assert_eq!(state.results_scroll, 0);
+    }
+
+    #[test]
     fn open_band_checklist_prefers_existing_custom_selection() {
         let mut state = TuiState::new(None);
         state.custom_band_indices = vec![2, 5];
