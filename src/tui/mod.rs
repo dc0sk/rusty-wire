@@ -51,10 +51,10 @@ use ratatui::Terminal;
 
 use crate::app::{
     apply_action, band_listing_view, results_display_document, AntennaModel, AppAction, AppState,
-    CalcMode, UnitSystem,
+    CalcMode, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
 };
 use crate::bands::ITURegion;
-use crate::calculations::TransformerRatio;
+use crate::calculations::{GroundClass, TransformerRatio};
 
 // ---------------------------------------------------------------------------
 // Preset tables — values the user cycles through with ←/→
@@ -63,6 +63,9 @@ use crate::calculations::TransformerRatio;
 const VF_PRESETS: &[f64] = &[0.50, 0.60, 0.66, 0.70, 0.80, 0.85, 0.90, 0.95, 0.97, 1.00];
 const WIRE_MIN_PRESETS: &[f64] = &[5.0, 8.0, 10.0, 12.0, 15.0, 20.0];
 const WIRE_MAX_PRESETS: &[f64] = &[20.0, 25.0, 30.0, 35.0, 40.0, 50.0, 60.0, 80.0, 100.0];
+const CONDUCTOR_DIAMETER_PRESETS: &[f64] = &[1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
+const GROUND_CLASS_PRESETS: &[GroundClass] =
+    &[GroundClass::Poor, GroundClass::Average, GroundClass::Good];
 const PROJECT_URL: &str = env!("CARGO_PKG_REPOSITORY");
 const TRANSFORMER_RATIOS: &[TransformerRatio] = &[
     TransformerRatio::R1To1,
@@ -113,6 +116,9 @@ enum ConfigField {
     Units,
     WireMin,
     WireMax,
+    AntennaHeight,
+    GroundClassField,
+    ConductorDiameter,
 }
 
 impl ConfigField {
@@ -126,6 +132,9 @@ impl ConfigField {
         Self::Units,
         Self::WireMin,
         Self::WireMax,
+        Self::AntennaHeight,
+        Self::GroundClassField,
+        Self::ConductorDiameter,
     ];
 
     fn label(self) -> &'static str {
@@ -139,6 +148,9 @@ impl ConfigField {
             Self::Units => "Units",
             Self::WireMin => "Wire Min",
             Self::WireMax => "Wire Max",
+            Self::AntennaHeight => "Height",
+            Self::GroundClassField => "Ground",
+            Self::ConductorDiameter => "Conductor",
         }
     }
 }
@@ -159,6 +171,12 @@ struct TuiState {
     wire_min_idx: usize,
     /// Index into `WIRE_MAX_PRESETS`.
     wire_max_idx: usize,
+    /// Index into `STANDARD_ANTENNA_HEIGHTS_M`.
+    height_idx: usize,
+    /// Index into `GROUND_CLASS_PRESETS`.
+    ground_idx: usize,
+    /// Index into `CONDUCTOR_DIAMETER_PRESETS`.
+    conductor_idx: usize,
     /// Vertical scroll offset for the results panel.
     results_scroll: u16,
     /// Whether the project-info popup is visible.
@@ -198,6 +216,18 @@ impl TuiState {
             .iter()
             .position(|&v| (v - app.config.wire_max_m).abs() < 0.5)
             .unwrap_or(3); // 35.0 m
+        let height_idx = STANDARD_ANTENNA_HEIGHTS_M
+            .iter()
+            .position(|&v| (v - app.config.antenna_height_m).abs() < 1e-9)
+            .unwrap_or(1); // 10.0 m
+        let ground_idx = GROUND_CLASS_PRESETS
+            .iter()
+            .position(|&g| g == app.config.ground_class)
+            .unwrap_or(1); // Average
+        let conductor_idx = CONDUCTOR_DIAMETER_PRESETS
+            .iter()
+            .position(|&v| (v - app.config.conductor_diameter_mm).abs() < 1e-9)
+            .unwrap_or(2); // 2.0 mm
         Self {
             app,
             focus: Focus::Config,
@@ -207,6 +237,9 @@ impl TuiState {
             ratio_idx,
             wire_min_idx,
             wire_max_idx,
+            height_idx,
+            ground_idx,
+            conductor_idx,
             results_scroll: 0,
             show_info_popup: false,
             quit: false,
@@ -273,6 +306,17 @@ impl TuiState {
                     }
                     ConfigField::WireMax => {
                         format!("{:.1} m", WIRE_MAX_PRESETS[self.wire_max_idx])
+                    }
+                    ConfigField::AntennaHeight => {
+                        format!("{:.0} m", STANDARD_ANTENNA_HEIGHTS_M[self.height_idx])
+                    }
+                    ConfigField::GroundClassField => match GROUND_CLASS_PRESETS[self.ground_idx] {
+                        GroundClass::Poor => "Poor".into(),
+                        GroundClass::Average => "Average".into(),
+                        GroundClass::Good => "Good".into(),
+                    },
+                    ConfigField::ConductorDiameter => {
+                        format!("{:.1} mm", CONDUCTOR_DIAMETER_PRESETS[self.conductor_idx])
                     }
                 };
                 let selected = i == self.field_idx && self.focus == Focus::Config;
@@ -392,6 +436,35 @@ impl TuiState {
                     self.wire_max_idx -= 1;
                 }
                 AppAction::SetWireMax(WIRE_MAX_PRESETS[self.wire_max_idx])
+            }
+            ConfigField::AntennaHeight => {
+                if forward {
+                    self.height_idx =
+                        (self.height_idx + 1).min(STANDARD_ANTENNA_HEIGHTS_M.len() - 1);
+                } else if self.height_idx > 0 {
+                    self.height_idx -= 1;
+                }
+                AppAction::SetAntennaHeight(STANDARD_ANTENNA_HEIGHTS_M[self.height_idx])
+            }
+            ConfigField::GroundClassField => {
+                if forward {
+                    self.ground_idx = (self.ground_idx + 1) % GROUND_CLASS_PRESETS.len();
+                } else {
+                    self.ground_idx = self
+                        .ground_idx
+                        .checked_sub(1)
+                        .unwrap_or(GROUND_CLASS_PRESETS.len() - 1);
+                }
+                AppAction::SetGroundClass(GROUND_CLASS_PRESETS[self.ground_idx])
+            }
+            ConfigField::ConductorDiameter => {
+                if forward {
+                    self.conductor_idx =
+                        (self.conductor_idx + 1).min(CONDUCTOR_DIAMETER_PRESETS.len() - 1);
+                } else if self.conductor_idx > 0 {
+                    self.conductor_idx -= 1;
+                }
+                AppAction::SetConductorDiameter(CONDUCTOR_DIAMETER_PRESETS[self.conductor_idx])
             }
         }
     }

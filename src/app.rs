@@ -2653,6 +2653,9 @@ pub enum AppAction {
     SetItuRegion(ITURegion),
     SetCustomFreq(Option<f64>),
     SetFreqList(Vec<f64>),
+    SetAntennaHeight(f64),
+    SetGroundClass(crate::calculations::GroundClass),
+    SetConductorDiameter(f64),
     // --- Lifecycle ---
     /// Run `run_calculation_checked` against the current config.
     /// On success: replaces `results` and clears `error`.
@@ -2762,6 +2765,30 @@ pub fn apply_action(state: AppState, action: AppAction) -> AppState {
         AppAction::SetFreqList(freqs) => AppState {
             config: AppConfig {
                 freq_list_mhz: freqs,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetAntennaHeight(height_m) => AppState {
+            config: AppConfig {
+                antenna_height_m: height_m,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetGroundClass(ground_class) => AppState {
+            config: AppConfig {
+                ground_class,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetConductorDiameter(diameter_mm) => AppState {
+            config: AppConfig {
+                conductor_diameter_mm: diameter_mm,
                 ..state.config
             },
             error: None,
@@ -4046,6 +4073,42 @@ mod state_machine_tests {
     fn apply_action_set_custom_freq_updates_config() {
         let state = apply_action(default_state(), AppAction::SetCustomFreq(Some(14.225)));
         assert_eq!(state.config.custom_freq_mhz, Some(14.225));
+    }
+
+    #[test]
+    fn apply_action_set_antenna_height_updates_config() {
+        let state = apply_action(default_state(), AppAction::SetAntennaHeight(7.0));
+        assert!((state.config.antenna_height_m - 7.0).abs() < 1e-9);
+        let state = apply_action(state, AppAction::SetAntennaHeight(12.0));
+        assert!((state.config.antenna_height_m - 12.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn apply_action_set_ground_class_updates_config() {
+        let state = apply_action(
+            default_state(),
+            AppAction::SetGroundClass(crate::calculations::GroundClass::Poor),
+        );
+        assert_eq!(
+            state.config.ground_class,
+            crate::calculations::GroundClass::Poor
+        );
+        let state = apply_action(
+            state,
+            AppAction::SetGroundClass(crate::calculations::GroundClass::Good),
+        );
+        assert_eq!(
+            state.config.ground_class,
+            crate::calculations::GroundClass::Good
+        );
+    }
+
+    #[test]
+    fn apply_action_set_conductor_diameter_updates_config() {
+        let state = apply_action(default_state(), AppAction::SetConductorDiameter(1.0));
+        assert!((state.config.conductor_diameter_mm - 1.0).abs() < 1e-9);
+        let state = apply_action(state, AppAction::SetConductorDiameter(4.0));
+        assert!((state.config.conductor_diameter_mm - 4.0).abs() < 1e-9);
     }
 
     #[test]
