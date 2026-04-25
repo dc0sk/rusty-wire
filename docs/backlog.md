@@ -12,16 +12,12 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 - `advise` mode: user provides a target band set and gets ranked wire-length + balun/unun candidates with compact scoring metadata (including estimated efficiency and tradeoff hints)
 - `advise` validation pass with `fnec-rust`: for top-ranked candidates, run a cross-check sweep to flag configurations that are unlikely to be thermally/efficiency sustainable in practical operation
 - `--verbose` / `--dry-run` flags
-- Expand `--info` metadata output with optional runtime/build details
 - YAML and HTML export targets
 - Persistent user preferences file (default units, region, mode)
 
 ## TUI (2.x, `ratatui`)
 
-- **Band selection refinement**: the current preset list omits 60m and other region-specific bands. Two improvements to consider together:
-  - Add 60m to relevant presets (or keep presets lean and note the gap)
-  - "Custom" preset that opens a band-checklist panel where the user can tick individual bands — similar to a multi-select dialog. This would replace the fixed preset table for advanced users.
-- Keep info popup parity-complete: author, version, GitHub URL, and license
+- **Band selection refinement**: the current preset list omits 60m and other region-specific bands. A "Custom" preset that opens a band-checklist panel where the user can tick individual bands — similar to a multi-select dialog — would replace the fixed preset table for advanced users.
 - Live recalculation as inputs change (with debounce for non-resonant search)
 - Collapsible result panels per antenna model
 - Visual highlighting of recommended transformer ratio and skipped bands

@@ -98,7 +98,10 @@ const TRANSFORMER_RATIOS: &[TransformerRatio] = &[
 const BUILTIN_BAND_PRESETS: &[(&str, &str)] = &[
     ("40m–10m (7 bands)", "40m,30m,20m,17m,15m,12m,10m"),
     ("80m–10m (8 bands)", "80m,40m,30m,20m,17m,15m,12m,10m"),
-    ("160m–10m (9 bands)", "160m,80m,40m,30m,20m,17m,15m,12m,10m"),
+    (
+        "160m–10m + 60m (10 bands)",
+        "160m,80m,60m,40m,30m,20m,17m,15m,12m,10m",
+    ),
     ("20m–10m (5 bands)", "20m,17m,15m,12m,10m"),
     ("Contest 80/40/20/15/10", "80m,40m,20m,15m,10m"),
 ];
@@ -1098,6 +1101,11 @@ fn info_popup_lines() -> Vec<Line<'static>> {
         Line::from(format!("Author: {}", env!("CARGO_PKG_AUTHORS"))),
         Line::from(format!("GitHub: {PROJECT_URL}")),
         Line::from(format!("License: {}", env!("CARGO_PKG_LICENSE"))),
+        Line::from(format!(
+            "Platform: {}/{}",
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        )),
         Line::from(""),
         Line::from(Span::styled(
             "Press i, ?, or Esc to close.",
@@ -1518,6 +1526,7 @@ mod tests {
         assert!(lines.iter().any(|line| line.starts_with("Author:")));
         assert!(lines.iter().any(|line| line.starts_with("GitHub:")));
         assert!(lines.iter().any(|line| line.starts_with("License:")));
+        assert!(lines.iter().any(|line| line.starts_with("Platform:")));
         assert!(lines
             .iter()
             .any(|line| line.contains("Press i, ?, or Esc to close.")));

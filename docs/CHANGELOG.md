@@ -13,6 +13,8 @@ All notable changes to Rusty Wire are documented here.
   - Esc-without-popup quit behavior
 
 ## [Unreleased]
+- **60m band preset**: added 60m (5 MHz WRC-15 segment) to the TUI's "160m–10m + 60m (10 bands)" built-in preset; the preset previously omitted 60m despite the band being defined in the band table.
+- **Platform info in `--info` and About popup**: `--info` and the TUI About popup now show `Platform: <os>/<arch>` alongside version, author, GitHub URL, and license.
 - **TUI screenshot refresh tooling**: added `tui-doc-snapshots` to render a deterministic HTML gallery for the five canonical TUI documentation screenshots; README and CLI guide now reference non-placeholder screenshot embeds.
 - **NEC template CSV expanded**: `docs/data/nec_conductor_reference.csv` grows from 3 to 7 data points (1.0–4.0 mm at 0.5 mm intervals); adds comment header; regression script updated to verify row count.
 - **CI regression runner**: added `scripts/test-all.sh` to run the full suite (format gate, compile gate, cargo test, ITU bands, multi-optima, NEC calibration) with a single command.
