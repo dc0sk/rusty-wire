@@ -126,7 +126,7 @@ rusty-wire --interactive
 ## Core Options
 
 - `--help` Show help
-- `--info` Print project metadata (version, author, GitHub URL, license)
+- `--info` Print project metadata (version, author, GitHub URL, license, platform)
 - `--interactive` Start interactive mode
 - `--list-bands` List bands for selected region
 - `--region <1|2|3>` ITU region (default: `1`)
@@ -147,6 +147,8 @@ rusty-wire --interactive
 - `--units <m|ft|both>` Output unit filter
 - `--step <meters>` Non-resonant search resolution (default: `0.05`)
 - `--quiet` Suppress the results table; non-resonant prints one recommendation line, resonant exits silently. Useful for scripting.
+- `--verbose` Print the resolved run configuration before executing
+- `--dry-run` Validate inputs and print the resolved run without calculating or exporting
 - `--freq <MHz>` Compute wire lengths for a single explicit frequency, bypassing band selection entirely (range: `0 < f ≤ 1000`)
 - `--freq-list <f1,f2,...>` Compute wire lengths for multiple explicit frequencies in a single run (each produces a labelled row; range: `0 < f ≤ 1000` per value)
 - `--velocity-sweep <v1,v2,...>` Run the same configuration at multiple velocity factors and print a side-by-side comparison table
@@ -272,6 +274,13 @@ Script-friendly quiet output (non-resonant):
 
 ```bash
 rusty-wire --mode non-resonant --bands 40m,20m --wire-min 10 --wire-max 35 --quiet
+```
+
+Verbose and dry-run inspection:
+
+```bash
+rusty-wire --bands 40m --verbose
+rusty-wire --mode non-resonant --bands 40m,20m --wire-min 10 --wire-max 35 --dry-run
 ```
 
 Finer search resolution:

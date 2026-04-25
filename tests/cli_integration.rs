@@ -766,6 +766,89 @@ fn step_flag_exceeding_window_shows_structured_error() {
 // ---------------------------------------------------------------------------
 
 #[test]
+fn verbose_prints_resolved_run_before_results() {
+    let output = binary()
+        .args(["--bands", "40m", "--verbose"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Resolved run:"));
+    assert!(stdout.contains("Operation: calculation"));
+    assert!(stdout.contains("Selection: bands 40m"));
+    assert!(stdout.contains("Half-wave:"));
+
+    let resolved_idx = stdout
+        .find("Resolved run:")
+        .expect("missing resolved run header");
+    let half_wave_idx = stdout.find("Half-wave:").expect("missing results output");
+    assert!(resolved_idx < half_wave_idx);
+}
+
+#[test]
+fn dry_run_prints_plan_and_skips_export_write() {
+    let dir = temp_test_dir("dry-run-export");
+    let output_path = dir.join("plan.csv");
+
+    let output = binary()
+        .current_dir(&dir)
+        .args([
+            "--bands",
+            "40m,20m",
+            "--mode",
+            "non-resonant",
+            "--wire-min",
+            "10",
+            "--wire-max",
+            "35",
+            "--dry-run",
+            "--export",
+            "csv",
+            "--output",
+            "plan.csv",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Resolved run:"));
+    assert!(stdout.contains("Exports: csv -> plan.csv"));
+    assert!(stdout.contains("Dry run only: no calculations or exports executed."));
+    assert!(!stdout.contains("Half-wave:"));
+    assert!(!stdout.contains("Exported results to"));
+    assert!(
+        !output_path.exists(),
+        "dry-run should not create export files"
+    );
+}
+
+#[test]
+fn dry_run_still_rejects_invalid_config() {
+    let output = binary()
+        .args([
+            "--bands",
+            "40m",
+            "--mode",
+            "non-resonant",
+            "--wire-min",
+            "8",
+            "--wire-max",
+            "10",
+            "--step",
+            "5",
+            "--dry-run",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("search step must be greater than 0"));
+}
+
+#[test]
 fn quiet_non_resonant_prints_only_recommendation_length() {
     let output = binary()
         .args([

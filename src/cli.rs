@@ -9,10 +9,11 @@ use crate::app::{
     build_advise_candidates_with_thresholds, execute_request_checked, format_quiet_summary,
     parse_band_selection, parse_single_band_token, recommended_transformer_ratio,
     recommended_transformer_ratio_fallback_message, resolve_wire_window_inputs,
-    results_display_document, validate_velocity_sweep, velocity_sweep_display_lines,
-    velocity_sweep_view, AntennaModel, AppConfig, AppRequest, AppResults, CalcMode, ExportFormat,
-    UnitSystem, DEFAULT_ANTENNA_HEIGHT_M, DEFAULT_BAND_SELECTION, DEFAULT_CONDUCTOR_DIAMETER_MM,
-    DEFAULT_GROUND_CLASS, DEFAULT_ITU_REGION, FEET_TO_METERS,
+    results_display_document, validate_config, validate_velocity_sweep,
+    velocity_sweep_display_lines, velocity_sweep_view, AntennaModel, AppConfig, AppRequest,
+    AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_ANTENNA_HEIGHT_M,
+    DEFAULT_BAND_SELECTION, DEFAULT_CONDUCTOR_DIAMETER_MM, DEFAULT_GROUND_CLASS,
+    DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
 use crate::band_presets::load_preset_selection;
 use crate::bands::{ITURegion, ALL_REGIONS};
@@ -143,6 +144,14 @@ struct Cli {
     /// Suppress the full results table; print only the key recommendation
     #[arg(long)]
     quiet: bool,
+
+    /// Print the resolved run configuration before executing
+    #[arg(long)]
+    verbose: bool,
+
+    /// Validate inputs and print the resolved run without calculating or exporting
+    #[arg(long)]
+    dry_run: bool,
 
     /// Run a sweep over multiple velocity factors (comma-separated, e.g. 0.66,0.85,0.95)
     #[arg(long, value_delimiter = ',')]
@@ -559,6 +568,36 @@ pub fn run_from_args(args: &[String]) -> bool {
         validate_with_fnec: cli.validate_with_fnec,
     };
 
+    if let Some(ref velocity_values) = cli.velocity_sweep {
+        if let Err(err) = validate_velocity_sweep(velocity_values) {
+            eprintln!("Error: {err}");
+            return false;
+        }
+    }
+
+    if cli.dry_run {
+        if let Err(err) = validate_config(&config) {
+            eprintln!("Error: {err}");
+            return false;
+        }
+    }
+
+    if cli.verbose || cli.dry_run {
+        print_resolved_run(
+            &config,
+            &export_formats,
+            cli.output.as_deref(),
+            cli.quiet,
+            cli.advise,
+            cli.velocity_sweep.as_deref(),
+            cli.dry_run,
+        );
+    }
+
+    if cli.dry_run {
+        return true;
+    }
+
     // Velocity sweep overrides single-run output
     if let Some(velocity_values) = cli.velocity_sweep {
         return run_velocity_sweep(&velocity_values, config, units);
@@ -752,6 +791,172 @@ fn run_velocity_sweep(velocities: &[f64], base_config: AppConfig, units: UnitSys
         }
     }
     true
+}
+
+fn print_resolved_run(
+    config: &AppConfig,
+    export_formats: &[ExportFormat],
+    single_output: Option<&str>,
+    quiet: bool,
+    advise: bool,
+    velocity_sweep: Option<&[f64]>,
+    dry_run: bool,
+) {
+    let operation = if advise {
+        "advise"
+    } else if velocity_sweep.is_some() {
+        "velocity sweep"
+    } else {
+        "calculation"
+    };
+
+    println!("Resolved run:");
+    println!("  Operation: {operation}");
+    println!("  Selection: {}", selection_summary(config));
+    println!("  Region: {}", config.itu_region.short_name());
+    println!(
+        "  Mode: {}",
+        match config.mode {
+            CalcMode::Resonant => "resonant",
+            CalcMode::NonResonant => "non-resonant",
+        }
+    );
+    println!("  Antenna: {}", antenna_summary(config.antenna_model));
+    println!("  Transformer: {}", config.transformer_ratio.as_label());
+    println!("  Velocity factor: {:.2}", config.velocity_factor);
+    if let Some(values) = velocity_sweep {
+        let summary = values
+            .iter()
+            .map(|value| format!("{value:.2}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("  Sweep values: {summary}");
+    }
+    println!("  Height: {:.0} m", config.antenna_height_m);
+    println!("  Ground: {}", config.ground_class.as_label());
+    println!("  Conductor: {:.1} mm", config.conductor_diameter_mm);
+    if config.mode == CalcMode::NonResonant {
+        println!(
+            "  Window: {:.2}..{:.2} m",
+            config.wire_min_m, config.wire_max_m
+        );
+        println!("  Step: {:.2} m", config.step_m);
+    }
+    println!("  Units: {}", units_summary(config.units));
+    if advise {
+        println!(
+            "  fnec validation: {}",
+            if config.validate_with_fnec {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        );
+    } else if velocity_sweep.is_none() {
+        println!(
+            "  Output: {}",
+            if quiet {
+                "quiet summary"
+            } else {
+                "full report"
+            }
+        );
+    }
+    println!(
+        "  Exports: {}",
+        export_summary(export_formats, single_output, advise)
+    );
+    if dry_run {
+        println!("  Dry run only: no calculations or exports executed.");
+    }
+    println!();
+}
+
+fn selection_summary(config: &AppConfig) -> String {
+    if !config.freq_list_mhz.is_empty() {
+        let freqs = config
+            .freq_list_mhz
+            .iter()
+            .map(|freq| format!("{freq:.3}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        return format!("frequencies {freqs} MHz");
+    }
+
+    if let Some(freq) = config.custom_freq_mhz {
+        return format!("frequency {freq:.3} MHz");
+    }
+
+    let bands = config
+        .band_indices
+        .iter()
+        .map(|idx| band_label_for_index(*idx, config.itu_region))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("bands {bands}")
+}
+
+fn antenna_summary(antenna_model: Option<AntennaModel>) -> &'static str {
+    match antenna_model {
+        Some(AntennaModel::Dipole) => "dipole",
+        Some(AntennaModel::InvertedVDipole) => "inverted-v",
+        Some(AntennaModel::EndFedHalfWave) => "efhw",
+        Some(AntennaModel::FullWaveLoop) => "loop",
+        Some(AntennaModel::OffCenterFedDipole) => "ocfd",
+        Some(AntennaModel::TrapDipole) => "trap-dipole",
+        None => "all models",
+    }
+}
+
+fn units_summary(units: UnitSystem) -> &'static str {
+    match units {
+        UnitSystem::Metric => "m",
+        UnitSystem::Imperial => "ft",
+        UnitSystem::Both => "both",
+    }
+}
+
+fn export_summary(
+    export_formats: &[ExportFormat],
+    single_output: Option<&str>,
+    advise: bool,
+) -> String {
+    if export_formats.is_empty() {
+        return "none".to_string();
+    }
+
+    if export_formats.len() == 1 {
+        let format = export_formats[0];
+        let output = single_output
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| {
+                if advise {
+                    default_advise_output_name(format).to_string()
+                } else {
+                    default_output_name(format).to_string()
+                }
+            });
+        return format!("{} -> {output}", format.as_str());
+    }
+
+    let outputs = export_formats
+        .iter()
+        .map(|format| {
+            let name = if advise {
+                default_advise_output_name(*format)
+            } else {
+                default_output_name(*format)
+            };
+            format!("{} -> {name}", format.as_str())
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    if single_output.is_some() {
+        format!("{outputs} (--output ignored for multiple formats)")
+    } else {
+        outputs
+    }
 }
 
 // ---------------------------------------------------------------------------
