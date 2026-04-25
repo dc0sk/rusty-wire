@@ -36,6 +36,11 @@ The script prints:
 - RMSE and max absolute error
 - suggested clamp bounds over your observed diameter span
 
+Current template output (`docs/data/nec_conductor_reference.csv`):
+- `k = 0.011542`
+- `RMSE = 0.000000`
+- observed-span clamp suggestion: `0.992000 .. 1.008000`
+
 ## Apply Results
 
 Update conductor correction constants in src/calculations.rs after reviewing fit quality.
@@ -55,3 +60,4 @@ Recommended process:
 - Keep all internal calculations metric-first.
 - Use imperial only for output rendering.
 - The script is intentionally non-destructive and does not edit source files automatically.
+- `src/calculations.rs` currently uses the fitted template slope constant directly, but keeps broader runtime clamps (`0.97 .. 1.03`) than the template's observed span so the heuristic remains tolerant until real NEC sweep data replaces the placeholder CSV.
