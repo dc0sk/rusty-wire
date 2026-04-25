@@ -137,6 +137,9 @@ cargo sbom-cdx
 git add sbom/
 ```
 
+For the full release flow (including manual real-terminal screenshot refresh),
+see `docs/release-checklist.md`.
+
 When changing region or band behavior:
 
 ```bash
