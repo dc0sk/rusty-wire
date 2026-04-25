@@ -146,6 +146,7 @@ rusty-wire --interactive
 - `--step <meters>` Non-resonant search resolution (default: `0.05`)
 - `--quiet` Suppress the results table; non-resonant prints one recommendation line, resonant exits silently. Useful for scripting.
 - `--freq <MHz>` Compute wire lengths for a single explicit frequency, bypassing band selection entirely (range: `0 < f ≤ 1000`)
+- `--freq-list <f1,f2,...>` Compute wire lengths for multiple explicit frequencies in a single run (each produces a labelled row; range: `0 < f ≤ 1000` per value)
 - `--velocity-sweep <v1,v2,...>` Run the same configuration at multiple velocity factors and print a side-by-side comparison table
 
 ## Non-Resonant Window Options
