@@ -13,6 +13,8 @@ All notable changes to Rusty Wire are documented here.
   - Esc-without-popup quit behavior
 
 ## [Unreleased]
+- **Docs/version sync**: updated README and CLI guide version labels to 2.6.0.
+- **TUI warning cleanup**: removed non-test unused import warning by scoping `KeyEventState` usage to tests.
 - **TUI export**: press `e` (CSV), `E` (JSON), `m` (Markdown), or `t` (plain text) to export results directly from the TUI; a status message is shown in the hints bar after each export attempt.
 - **TUI step-size config field**: the `Step` field in the TUI config panel lets you cycle through search-step presets (0.01, 0.02, 0.05, 0.10, 0.25, 0.50, 1.00 m) with ←/→, matching the CLI `--step` flag.
 - **TUI explicit frequency selection**: the `Frequencies` field in the TUI config panel lets you cycle through frequency presets (single frequencies or multi-frequency sets like "3.5, 7.0, 14.0 MHz") with ←/→, matching the CLI `--freq` and `--freq-list` flags.

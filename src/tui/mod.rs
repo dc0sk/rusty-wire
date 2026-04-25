@@ -42,7 +42,7 @@ use std::io::{self, Stdout};
 use std::panic;
 use std::path::Path;
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -1256,7 +1256,7 @@ mod tests {
             code,
             modifiers: KeyModifiers::NONE,
             kind,
-            state: KeyEventState::NONE,
+            state: crossterm::event::KeyEventState::NONE,
         }
     }
 

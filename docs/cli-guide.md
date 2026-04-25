@@ -1,6 +1,6 @@
 # CLI Guide
 
-**Version 2.5.2**
+**Version 2.6.0**
 
 Use this page as the command reference for Rusty Wire.
 
