@@ -5,6 +5,8 @@ authors = ["Simon Keimer (DC0SK)"]
 license = "GPL-2.0-or-later"
 repository = "https://github.com/dc0sk/rusty-wire"
 edition = "2021"
+keywords = ["amateur-radio", "antenna", "ham-radio", "rf", "cli"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
