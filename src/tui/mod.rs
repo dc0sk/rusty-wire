@@ -33,6 +33,7 @@
 //! | `m` | Export results as Markdown (`rusty-wire-results.md`) |
 //! | `t` | Export results as plain text (`rusty-wire-results.txt`) |
 //! | `s` | Save current settings as persistent preferences (`~/.config/rusty-wire/config.toml`) |
+//! | `a` | Toggle balun/unun advise panel |
 //! | `i` / `?` | Toggle project info popup |
 //! | `Tab` | Toggle focus between config and results panels |
 //! | `q` / `Esc` | Quit |
@@ -59,8 +60,9 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use ratatui::Terminal;
 
 use crate::app::{
-    apply_action, band_listing_view, parse_band_selection, results_display_document, AntennaModel,
-    AppAction, AppState, CalcMode, ExportFormat, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
+    apply_action, band_listing_view, build_advise_candidates, execute_request_checked,
+    parse_band_selection, results_display_document, AdviseView, AntennaModel, AppAction,
+    AppRequest, AppState, CalcMode, ExportFormat, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
 };
 use crate::band_presets::load_named_presets;
 use crate::bands::ITURegion;
@@ -249,6 +251,10 @@ struct TuiState {
     results_scroll: u16,
     /// Whether the project-info popup is visible.
     show_info_popup: bool,
+    /// Whether to show ranked wire + balun/unun advise candidates in results.
+    show_advise_panel: bool,
+    /// Cached advise candidates for the current configuration.
+    advise_view: Option<AdviseView>,
     /// Set to `true` to exit the event loop.
     quit: bool,
     /// Whether the band-checklist overlay is open.
@@ -329,6 +335,8 @@ impl TuiState {
             freq_idx: 0, // "Use bands" (empty list means revert to band selection)
             results_scroll: 0,
             show_info_popup: false,
+            show_advise_panel: false,
+            advise_view: None,
             quit: false,
             show_band_checklist: false,
             band_checklist_items: Vec::new(),
@@ -679,6 +687,8 @@ impl TuiState {
         };
 
         self.app = apply_action(self.app.clone(), action);
+        self.show_advise_panel = false;
+        self.advise_view = None;
 
         if let Some((region, selection, label, was_custom, previous_indices)) = region_change {
             self.refresh_band_presets_for_region();
@@ -713,6 +723,28 @@ impl TuiState {
                 }
             }
         }
+    }
+
+    fn toggle_advise_panel(&mut self) {
+        if self.show_advise_panel {
+            self.show_advise_panel = false;
+            return;
+        }
+
+        if let Err(err) = execute_request_checked(AppRequest::new(self.app.config.clone())) {
+            self.export_status = Some(format!("Cannot build advise candidates: {err}"));
+            return;
+        }
+
+        let view = build_advise_candidates(&self.app.config, 5);
+        if view.candidates.is_empty() {
+            self.export_status = Some("No advise candidates available for current setup.".into());
+            return;
+        }
+
+        self.results_scroll = 0;
+        self.advise_view = Some(view);
+        self.show_advise_panel = true;
     }
 
     fn run_calculation(&mut self) {
@@ -874,6 +906,10 @@ impl TuiState {
                         self.export_status = Some(format!("Preferences save failed: {err}"));
                     }
                 }
+                return;
+            }
+            KeyCode::Char('a') => {
+                self.toggle_advise_panel();
                 return;
             }
             KeyCode::Enter => {
@@ -1054,15 +1090,33 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         Style::default().fg(Color::DarkGray)
     };
 
+    let title = if state.show_advise_panel {
+        " Advise  (↑↓/PgUp/Dn scroll) "
+    } else {
+        " Results  (↑↓/PgUp/Dn scroll) "
+    };
+
     let block = Block::default()
-        .title(" Results  (↑↓/PgUp/Dn scroll) ")
+        .title(title)
         .borders(Borders::ALL)
         .border_style(border_style);
 
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    let lines: Vec<Line<'static>> = if let Some(ref err) = state.app.error {
+    let lines: Vec<Line<'static>> = if state.show_advise_panel {
+        if let Some(ref view) = state.advise_view {
+            render_advise_lines(view)
+        } else {
+            vec![
+                Line::from(""),
+                Line::from(Span::styled(
+                    "  No advise data yet. Press a to generate candidates.",
+                    Style::default().fg(Color::DarkGray),
+                )),
+            ]
+        }
+    } else if let Some(ref err) = state.app.error {
         vec![
             Line::from(Span::styled(
                 "Error:",
@@ -1154,6 +1208,66 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     f.render_widget(para, inner);
 }
 
+fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
+    let mut out: Vec<Line<'static>> = Vec::new();
+
+    out.push(Line::from(Span::styled(
+        "Advise candidates",
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )));
+    out.push(Line::from(format!(
+        "Assumed feedpoint impedance: {:.0} ohm",
+        view.assumed_feedpoint_ohm
+    )));
+    out.push(Line::from(""));
+
+    for (idx, candidate) in view.candidates.iter().enumerate() {
+        out.push(Line::from(Span::styled(
+            format!(
+                "{:2}. ratio {}  wire {:.2} m ({:.2} ft)",
+                idx + 1,
+                candidate.ratio.as_label(),
+                candidate.recommended_length_m,
+                candidate.recommended_length_ft
+            ),
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )));
+        out.push(Line::from(format!(
+            "    efficiency {:.2}%  mismatch loss {:.3} dB  clearance {:.2}%",
+            candidate.estimated_efficiency_pct,
+            candidate.mismatch_loss_db,
+            candidate.min_resonance_clearance_pct
+        )));
+        out.push(Line::from(format!(
+            "    score {:.2}  correction shift {:.2}%",
+            candidate.score, candidate.average_length_shift_pct
+        )));
+        if let Some(note) = &candidate.validation_note {
+            let status = candidate
+                .validation_status
+                .map(|value| value.as_str())
+                .unwrap_or(if candidate.validated {
+                    "validated"
+                } else {
+                    "not-validated"
+                });
+            out.push(Line::from(format!("    fnec: {status} ({note})")));
+        }
+        out.push(Line::from(""));
+    }
+
+    out.push(Line::from(Span::styled(
+        "Note: efficiency and score are model-based estimates for ranking, not lab measurements.",
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    out
+}
+
 fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     if let Some(ref status) = state.export_status {
         let style = if status.starts_with("Export failed") || status.starts_with("No results") {
@@ -1177,10 +1291,10 @@ fn hint_text(focus: Focus, show_band_checklist: bool) -> &'static str {
 
     match focus {
         Focus::Config => {
-            " ↑↓/jk:select  ←→/hl:change  r:run  e:csv  E:json  m:md  t:txt  s:prefs  i:info  Tab:→results  q:quit"
+            " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  s:prefs  i:info  Tab:→results  q:quit"
         }
         Focus::Results => {
-            " ↑↓/jk:scroll  PgUp/Dn:page  r:run  e:csv  E:json  m:md  t:txt  s:prefs  i:info  Tab:→config   q:quit"
+            " ↑↓/jk:scroll  PgUp/Dn:page  r:run  a:advise  e:csv  E:json  m:md  t:txt  s:prefs  i:info  Tab:→config   q:quit"
         }
     }
 }
@@ -1665,6 +1779,7 @@ mod tests {
     fn hint_text_for_config_focus_matches_documented_keybindings() {
         let text = hint_text(Focus::Config, false);
 
+        assert!(text.contains("a:advise"));
         assert!(text.contains("e:csv"));
         assert!(text.contains("E:json"));
         assert!(text.contains("m:md"));
@@ -1677,6 +1792,7 @@ mod tests {
     fn hint_text_for_results_focus_mentions_scroll_and_tab_back() {
         let text = hint_text(Focus::Results, false);
 
+        assert!(text.contains("a:advise"));
         assert!(text.contains("↑↓/jk:scroll"));
         assert!(text.contains("PgUp/Dn:page"));
         assert!(text.contains("Tab:→config"));
@@ -1845,6 +1961,33 @@ mod tests {
 
         assert_eq!(state.results_scroll, 0);
         assert!(state.app.results.is_some());
+    }
+
+    #[test]
+    fn a_key_toggles_advise_panel_and_populates_candidates() {
+        let mut state = TuiState::new(None);
+
+        state.handle_key(press(KeyCode::Char('a')));
+        assert!(state.show_advise_panel);
+        assert!(state
+            .advise_view
+            .as_ref()
+            .is_some_and(|view| !view.candidates.is_empty()));
+
+        state.handle_key(press(KeyCode::Char('a')));
+        assert!(!state.show_advise_panel);
+    }
+
+    #[test]
+    fn changing_configuration_hides_stale_advise_panel() {
+        let mut state = TuiState::new(None);
+        state.handle_key(press(KeyCode::Char('a')));
+        assert!(state.show_advise_panel);
+
+        state.handle_key(press(KeyCode::Right));
+
+        assert!(!state.show_advise_panel);
+        assert!(state.advise_view.is_none());
     }
 
     #[test]

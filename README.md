@@ -249,7 +249,8 @@ PgUp/PgDn. Named presets are auto-discovered from
 `~/.config/rusty-wire/bands.toml` first, then `./bands.toml`, and you can still
 override the preset file at startup with `--bands-config <path>`. Changing ITU
 region refreshes the built-in band preset labels and updates the custom-band
-checklist in place. Press `r` to recalculate, `q` to quit.
+checklist in place. Press `a` to toggle ranked advise candidates (wire +
+balun/unun ratio) in the results panel, `r` to recalculate, and `q` to quit.
 
 Screenshot capture and placement checklist: [docs/tui-screenshots.md](docs/tui-screenshots.md).
 
@@ -262,6 +263,7 @@ Screenshot capture and placement checklist: [docs/tui-screenshots.md](docs/tui-s
 | `↑` / `↓` or `j` / `k` | Select config field / scroll results |
 | `←` / `→` or `h` / `l` | Change selected value |
 | `r` / `Enter` | Run calculation |
+| `a` | Toggle advise panel (ranked wire + balun/unun candidates) |
 | `Tab` | Toggle focus (config ↔ results) |
 | `PgUp` / `PgDn` | Scroll results by 10 lines |
 | `q` / `Esc` / `Ctrl-C` | Quit |
