@@ -1,0 +1,42 @@
+# rusty-wire — custom band preset file
+#
+# Place this file at one of the following locations so rusty-wire picks it
+# up automatically (no --bands-config flag needed):
+#
+#   ~/.config/rusty-wire/bands.toml   ← recommended (XDG-style config dir)
+#   ./bands.toml                      ← current working directory fallback
+#
+# You can also point directly to any file with --bands-config <path>.
+#
+# Format
+# ------
+# Each preset is a named list of band tokens under [presets].
+# Band tokens are the same strings accepted by --bands (e.g. "40m", "20m",
+# "80m-10m", "160m").  Tokens are comma-joined internally, so you may write
+# them as separate list items for readability.
+#
+# Example presets
+# ---------------
+
+[presets]
+
+# Portable / SOTA operation — compact HF set
+portable = ["40m", "20m", "17m", "15m", "10m"]
+
+# DX-focused — full WARC bands included
+portable-dx = ["40m", "30m", "20m", "17m", "15m", "12m", "10m"]
+
+# Winter HF — low-band emphasis
+winter = ["80m", "60m", "40m", "30m", "20m"]
+
+# Digital modes (FT8 primary bands)
+digital = ["40m", "30m", "20m", "17m", "15m", "10m"]
+
+# All HF amateur bands (ITU Region 1 / Europe)
+all-hf-r1 = ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m"]
+
+# North American contest standard (CQ WW / ARRL DX)
+contest-na = ["80m", "40m", "20m", "15m", "10m"]
+
+# EFHW multi-band — bands well-served by an end-fed half-wave at 40 m
+efhw-40m = ["40m", "20m", "15m", "10m"]
