@@ -32,6 +32,7 @@
 //! | `E` | Export results as JSON (`rusty-wire-results.json`) |
 //! | `m` | Export results as Markdown (`rusty-wire-results.md`) |
 //! | `t` | Export results as plain text (`rusty-wire-results.txt`) |
+//! | `s` | Save current settings as persistent preferences (`~/.config/rusty-wire/config.toml`) |
 //! | `i` / `?` | Toggle project info popup |
 //! | `Tab` | Toggle focus between config and results panels |
 //! | `q` / `Esc` | Quit |
@@ -261,7 +262,13 @@ struct TuiState {
 
 impl TuiState {
     fn new(band_preset_config: Option<&str>) -> Self {
-        let app = AppState::default();
+        let mut app = AppState::default();
+
+        // Apply persistent user preferences over the compiled-in defaults so
+        // the TUI starts with the user's preferred region, mode, velocity, etc.
+        let prefs = crate::prefs::UserPrefs::load();
+        prefs.apply_to_config(&mut app.config);
+
         let (band_presets, preset_status) = load_tui_band_presets(band_preset_config);
         // Derive preset indices from the default AppConfig values.
         let vf = app.config.velocity_factor;
@@ -748,6 +755,21 @@ impl TuiState {
                 self.try_export(ExportFormat::Txt);
                 return;
             }
+            KeyCode::Char('s') => {
+                let prefs = crate::prefs::UserPrefs::from_config(&self.app.config);
+                match prefs.save() {
+                    Ok(()) => {
+                        self.export_status = Some(format!(
+                            "Preferences saved → {}",
+                            crate::prefs::UserPrefs::prefs_path_display()
+                        ));
+                    }
+                    Err(err) => {
+                        self.export_status = Some(format!("Preferences save failed: {err}"));
+                    }
+                }
+                return;
+            }
             KeyCode::Enter => {
                 // When the Bands field is on the Custom sentinel, Enter opens
                 // the band-checklist instead of running a calculation.
@@ -1049,10 +1071,10 @@ fn hint_text(focus: Focus, show_band_checklist: bool) -> &'static str {
 
     match focus {
         Focus::Config => {
-            " ↑↓/jk:select  ←→/hl:change  r:run  e:csv  E:json  m:md  t:txt  i:info  Tab:→results  q:quit"
+            " ↑↓/jk:select  ←→/hl:change  r:run  e:csv  E:json  m:md  t:txt  s:prefs  i:info  Tab:→results  q:quit"
         }
         Focus::Results => {
-            " ↑↓/jk:scroll  PgUp/Dn:page  r:run  e:csv  E:json  m:md  t:txt  i:info  Tab:→config   q:quit"
+            " ↑↓/jk:scroll  PgUp/Dn:page  r:run  e:csv  E:json  m:md  t:txt  s:prefs  i:info  Tab:→config   q:quit"
         }
     }
 }
