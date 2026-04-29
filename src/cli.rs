@@ -2045,7 +2045,20 @@ fn print_results(results: &AppResults) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::io::Cursor;
+
+    fn sample_results_for_export_tests() -> AppResults {
+        AppResults {
+            calculations: Vec::new(),
+            recommendation: None,
+            optima: Vec::new(),
+            window_optima: Vec::new(),
+            resonant_compromises: Vec::new(),
+            config: AppConfig::default(),
+            skipped_band_indices: Vec::new(),
+        }
+    }
 
     #[test]
     fn run_interactive_with_io_exits_cleanly() {
@@ -2233,15 +2246,7 @@ mod tests {
     fn interactive_export_prompt_rejects_unknown_format() {
         let mut input = Cursor::new(b"yaml\n".to_vec());
         let mut output = Vec::new();
-        let results = AppResults {
-            calculations: Vec::new(),
-            recommendation: None,
-            optima: Vec::new(),
-            window_optima: Vec::new(),
-            resonant_compromises: Vec::new(),
-            config: AppConfig::default(),
-            skipped_band_indices: Vec::new(),
-        };
+        let results = sample_results_for_export_tests();
 
         let exports = interactive_export_prompt(&mut input, &mut output, &results);
 
@@ -2359,21 +2364,47 @@ mod tests {
     fn interactive_export_prompt_requires_at_least_one_format_when_only_commas() {
         let mut input = Cursor::new(b" , , \n".to_vec());
         let mut output = Vec::new();
-        let results = AppResults {
-            calculations: Vec::new(),
-            recommendation: None,
-            optima: Vec::new(),
-            window_optima: Vec::new(),
-            resonant_compromises: Vec::new(),
-            config: AppConfig::default(),
-            skipped_band_indices: Vec::new(),
-        };
+        let results = sample_results_for_export_tests();
 
         let exports = interactive_export_prompt(&mut input, &mut output, &results);
 
         assert!(exports.is_empty());
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
         assert!(rendered.contains("--export requires at least one format; skipping export."));
+    }
+
+    #[test]
+    fn interactive_export_prompt_none_returns_empty_without_errors() {
+        let mut input = Cursor::new(b"none\n".to_vec());
+        let mut output = Vec::new();
+        let results = sample_results_for_export_tests();
+
+        let exports = interactive_export_prompt(&mut input, &mut output, &results);
+
+        assert!(exports.is_empty());
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(!rendered.contains("unknown format"));
+        assert!(!rendered.contains("skipping export"));
+    }
+
+    #[test]
+    fn interactive_export_prompt_single_format_uses_explicit_output_path() {
+        let out_path = format!("rusty-wire-export-test-{}-single.csv", std::process::id());
+        let input_bytes = format!("csv\n{}\n", out_path);
+        let mut input = Cursor::new(input_bytes.into_bytes());
+        let mut output = Vec::new();
+        let results = sample_results_for_export_tests();
+
+        let exports = interactive_export_prompt(&mut input, &mut output, &results);
+
+        assert_eq!(exports.len(), 1);
+        assert_eq!(exports[0].0, ExportFormat::Csv);
+        assert_eq!(exports[0].1, out_path);
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Exported results to"));
+        assert!(std::path::Path::new(&exports[0].1).exists());
+
+        let _ = fs::remove_file(&exports[0].1);
     }
 
     // --- prompt_calc_mode_with_default ---
