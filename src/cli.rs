@@ -2073,6 +2073,18 @@ mod tests {
     }
 
     #[test]
+    fn run_interactive_with_io_exits_cleanly_on_eof_menu_input() {
+        let mut input = Cursor::new(Vec::<u8>::new());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Select option (1-6): "));
+        assert!(rendered.contains("Exiting Rusty Wire."));
+    }
+
+    #[test]
     fn run_interactive_with_io_about_menu_shows_project_info() {
         let mut input = Cursor::new(b"\n5\n6\n".to_vec());
         let mut output = Vec::new();
@@ -2109,6 +2121,19 @@ mod tests {
         assert_eq!(units, UnitSystem::Imperial);
         assert!((min_m - 12.192).abs() < 1e-6);
         assert!((max_m - 24.384).abs() < 1e-6);
+    }
+
+    #[test]
+    fn prompt_wire_length_window_supports_metric_input() {
+        let mut input = Cursor::new(b"m\n12\n25\n".to_vec());
+        let mut output = Vec::new();
+
+        let (min_m, max_m, units) =
+            prompt_wire_length_window_with_default(&mut input, &mut output, None, None);
+
+        assert_eq!(units, UnitSystem::Metric);
+        assert!((min_m - 12.0).abs() < 1e-9);
+        assert!((max_m - 25.0).abs() < 1e-9);
     }
 
     #[test]
@@ -2172,6 +2197,29 @@ mod tests {
         );
 
         assert_eq!(ratio, TransformerRatio::R1To56);
+    }
+
+    #[test]
+    fn prompt_transformer_ratio_invalid_value_falls_back_to_recommended_with_message() {
+        let mut input = Cursor::new(b"1:13\n".to_vec());
+        let mut output = Vec::new();
+
+        let ratio = prompt_transformer_ratio_with_default(
+            &mut input,
+            &mut output,
+            CalcMode::NonResonant,
+            None,
+            None,
+        );
+
+        assert_eq!(ratio, TransformerRatio::R1To9);
+        let rendered = String::from_utf8(output).expect("output should be utf-8");
+        assert!(
+            rendered.contains(&recommended_transformer_ratio_fallback_message(
+                CalcMode::NonResonant,
+                None,
+            ))
+        );
     }
 
     #[test]
