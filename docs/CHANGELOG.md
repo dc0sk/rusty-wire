@@ -2,17 +2,16 @@
 
 All notable changes to Rusty Wire are documented here.
 
-## [2.6.0] — 2026-04-25
-
-### Test Coverage
-- **PR #49**: Antenna-model metadata coverage (5 lib tests)
-  - Transformer ratio explanations: dipole, inverted-V, trap dipole, full-wave loop, OCFD
-  - Impedance expectations for each model
-- **PR #48**: TUI global key-event guards (2 lib tests)
-  - Non-Press event rejection (Release events ignored)
-  - Esc-without-popup quit behavior
-
 ## [Unreleased]
+
+## [2.7.0] — 2026-04-29
+
+### Added
+- **Release packaging pipeline**: added Arch Linux packaging metadata, Debian packaging files, crate `cargo-deb` metadata, and a GitHub Actions release workflow that publishes tarballs and `.deb` artifacts for both `x86_64` and native `aarch64` runners.
+- **Persistent user preferences**: added `~/.config/rusty-wire/config.toml` support for saving and reloading preferred region, mode, velocity factor, antenna height, ground class, conductor diameter, and output units across CLI and TUI sessions.
+- **XDG custom band preset discovery**: added auto-discovery of `~/.config/rusty-wire/bands.toml` for named band presets in both CLI and TUI, plus a commented example preset file in `packaging/example-bands.toml`.
+- **TUI live region refresh**: changing ITU region in the TUI now rebuilds built-in band preset labels with region-specific 80m/40m edges, reapplies the active preset for the new region, and refreshes the custom-band checklist overlay in place.
+
 - **TUI documentation screenshots refreshed**: regenerated the five canonical PNGs from `tui-doc-snapshots` after the recent TUI metadata changes; the About popup capture now includes the `Platform` line and `docs/tui-screenshots.md` now documents the canonical-only screenshot set.
 - **`--verbose` and `--dry-run` CLI inspection flags**: added a resolved-run summary for normal execution (`--verbose`) and a validation-only preview path (`--dry-run`) that skips calculations and exports while still rejecting invalid configurations.
 - **60m band preset**: added 60m (5 MHz WRC-15 segment) to the TUI's "160m–10m + 60m (10 bands)" built-in preset; the preset previously omitted 60m despite the band being defined in the band table.
@@ -22,7 +21,7 @@ All notable changes to Rusty Wire are documented here.
 - **CI regression runner**: added `scripts/test-all.sh` to run the full suite (format gate, compile gate, cargo test, ITU bands, multi-optima, NEC calibration) with a single command.
 - **NEC calibration hardening**: `scripts/calibrate-conductor-model.sh` now tolerates blank lines and `#` comments in CSV inputs while preserving strict malformed-row validation.
 - **NEC calibration regression script**: added `scripts/test-nec-calibration.sh` to lock template fit constants (`k = 0.011542`, `RMSE = 0.000000`) and validate parser behavior.
-- **Docs/version sync**: updated README and CLI guide version labels to 2.6.0.
+- **Docs/version sync**: updated README and CLI guide version labels to 2.7.0 and refreshed their `bands.toml` and TUI-region behavior notes.
 - **TUI warning cleanup**: removed non-test unused import warning by scoping `KeyEventState` usage to tests.
 - **TUI export**: press `e` (CSV), `E` (JSON), `m` (Markdown), or `t` (plain text) to export results directly from the TUI; a status message is shown in the hints bar after each export attempt.
 - **TUI step-size config field**: the `Step` field in the TUI config panel lets you cycle through search-step presets (0.01, 0.02, 0.05, 0.10, 0.25, 0.50, 1.00 m) with ←/→, matching the CLI `--step` flag.
@@ -58,6 +57,19 @@ All notable changes to Rusty Wire are documented here.
 - **Practical-limits extension**: skip-distance summaries now also include first-order ground-class scaling (poor/average/good).
 - **Practical-limits extension**: resonant-length estimates now include first-order conductor-diameter correction around a 2.0 mm baseline.
 - **Conductor calibration refinement**: updated conductor-diameter logarithmic coefficient to `0.011542` from the current reference sweep dataset.
+
+### Test Coverage
+- **TUI region refresh regression coverage**: added targeted tests for live preset-label refresh and checklist-overlay refresh when the ITU region changes.
+
+## [2.6.0] — 2026-04-25
+
+### Test Coverage
+- **PR #49**: Antenna-model metadata coverage (5 lib tests)
+	- Transformer ratio explanations: dipole, inverted-V, trap dipole, full-wave loop, OCFD
+	- Impedance expectations for each model
+- **PR #48**: TUI global key-event guards (2 lib tests)
+	- Non-Press event rejection (Release events ignored)
+	- Esc-without-popup quit behavior
 
 ## [2.5.2] - 2026-04-21
 
