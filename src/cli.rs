@@ -2729,4 +2729,44 @@ mod tests {
 
         assert_eq!(model, Some(AntennaModel::Dipole));
     }
+
+    #[test]
+    fn run_interactive_with_io_option_4_changes_region() {
+        // Default region (1) → option 4 → select region 3 → exit
+        let mut input = Cursor::new(b"\n4\n3\n6\n".to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Switched to ITU Region 3"));
+    }
+
+    #[test]
+    fn run_interactive_with_io_option_5_shows_project_info() {
+        // Default region → option 5 (about/project info) → exit
+        let mut input = Cursor::new(b"\n5\n6\n".to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Project info:"));
+        assert!(rendered.contains("Version:"));
+        assert!(rendered.contains("GitHub:"));
+    }
+
+    #[test]
+    fn interactive_export_prompt_uppercase_tokens_are_normalized() {
+        // Uppercase format tokens should be lowercased and accepted
+        let mut input = Cursor::new(b"CSV,JSON\n".to_vec());
+        let mut output = Vec::new();
+        let results = sample_results_for_export_tests();
+
+        let exports = interactive_export_prompt(&mut input, &mut output, &results);
+
+        assert_eq!(exports.len(), 2);
+        assert_eq!(exports[0].0, ExportFormat::Csv);
+        assert_eq!(exports[1].0, ExportFormat::Json);
+    }
 }
