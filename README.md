@@ -1,6 +1,6 @@
 # Rusty Wire
 
-![Version](https://img.shields.io/badge/version-2.6.0-blue)
+![Version](https://img.shields.io/badge/version-2.7.0-blue)
 ![License](https://img.shields.io/badge/license-GPL--2.0--or--later-green)
 ![Rust edition](https://img.shields.io/badge/rust-2021-orange)
 
@@ -19,7 +19,7 @@ amateur and shortwave bands. It covers six antenna models, recommends transforme
 automatically, and fits comfortably into shell scripts as well as interactive
 planning sessions.
 
-**2.6.0: expanded regression coverage for TUI key guards and antenna-model guidance · 3.x roadmap: desktop GUI (`iced`)**
+**2.7.0: packaging pipeline, persistent preferences, and smarter TUI band presets · 3.x roadmap: desktop GUI (`iced`)**
 
 ---
 
@@ -245,10 +245,11 @@ cargo run --bin tui -- --bands-config ./profiles/bands.toml
 The TUI provides a two-panel layout — configuration on the left, results on the
 right — and requires no command-line flags for the default experience.
 Configuration fields cycle through presets with ←/→; results scroll with ↑↓ or
-PgUp/PgDn. If a `bands.toml` file is present in the current working directory,
-its named presets are added to the `Bands` field automatically. You can also
-override the preset file at startup with `--bands-config <path>`. Press `r` to
-recalculate, `q` to quit.
+PgUp/PgDn. Named presets are auto-discovered from
+`~/.config/rusty-wire/bands.toml` first, then `./bands.toml`, and you can still
+override the preset file at startup with `--bands-config <path>`. Changing ITU
+region refreshes the built-in band preset labels and updates the custom-band
+checklist in place. Press `r` to recalculate, `q` to quit.
 
 Screenshot capture and placement checklist: [docs/tui-screenshots.md](docs/tui-screenshots.md).
 

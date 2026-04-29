@@ -1,6 +1,6 @@
 # CLI Guide
 
-**Version 2.6.0**
+**Version 2.7.0**
 
 Use this page as the command reference for Rusty Wire.
 
@@ -66,7 +66,7 @@ It lets you:
 - Configure non-resonant wire windows interactively
 - Export results as CSV (`e`), JSON (`E`), Markdown (`m`), or plain text (`t`) directly from the TUI
 
-When a `bands.toml` file exists in the current working directory, the TUI adds its named presets to the `Bands` field alongside the built-in preset list and the `Custom…` checklist option. To load a different preset file at startup, launch the TUI with `cargo run --bin tui -- --bands-config <path>` or `rusty-wire-tui --bands-config <path>`.
+The TUI auto-discovers named presets from `~/.config/rusty-wire/bands.toml` first and `./bands.toml` second, adding them to the `Bands` field alongside the built-in preset list and the `Custom…` checklist option. To load a different preset file at startup, launch the TUI with `cargo run --bin tui -- --bands-config <path>` or `rusty-wire-tui --bands-config <path>`. Changing ITU region refreshes the built-in band preset labels and updates the custom-band checklist overlay in place.
 
 **TUI keybindings:**
 
@@ -132,7 +132,7 @@ rusty-wire --interactive
 - `--region <1|2|3>` ITU region (default: `1`)
 - `--bands <csv>` Band names/ranges, for example `40m,20m,10m-15m`
 - `--bands-preset <name>` Named band preset loaded from TOML
-- `--bands-config <path>` Preset config path (default: `bands.toml`)
+- `--bands-config <path>` Preset config path override (otherwise auto-discovered from `~/.config/rusty-wire/bands.toml` then `./bands.toml`)
 - `--advise` Print ranked wire + balun/unun candidates with efficiency-style metrics
 - `--validate-with-fnec` With `--advise`, attempt optional fnec-rust cross-validation (if `fnec` is available in `PATH`) and print per-candidate status notes
 - `--fnec-pass-max-mismatch <value>` With `--advise --validate-with-fnec`, mismatch factor at or below this value is marked `passed` (range `0.0..=1.0`, default `0.25`)
