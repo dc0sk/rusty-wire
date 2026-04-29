@@ -54,7 +54,7 @@ equal-tie support.
 - `--verbose` — print the resolved run configuration before executing.
 - `--dry-run` — validate inputs and print the resolved run without calculating or exporting.
 - `--bands-preset <name>` — load a named band set from a TOML config file.
-- `--bands-config <path>` — override preset file path (default: `bands.toml`).
+- `--bands-config <path>` — override preset file path; otherwise Rusty Wire auto-discovers `~/.config/rusty-wire/bands.toml` first, then `./bands.toml`.
 - `--advise` — print ranked wire + balun/unun candidates with efficiency-style metrics.
 - `--validate-with-fnec` — when used with `--advise`, run optional cross-tool validation via `fnec-rust` (if available in `PATH`) and print per-candidate status notes.
 - `--fnec-pass-max-mismatch` and `--fnec-reject-min-mismatch` — configure pass/warn/reject thresholds for advise validation when `--validate-with-fnec` is enabled.
@@ -83,6 +83,7 @@ equal-tie support.
 - ITU Region-aware band tables (Region 1 default; `--region 1|2|3`).
 - Named-band selection and ranges: `--bands 40m,20m,10m-15m`.
 - `--list-bands` to inspect the full band table for any region.
+- In the TUI, changing ITU region immediately refreshes built-in band preset labels, reapplies the active preset for the new region, and updates the custom-band checklist overlay in place.
 
 ---
 
