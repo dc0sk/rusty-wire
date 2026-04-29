@@ -7,6 +7,13 @@ All notable changes to Rusty Wire are documented here.
 ### Added
 - **TUI advise panel toggle**: press `a` in the TUI to toggle ranked wire + balun/unun candidates directly in the results panel. The view reuses app-layer optimizer ranking and auto-hides whenever configuration changes to avoid stale recommendations.
 
+### Changed
+- **Interactive-mode test coverage** (slices 1–5): extended injected-I/O unit tests to cover all remaining interactive prompt paths — export format normalization (uppercase tokens), menu option 4 (ITU region change), menu option 5 (project info), deduplication of alias formats, mixed valid/invalid abort behavior, multi-format defaults, and single-format explicit output paths. Unit test count: 255 (up from 242 at v2.7.0).
+
+### Infrastructure
+- **Packaging version sync guardrails**: added `scripts/sync-packaging-version.sh` (one-command Arch/Debian version patch), `scripts/check-packaging-version-sync.sh` (CI validation), and `.github/workflows/packaging-version-sync.yml` (PR + main branch enforcement). Debian changelog fixed from 2.6.0-1 to 2.7.0-1.
+- **Release tag version gate**: `.github/workflows/release-packaging.yml` now runs a `verify-tag-version-sync` job first; all release steps are gated on Cargo.toml, PKGBUILD, and Debian changelog being at the same version as the pushed tag.
+
 ## [2.7.0] — 2026-04-29
 
 ### Added
