@@ -2495,6 +2495,20 @@ mod tests {
         }
     }
 
+    #[test]
+    fn interactive_export_prompt_mixed_valid_and_invalid_formats_aborts_export() {
+        let mut input = Cursor::new(b"csv,yaml\n".to_vec());
+        let mut output = Vec::new();
+        let results = sample_results_for_export_tests();
+
+        let exports = interactive_export_prompt(&mut input, &mut output, &results);
+
+        assert!(exports.is_empty());
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("unknown format 'yaml'; skipping export."));
+        assert!(!std::path::Path::new(default_output_name(ExportFormat::Csv)).exists());
+    }
+
     // --- prompt_calc_mode_with_default ---
 
     #[test]
