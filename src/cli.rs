@@ -29,6 +29,26 @@ use std::io::{self, BufRead, Write};
 
 const PROJECT_URL: &str = env!("CARGO_PKG_REPOSITORY");
 
+/// Resolve the default bands config file path by probing standard locations
+/// in priority order:
+///   1. `~/.config/rusty-wire/bands.toml` (XDG-style user config dir)
+///   2. `./bands.toml` in the current working directory
+///
+/// Falls back to `"bands.toml"` (cwd) when neither file exists, so that
+/// any subsequent error message names a path the user can create.
+fn resolve_bands_config_path() -> String {
+    if let Ok(home) = std::env::var("HOME") {
+        let user_path = std::path::PathBuf::from(home)
+            .join(".config")
+            .join("rusty-wire")
+            .join("bands.toml");
+        if user_path.exists() {
+            return user_path.display().to_string();
+        }
+    }
+    "bands.toml".to_string()
+}
+
 // ---------------------------------------------------------------------------
 // CLI argument parsing with clap
 // ---------------------------------------------------------------------------
@@ -466,7 +486,20 @@ pub fn run_from_args(args: &[String]) -> bool {
             }
         },
         (None, Some(preset_name)) => {
-            let config_path = cli.bands_config.as_deref().unwrap_or("bands.toml");
+            let config_path = cli.bands_config.as_deref().unwrap_or_else(|| {
+                // When --bands-config is not specified, probe the standard
+                // locations in priority order so the user doesn't need to
+                // pass the path explicitly when the file is in the default
+                // XDG config directory.
+                "bands.toml" // placeholder; resolved below
+            });
+            // Resolve the actual path (explicit > XDG config dir > cwd).
+            let resolved_path: String = if cli.bands_config.is_some() {
+                config_path.to_string()
+            } else {
+                resolve_bands_config_path()
+            };
+            let config_path = resolved_path.as_str();
             let resolved_selection = match load_preset_selection(config_path, preset_name) {
                 Ok(selection) => selection,
                 Err(err) => {

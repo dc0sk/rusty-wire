@@ -1436,6 +1436,19 @@ fn escape_html(text: &str) -> String {
     escaped
 }
 
+fn user_bands_config_path() -> Option<String> {
+    let home = std::env::var("HOME").ok()?;
+    let path = std::path::PathBuf::from(home)
+        .join(".config")
+        .join("rusty-wire")
+        .join("bands.toml");
+    if path.exists() {
+        Some(path.display().to_string())
+    } else {
+        None
+    }
+}
+
 fn load_tui_band_presets(
     band_preset_config: Option<&str>,
 ) -> (Vec<BandPresetChoice>, Option<String>) {
@@ -1444,10 +1457,22 @@ fn load_tui_band_presets(
         .map(|(label, selection)| BandPresetChoice::named(*label, *selection))
         .collect();
     let mut status = None;
-    let preset_path = band_preset_config.unwrap_or(DEFAULT_BAND_PRESET_CONFIG);
-    let should_attempt_load = band_preset_config.is_some() || Path::new(preset_path).exists();
 
-    if should_attempt_load {
+    // Resolve the preset file path.  Priority:
+    //   1. Explicit --bands-config argument
+    //   2. ~/.config/rusty-wire/bands.toml (if it exists)
+    //   3. ./bands.toml in the current directory (if it exists)
+    let resolved_path: Option<String> = if let Some(explicit) = band_preset_config {
+        Some(explicit.to_string())
+    } else if let Some(user_path) = user_bands_config_path() {
+        Some(user_path)
+    } else if Path::new(DEFAULT_BAND_PRESET_CONFIG).exists() {
+        Some(DEFAULT_BAND_PRESET_CONFIG.to_string())
+    } else {
+        None
+    };
+
+    if let Some(ref preset_path) = resolved_path {
         match load_named_presets(preset_path) {
             Ok(named) => {
                 presets.extend(named.into_iter().map(|(name, selection)| {
