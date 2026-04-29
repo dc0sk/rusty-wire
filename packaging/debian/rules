@@ -1,0 +1,7 @@
+#!/usr/bin/make -f
+
+# Disable debug packages if the Rust helpers do not emit them automatically.
+export DH_VERBOSE=1
+
+%:
+	dh $@ --buildsystem=cargo

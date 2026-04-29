@@ -8,6 +8,20 @@ edition = "2021"
 keywords = ["amateur-radio", "antenna", "ham-radio", "rf", "cli"]
 categories = ["command-line-utilities"]
 
+[package.metadata.deb]
+name = "rusty-wire"
+section = "hamradio"
+priority = "optional"
+assets = [
+    { source = "target/release/rusty-wire", dest = "/usr/bin/rusty-wire", mode = "755" },
+    { source = "README.md", dest = "/usr/share/doc/rusty-wire/README.md", mode = "644" },
+]
+extended-description = """\
+Wire antenna length calculator for amateur radio operators. \
+Supports CLI and full-screen TUI modes, ITU/amateur band constraints, \
+velocity factor, and multiple antenna types.\
+"""
+
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
 ratatui = "0.29"

@@ -1,0 +1,45 @@
+# Maintainer: Simon Keimer <dc0sk@example.com>
+pkgname=rusty-wire-git
+pkgver=r0.g0000000
+pkgrel=1
+pkgdesc="Wire antenna length calculator for amateur radio operators – CLI and TUI (git HEAD)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/dc0sk/rusty-wire"
+license=('GPL-2.0-or-later')
+depends=()
+makedepends=('cargo' 'rust' 'git')
+provides=("rusty-wire=$pkgver")
+conflicts=('rusty-wire')
+source=("$pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$pkgname"
+    printf "r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+    cd "$pkgname"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "$pkgname"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    cargo build --release --all-features
+}
+
+check() {
+    cd "$pkgname"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo test --all-features
+}
+
+package() {
+    cd "$pkgname"
+    install -Dm755 "target/release/rusty-wire" "$pkgdir/usr/bin/rusty-wire"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
