@@ -2475,6 +2475,26 @@ mod tests {
         }
     }
 
+    #[test]
+    fn interactive_export_prompt_deduplicates_alias_formats_in_input_order() {
+        let mut input = Cursor::new(b"md,text,markdown,txt,text\n".to_vec());
+        let mut output = Vec::new();
+        let results = sample_results_for_export_tests();
+
+        let exports = interactive_export_prompt(&mut input, &mut output, &results);
+
+        assert_eq!(exports.len(), 2);
+        assert_eq!(exports[0].0, ExportFormat::Markdown);
+        assert_eq!(exports[0].1, default_output_name(ExportFormat::Markdown));
+        assert_eq!(exports[1].0, ExportFormat::Txt);
+        assert_eq!(exports[1].1, default_output_name(ExportFormat::Txt));
+
+        for (_, path) in &exports {
+            assert!(std::path::Path::new(path).exists());
+            let _ = fs::remove_file(path);
+        }
+    }
+
     // --- prompt_calc_mode_with_default ---
 
     #[test]
