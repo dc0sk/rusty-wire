@@ -22,7 +22,11 @@ Use this checklist for each version bump and release tag.
 ## 3. Update Version and SBOM
 
 - Bump version in `Cargo.toml`.
-- Update `packaging/arch/rusty-wire/PKGBUILD`: set `pkgver=` to the new version and reset `pkgrel=1`. After downloading the source tarball, run `makepkg -g` to regenerate `sha256sums`.
+- Sync packaging versions using `scripts/sync-packaging-version.sh <version>`.
+- Confirm both files were updated:
+  - `packaging/arch/rusty-wire/PKGBUILD`: `pkgver=` set to the new version and `pkgrel=1`
+  - `packaging/debian/changelog`: first entry version set to `<version>-1`
+- After downloading the source tarball, run `makepkg -g` to regenerate Arch `sha256sums`.
 - Regenerate SBOM artifacts:
 
 ```bash
