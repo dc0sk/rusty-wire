@@ -94,17 +94,18 @@ const TRANSFORMER_RATIOS: &[TransformerRatio] = &[
 
 /// Named band presets that work in all three ITU regions.
 ///
-/// Indices are 1-based.  All selected indices exist across all three regions
-/// (they are the common HF amateur allocations).
-const BUILTIN_BAND_PRESETS: &[(&str, &str)] = &[
-    ("40m–10m (7 bands)", "40m,30m,20m,17m,15m,12m,10m"),
-    ("80m–10m (8 bands)", "80m,40m,30m,20m,17m,15m,12m,10m"),
+/// Some labels include the current region's 80m/40m allocations so the user
+/// can immediately see when a preset will map to the wider Region 2/3 edges.
+const BUILTIN_BAND_PRESET_TEMPLATES: &[(&str, &str, bool)] = &[
+    ("40m–10m (7 bands)", "40m,30m,20m,17m,15m,12m,10m", true),
+    ("80m–10m (8 bands)", "80m,40m,30m,20m,17m,15m,12m,10m", true),
     (
         "160m–10m + 60m (10 bands)",
         "160m,80m,60m,40m,30m,20m,17m,15m,12m,10m",
+        true,
     ),
-    ("20m–10m (5 bands)", "20m,17m,15m,12m,10m"),
-    ("Contest 80/40/20/15/10", "80m,40m,20m,15m,10m"),
+    ("20m–10m (5 bands)", "20m,17m,15m,12m,10m", false),
+    ("Contest 80/40/20/15/10", "80m,40m,20m,15m,10m", true),
 ];
 
 const DEFAULT_BAND_PRESET_CONFIG: &str = "bands.toml";
@@ -222,6 +223,8 @@ struct TuiState {
     field_idx: usize,
     /// Available built-in and TOML-loaded band presets.
     band_presets: Vec<BandPresetChoice>,
+    /// Optional explicit bands.toml path passed into the TUI.
+    band_preset_config: Option<String>,
     /// Index into `band_presets`.
     band_preset_idx: usize,
     /// Index into `VF_PRESETS`.
@@ -269,7 +272,9 @@ impl TuiState {
         let prefs = crate::prefs::UserPrefs::load();
         prefs.apply_to_config(&mut app.config);
 
-        let (band_presets, preset_status) = load_tui_band_presets(band_preset_config);
+        let band_preset_config = band_preset_config.map(str::to_string);
+        let (band_presets, preset_status) =
+            load_tui_band_presets(band_preset_config.as_deref(), app.config.itu_region);
         // Derive preset indices from the default AppConfig values.
         let vf = app.config.velocity_factor;
         let vf_idx = VF_PRESETS
@@ -311,6 +316,7 @@ impl TuiState {
             focus: Focus::Config,
             field_idx: 0,
             band_presets,
+            band_preset_config,
             band_preset_idx: 0,
             vf_idx,
             ratio_idx,
@@ -338,6 +344,61 @@ impl TuiState {
 
     fn current_field(&self) -> ConfigField {
         ConfigField::ALL[self.field_idx]
+    }
+
+    fn refresh_band_presets_for_region(&mut self) {
+        let current_selection = self.current_band_preset().selection.clone();
+        let was_custom = self.current_band_preset().is_custom();
+        let (band_presets, preset_status) = load_tui_band_presets(
+            self.band_preset_config.as_deref(),
+            self.app.config.itu_region,
+        );
+
+        self.band_presets = band_presets;
+        self.band_preset_idx = if was_custom {
+            self.band_presets.len() - 1
+        } else if let Some(selection) = current_selection.as_deref() {
+            self.band_presets
+                .iter()
+                .position(|preset| preset.selection.as_deref() == Some(selection))
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
+        if let Some(status) = preset_status {
+            self.export_status = Some(status);
+        }
+    }
+
+    fn refresh_band_checklist_for_region(&mut self) {
+        if !self.show_band_checklist {
+            return;
+        }
+
+        let checked: std::collections::HashSet<usize> = self
+            .band_checklist_items
+            .iter()
+            .filter(|(_, _, is_checked)| *is_checked)
+            .map(|(idx, _, _)| *idx)
+            .collect();
+
+        self.band_checklist_items = band_listing_view(self.app.config.itu_region)
+            .rows
+            .into_iter()
+            .map(|row| {
+                let is_checked = checked.contains(&row.index);
+                (row.index, row.display, is_checked)
+            })
+            .collect();
+
+        if self.band_checklist_items.is_empty() {
+            self.band_checklist_cursor = 0;
+        } else {
+            self.band_checklist_cursor = self
+                .band_checklist_cursor
+                .min(self.band_checklist_items.len() - 1);
+        }
     }
 
     /// Return (label, value, is_selected) for every config field.
@@ -606,7 +667,52 @@ impl TuiState {
     }
 
     fn dispatch(&mut self, action: AppAction) {
+        let region_change = match &action {
+            AppAction::SetItuRegion(region) => Some((
+                *region,
+                self.current_band_preset().selection.clone(),
+                self.current_band_preset().label.clone(),
+                self.current_band_preset().is_custom(),
+                self.app.config.band_indices.clone(),
+            )),
+            _ => None,
+        };
+
         self.app = apply_action(self.app.clone(), action);
+
+        if let Some((region, selection, label, was_custom, previous_indices)) = region_change {
+            self.refresh_band_presets_for_region();
+            self.refresh_band_checklist_for_region();
+
+            if was_custom {
+                if !self.custom_band_indices.is_empty() {
+                    self.app = apply_action(
+                        self.app.clone(),
+                        AppAction::SetBandIndices(self.custom_band_indices.clone()),
+                    );
+                }
+                return;
+            }
+
+            if let Some(selection) = selection.as_deref() {
+                match parse_band_selection(selection, region) {
+                    Ok(indices) => {
+                        self.app =
+                            apply_action(self.app.clone(), AppAction::SetBandIndices(indices));
+                    }
+                    Err(err) => {
+                        self.export_status = Some(format!(
+                            "Preset '{label}' is invalid for Region {}: {err}",
+                            region.short_name()
+                        ));
+                        self.app = apply_action(
+                            self.app.clone(),
+                            AppAction::SetBandIndices(previous_indices),
+                        );
+                    }
+                }
+            }
+        }
     }
 
     fn run_calculation(&mut self) {
@@ -1322,8 +1428,11 @@ fn build_trap_dipole_snapshot_state() -> TuiState {
 fn build_non_resonant_snapshot_state() -> TuiState {
     let mut state = TuiState::new(None);
     state.band_preset_idx = 3;
-    let indices = parse_band_selection(BUILTIN_BAND_PRESETS[3].1, state.app.config.itu_region)
-        .expect("built-in band preset should parse");
+    let indices = parse_band_selection(
+        BUILTIN_BAND_PRESET_TEMPLATES[3].1,
+        state.app.config.itu_region,
+    )
+    .expect("built-in band preset should parse");
     state.dispatch(AppAction::SetBandIndices(indices));
     state.dispatch(AppAction::SetAntennaModel(Some(
         AntennaModel::EndFedHalfWave,
@@ -1471,13 +1580,33 @@ fn user_bands_config_path() -> Option<String> {
     }
 }
 
+fn region_band_edges_label(region: ITURegion) -> &'static str {
+    match region {
+        ITURegion::Region1 => " [R1 80m 3.5–3.8 / 40m 7.0–7.2]",
+        ITURegion::Region2 => " [R2 80m 3.5–4.0 / 40m 7.0–7.3]",
+        ITURegion::Region3 => " [R3 80m 3.5–3.9 / 40m 7.0–7.2]",
+    }
+}
+
+fn builtin_band_presets(region: ITURegion) -> Vec<BandPresetChoice> {
+    BUILTIN_BAND_PRESET_TEMPLATES
+        .iter()
+        .map(|(label, selection, region_specific)| {
+            let label = if *region_specific {
+                format!("{label}{}", region_band_edges_label(region))
+            } else {
+                (*label).to_string()
+            };
+            BandPresetChoice::named(label, *selection)
+        })
+        .collect()
+}
+
 fn load_tui_band_presets(
     band_preset_config: Option<&str>,
+    region: ITURegion,
 ) -> (Vec<BandPresetChoice>, Option<String>) {
-    let mut presets: Vec<BandPresetChoice> = BUILTIN_BAND_PRESETS
-        .iter()
-        .map(|(label, selection)| BandPresetChoice::named(*label, *selection))
-        .collect();
+    let mut presets = builtin_band_presets(region);
     let mut status = None;
 
     // Resolve the preset file path.  Priority:
@@ -1878,14 +2007,57 @@ mod tests {
 
         match action {
             AppAction::SetBandIndices(indices) => {
-                let expected =
-                    parse_band_selection(BUILTIN_BAND_PRESETS[1].1, state.app.config.itu_region)
-                        .expect("built-in preset should parse");
+                let expected = parse_band_selection(
+                    BUILTIN_BAND_PRESET_TEMPLATES[1].1,
+                    state.app.config.itu_region,
+                )
+                .expect("built-in preset should parse");
                 assert_eq!(indices, expected);
                 assert_eq!(state.band_preset_idx, 1);
             }
             other => panic!("expected SetBandIndices, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn region_change_refreshes_band_preset_labels_and_active_selection() {
+        let mut state = TuiState::new(None);
+        state.band_preset_idx = 1;
+        state.app.config.band_indices =
+            parse_band_selection(BUILTIN_BAND_PRESET_TEMPLATES[1].1, ITURegion::Region1)
+                .expect("region 1 preset should parse");
+
+        state.dispatch(AppAction::SetItuRegion(ITURegion::Region2));
+
+        assert_eq!(state.app.config.itu_region, ITURegion::Region2);
+        assert!(state
+            .current_band_preset()
+            .label
+            .contains("R2 80m 3.5–4.0 / 40m 7.0–7.3"));
+        assert_eq!(
+            state.app.config.band_indices,
+            parse_band_selection(BUILTIN_BAND_PRESET_TEMPLATES[1].1, ITURegion::Region2)
+                .expect("region 2 preset should parse")
+        );
+    }
+
+    #[test]
+    fn region_change_refreshes_open_band_checklist_items() {
+        let mut state = TuiState::new(None);
+        state.custom_band_indices = vec![2, 4];
+        state.open_band_checklist();
+
+        state.dispatch(AppAction::SetItuRegion(ITURegion::Region2));
+
+        assert!(state.show_band_checklist);
+        assert!(state
+            .band_checklist_items
+            .iter()
+            .any(|(_, display, checked)| *checked && display.contains("80m [HF] (3.5-4 MHz)")));
+        assert!(state
+            .band_checklist_items
+            .iter()
+            .any(|(_, display, checked)| *checked && display.contains("40m [HF] (7-7.3 MHz)")));
     }
 
     #[test]
@@ -1967,7 +2139,7 @@ mod tests {
 
     #[test]
     fn load_tui_band_presets_always_keeps_custom_choice_last() {
-        let (presets, status) = load_tui_band_presets(None);
+        let (presets, status) = load_tui_band_presets(None, ITURegion::Region1);
 
         assert!(status.is_none());
         assert!(presets.last().is_some_and(BandPresetChoice::is_custom));
