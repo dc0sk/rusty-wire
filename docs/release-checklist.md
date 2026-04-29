@@ -41,6 +41,7 @@ cargo sbom-cdx
 Run the default verification sequence:
 
 ```bash
+scripts/check-packaging-version-sync.sh
 cargo fmt
 cargo check
 cargo test
