@@ -67,6 +67,7 @@ It lets you:
 - Export results as CSV (`e`), JSON (`E`), Markdown (`m`), or plain text (`t`) directly from the TUI
 
 The TUI auto-discovers named presets from `~/.config/rusty-wire/bands.toml` first and `./bands.toml` second, adding them to the `Bands` field alongside the built-in preset list and the `Custom…` checklist option. To load a different preset file at startup, launch the TUI with `cargo run --bin tui -- --bands-config <path>` or `rusty-wire-tui --bands-config <path>`. Changing ITU region refreshes the built-in band preset labels and updates the custom-band checklist overlay in place.
+Press `a` to toggle ranked advise candidates (wire + balun/unun ratio) in the results panel.
 
 **TUI keybindings:**
 
@@ -77,6 +78,7 @@ The TUI auto-discovers named presets from `~/.config/rusty-wire/bands.toml` firs
 | `←` / `h` | Decrease selected field value |
 | `→` / `l` | Increase selected field value |
 | `r` / `Enter` | Run calculation |
+| `a` | Toggle advise panel (ranked wire + balun/unun candidates) |
 | `e` | Export results as CSV (`rusty-wire-results.csv`) |
 | `E` | Export results as JSON (`rusty-wire-results.json`) |
 | `m` | Export results as Markdown (`rusty-wire-results.md`) |

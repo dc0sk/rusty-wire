@@ -4,6 +4,9 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+### Added
+- **TUI advise panel toggle**: press `a` in the TUI to toggle ranked wire + balun/unun candidates directly in the results panel. The view reuses app-layer optimizer ranking and auto-hides whenever configuration changes to avoid stale recommendations.
+
 ## [2.7.0] — 2026-04-29
 
 ### Added
