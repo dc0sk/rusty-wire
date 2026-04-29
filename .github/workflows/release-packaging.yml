@@ -123,9 +123,9 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: target/debian/*.deb
 
-  # ── 3. Update stable PKGBUILD sha256sum and open a PR ───────────────────────
-  update-pkgbuild:
-    name: Update Arch PKGBUILD sha256sum
+  # ── 3. Update stable packaging metadata and open a PR ───────────────────────
+  update-packaging-metadata:
+    name: Update packaging metadata (Arch + Debian)
     runs-on: ubuntu-latest
     needs: create-release
 
@@ -148,14 +148,16 @@ jobs:
           echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION"  >> "$GITHUB_OUTPUT"
 
-      - name: Patch PKGBUILD
+      - name: Patch packaging files
         run: |
           VERSION=${{ steps.sha.outputs.version }}
           SHA256=${{ steps.sha.outputs.sha256 }}
           PKGBUILD=packaging/arch/rusty-wire/PKGBUILD
+          DEBIAN_CHANGELOG=packaging/debian/changelog
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/"         "$PKGBUILD"
           sed -i "s/^pkgrel=.*/pkgrel=1/"                  "$PKGBUILD"
           sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" "$PKGBUILD"
+          sed -Ei "1 s/^rusty-wire \([^)]+\)/rusty-wire (${VERSION}-1)/" "$DEBIAN_CHANGELOG"
 
       - name: Create branch and open PR
         env:
@@ -166,9 +168,9 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git add packaging/arch/rusty-wire/PKGBUILD
-          git diff --staged --quiet && echo "PKGBUILD already up to date" && exit 0
-          git commit -m "chore(packaging): update Arch PKGBUILD to v${VERSION}"
+          git add packaging/arch/rusty-wire/PKGBUILD packaging/debian/changelog
+          git diff --staged --quiet && echo "Packaging metadata already up to date" && exit 0
+          git commit -m "chore(packaging): sync Arch/Debian metadata to v${VERSION}"
           # Force-push so reruns replace a stale branch from a previous attempt.
           git push --force origin "$BRANCH"
           PR_BODY=$(printf '%s\n\n%s\n%s\n%s\n%s' \
@@ -176,10 +178,11 @@ jobs:
             "Updates:" \
             "- \`pkgver\` → \`${VERSION}\`" \
             "- \`pkgrel\` → \`1\`" \
+            "- \`debian/changelog\` version → \`${VERSION}-1\`" \
             "- \`sha256sums\` → computed from the upstream release tarball")
           # Create the PR; if one already exists for this branch, report its URL instead.
           gh pr create \
-            --title "chore(packaging): update Arch PKGBUILD to v${VERSION}" \
+            --title "chore(packaging): sync Arch/Debian metadata to v${VERSION}" \
             --body  "$PR_BODY" \
             --base  main \
             --head  "$BRANCH" \

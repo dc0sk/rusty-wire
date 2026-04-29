@@ -1,0 +1,20 @@
+name: Packaging Version Sync
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v[0-9]*'
+
+jobs:
+  check-version-sync:
+    name: Check packaging version sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Cargo, Arch, and Debian versions match
+        run: scripts/check-packaging-version-sync.sh
