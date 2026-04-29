@@ -1,0 +1,182 @@
+name: Release Packaging
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+
+# All jobs need write access to upload release assets and open PRs.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # ── 0. Create the GitHub Release (once, before uploading assets) ─────────────
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Extract version from tag
+        id: meta
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "rusty-wire ${{ steps.meta.outputs.version }}"
+          generate_release_notes: true
+
+  # ── 1. Build the release binary for each target arch ────────────────────────
+  release-binary:
+    name: Build binary (${{ matrix.arch }})
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            archive_suffix: x86_64-linux
+          - arch: aarch64
+            runner: ubuntu-24.04-arm   # native ARM64 runner (RPi 4/5 compatible)
+            archive_suffix: aarch64-linux
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.arch }}-cargo-
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Package binary tarball
+        run: |
+          VERSION=${{ needs.create-release.outputs.version }}
+          ARCHIVE="rusty-wire-${VERSION}-${{ matrix.archive_suffix }}.tar.gz"
+          tar czf "$ARCHIVE" -C target/release rusty-wire
+
+      - name: Upload tarball to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: "rusty-wire-${{ needs.create-release.outputs.version }}-${{ matrix.archive_suffix }}.tar.gz"
+
+  # ── 2. Build and upload a Debian package for each target arch ───────────────
+  release-deb:
+    name: Build .deb (${{ matrix.arch }})
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm   # native ARM64 runner (RPi 4/5 compatible)
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-${{ matrix.arch }}-cargo-deb-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.arch }}-cargo-
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --locked
+
+      - name: Build .deb package
+        run: cargo deb --locked
+
+      - name: Upload .deb to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: target/debian/*.deb
+
+  # ── 3. Update stable PKGBUILD sha256sum and open a PR ───────────────────────
+  update-pkgbuild:
+    name: Update Arch PKGBUILD sha256sum
+    runs-on: ubuntu-latest
+    needs: create-release
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          # Use a PAT if you need to trigger branch-protection-required CI
+          # on the resulting PR; GITHUB_TOKEN is sufficient otherwise.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute sha256 of upstream source tarball
+        id: sha
+        run: |
+          VERSION=${{ needs.create-release.outputs.version }}
+          TAG=${{ github.ref_name }}
+          URL="https://github.com/${{ github.repository }}/archive/refs/tags/${TAG}.tar.gz"
+          echo "Downloading $URL …"
+          SHA256=$(curl -fsSL "$URL" | sha256sum | cut -d' ' -f1)
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION"  >> "$GITHUB_OUTPUT"
+
+      - name: Patch PKGBUILD
+        run: |
+          VERSION=${{ steps.sha.outputs.version }}
+          SHA256=${{ steps.sha.outputs.sha256 }}
+          PKGBUILD=packaging/arch/rusty-wire/PKGBUILD
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/"         "$PKGBUILD"
+          sed -i "s/^pkgrel=.*/pkgrel=1/"                  "$PKGBUILD"
+          sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" "$PKGBUILD"
+
+      - name: Create branch and open PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${{ steps.sha.outputs.version }}
+          BRANCH="chore/pkgbuild-update-v${VERSION}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add packaging/arch/rusty-wire/PKGBUILD
+          git diff --staged --quiet && echo "PKGBUILD already up to date" && exit 0
+          git commit -m "chore(packaging): update Arch PKGBUILD to v${VERSION}"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore(packaging): update Arch PKGBUILD to v${VERSION}" \
+            --body  "Auto-generated by the \`release-packaging\` workflow after tag \`v${VERSION}\` was pushed.
+
+Updates:
+- \`pkgver\` → \`${VERSION}\`
+- \`pkgrel\` → \`1\`
+- \`sha256sums\` → computed from the upstream release tarball" \
+            --base  main \
+            --head  "$BRANCH"
