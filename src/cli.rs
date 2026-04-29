@@ -24,7 +24,7 @@ use crate::calculations::{
 use crate::export::{default_advise_output_name, export_advise};
 use crate::export::{default_output_name, export_results, validate_export_path};
 use crate::fnec_validation::{DEFAULT_FNEC_PASS_MAX_MISMATCH, DEFAULT_FNEC_REJECT_MIN_MISMATCH};
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches, Parser};
 use std::io::{self, BufRead, Write};
 
 const PROJECT_URL: &str = env!("CARGO_PKG_REPOSITORY");
@@ -172,6 +172,12 @@ struct Cli {
     /// Minimum mismatch factor considered rejected for fnec validation (0.0..=1.0)
     #[arg(long, default_value_t = DEFAULT_FNEC_REJECT_MIN_MISMATCH)]
     fnec_reject_min_mismatch: f64,
+
+    /// Save the current resolved settings as persistent user defaults
+    /// (~/.config/rusty-wire/config.toml).  Can be combined with any other
+    /// flags; the calculation still runs after saving.
+    #[arg(long)]
+    save_prefs: bool,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -404,7 +410,29 @@ impl From<CliITURegion> for ITURegion {
 /// Entry point when CLI arguments are present.
 /// Returns `true` on success, `false` if an error prevented completion.
 pub fn run_from_args(args: &[String]) -> bool {
-    let cli = Cli::parse_from(args.iter().map(|s| s.as_str()));
+    // Parse once using ArgMatches so we can detect which fields came from
+    // compiled-in defaults (ValueSource::DefaultValue) vs. the command line.
+    // This lets us apply persistent user preferences as fallbacks for any
+    // flag the user did not explicitly pass.
+    let matches = Cli::command().get_matches_from(args.iter().map(|s| s.as_str()));
+    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+
+    // Load persistent preferences; all fields are Option<T> so absent prefs
+    // silently fall through to compiled-in defaults.
+    let prefs = crate::prefs::UserPrefs::load();
+
+    // Returns true only when the arg was explicitly provided on the command
+    // line, not when it came from a compiled-in default_value.
+    let was_set =
+        |id: &str| matches.value_source(id) == Some(clap::parser::ValueSource::CommandLine);
+
+    // Resolve prefs-eligible fields: CLI wins when explicitly set, otherwise
+    // fall back to the stored preference, then the compiled-in default.
+    let region: ITURegion = if was_set("region") {
+        cli.region.into()
+    } else {
+        prefs.itu_region().unwrap_or_else(|| cli.region.into())
+    };
 
     if cli.info {
         let mut stdout = io::stdout();
@@ -418,7 +446,7 @@ pub fn run_from_args(args: &[String]) -> bool {
     }
 
     if cli.list_bands {
-        show_all_bands_for_region(cli.region.into());
+        show_all_bands_for_region(region);
         return true;
     }
 
@@ -458,7 +486,7 @@ pub fn run_from_args(args: &[String]) -> bool {
     }
 
     let bands = match (&cli.bands, &cli.bands_preset) {
-        (Some(selection), None) => match parse_band_selection(selection, cli.region.into()) {
+        (Some(selection), None) => match parse_band_selection(selection, region) {
             Ok(parsed) => parsed,
             Err(err) => {
                 eprintln!("Error: invalid --bands value: {err}");
@@ -474,7 +502,7 @@ pub fn run_from_args(args: &[String]) -> bool {
                     return false;
                 }
             };
-            match parse_band_selection(&resolved_selection, cli.region.into()) {
+            match parse_band_selection(&resolved_selection, region) {
                 Ok(parsed) => parsed,
                 Err(err) => {
                     eprintln!(
@@ -510,9 +538,40 @@ pub fn run_from_args(args: &[String]) -> bool {
         }
     }
 
+    // Resolve further prefs-eligible fields using the same fallback logic.
+    let mode = if was_set("mode") {
+        CalcMode::from(cli.mode)
+    } else {
+        prefs
+            .calc_mode()
+            .unwrap_or_else(|| CalcMode::from(cli.mode))
+    };
+    let velocity_factor: f64 = if was_set("velocity") {
+        cli.velocity
+    } else {
+        prefs.velocity_factor.unwrap_or(cli.velocity)
+    };
+    let antenna_height_m: f64 = if was_set("height") {
+        cli.height.into()
+    } else {
+        prefs.antenna_height_m.unwrap_or_else(|| cli.height.into())
+    };
+    let ground_class: GroundClass = if was_set("ground") {
+        cli.ground.into()
+    } else {
+        prefs
+            .ground_class_value()
+            .unwrap_or_else(|| cli.ground.into())
+    };
+    let conductor_diameter_mm: f64 = if was_set("conductor_mm") {
+        cli.conductor_mm
+    } else {
+        prefs.conductor_diameter_mm.unwrap_or(cli.conductor_mm)
+    };
     let units = cli
         .units
         .map(UnitSystem::from)
+        .or_else(|| prefs.unit_system())
         .unwrap_or(resolved_window.inferred_display_units);
 
     let export_formats: Vec<ExportFormat> = cli
@@ -522,7 +581,6 @@ pub fn run_from_args(args: &[String]) -> bool {
         .map(ExportFormat::from)
         .collect();
 
-    let mode = CalcMode::from(cli.mode);
     let antenna_model = cli.antenna.map(AntennaModel::from);
     let transformer_ratio = cli.transformer.resolve(mode, antenna_model);
 
@@ -551,22 +609,35 @@ pub fn run_from_args(args: &[String]) -> bool {
 
     let config = AppConfig {
         band_indices: bands,
-        velocity_factor: cli.velocity,
+        velocity_factor,
         mode,
         wire_min_m: resolved_window.min_m,
         wire_max_m: resolved_window.max_m,
         step_m: cli.step.unwrap_or(DEFAULT_NON_RESONANT_CONFIG.step_m),
         units,
-        itu_region: cli.region.into(),
+        itu_region: region,
         transformer_ratio,
         antenna_model,
-        antenna_height_m: cli.height.into(),
-        ground_class: cli.ground.into(),
-        conductor_diameter_mm: cli.conductor_mm,
+        antenna_height_m,
+        ground_class,
+        conductor_diameter_mm,
         custom_freq_mhz: cli.freq,
         freq_list_mhz: cli.freq_list.unwrap_or_default(),
         validate_with_fnec: cli.validate_with_fnec,
     };
+
+    // Persist preferences when requested.  The calculation continues after
+    // saving so the user sees output in the same run.
+    if cli.save_prefs {
+        let prefs_to_save = crate::prefs::UserPrefs::from_config(&config);
+        match prefs_to_save.save() {
+            Ok(()) => println!(
+                "Preferences saved to {}",
+                crate::prefs::UserPrefs::prefs_path_display()
+            ),
+            Err(err) => eprintln!("Warning: could not save preferences: {err}"),
+        }
+    }
 
     if let Some(ref velocity_values) = cli.velocity_sweep {
         if let Err(err) = validate_velocity_sweep(velocity_values) {
