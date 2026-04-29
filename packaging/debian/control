@@ -1,0 +1,25 @@
+Source: rusty-wire
+Section: hamradio
+Priority: optional
+Maintainer: Simon Keimer <dc0sk@example.com>
+Build-Depends: debhelper-compat (= 13),
+               dh-cargo (>= 25),
+               librust-clap+derive-dev (>= 4.0),
+               librust-ratatui-dev (>= 0.29),
+               librust-crossterm-dev (>= 0.28),
+               librust-serde+derive-dev (>= 1.0),
+               librust-toml-dev (>= 0.8)
+Standards-Version: 4.7.0
+Homepage: https://github.com/dc0sk/rusty-wire
+Vcs-Browser: https://github.com/dc0sk/rusty-wire
+Vcs-Git: https://github.com/dc0sk/rusty-wire.git
+Rules-Requires-Root: no
+
+Package: rusty-wire
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: Wire antenna length calculator for amateur radio operators
+ rusty-wire calculates optimal wire antenna lengths for amateur radio use,
+ taking into account frequency, velocity factor, and ITU/amateur band
+ constraints. It ships both a non-interactive CLI mode and a full-screen
+ terminal user interface (TUI).
