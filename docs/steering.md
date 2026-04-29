@@ -1,76 +1,127 @@
-# GitHub Copilot Steering (Current Session)
+# Project Steering
 
-This document captures the active steering I am following in this workspace session.
+This document captures the design goals, constraints, and trade-offs that should guide work on Rusty Wire.
 
-## Identity and Model
+It is intentionally project-facing. Tooling- or editor-specific agent instructions belong in workspace configuration, not in repository documentation.
 
-- Assistant name: GitHub Copilot
-- Model identifier to report when asked: GPT-5.3-Codex
-- Environment: VS Code coding agent with tool access
+## Product Direction
 
-## Core Operating Principles
+Rusty Wire is a planning tool for amateur-radio wire antennas.
 
-- Be precise, safe, and helpful.
-- Prefer direct implementation over only proposing ideas when coding work is requested.
-- Persist until the task is fully handled end-to-end unless blocked.
-- Keep changes minimal and focused on the user request.
-- Do not revert unrelated user changes.
-- Avoid destructive git commands unless explicitly requested.
+Its priorities are:
 
-## Editing and Code Change Constraints
+- fast, scriptable CLI execution
+- consistent interactive and TUI workflows
+- transparent calculations with documented assumptions
+- practical outputs for antenna building and comparison
+- a shared application layer that can support future front-ends
 
-- Prefer ASCII in edits unless Unicode is already justified.
-- Use concise, meaningful comments only where code is not self-evident.
-- Prefer apply_patch for targeted single-file edits.
-- Preserve existing style and public APIs unless the task requires changing them.
-- Do not use Python for file edits when simple shell or patch tools suffice.
-- If unexpected external changes appear during work, stop and ask the user how to proceed.
+The project should remain useful both to operators who want one quick answer and to users who want to inspect assumptions, exports, and trade-offs in detail.
 
-## Search and Execution Preferences
+## Non-Goals
 
-- Prefer rg and rg --files for searching.
-- Parallelize independent, read-only context gathering where possible.
-- Validate changes when practical (for example with compiler/lint/test checks).
+Rusty Wire does not attempt to be a full electromagnetic simulator.
 
-## Communication Style
+Unless a feature explicitly says otherwise, the project should not claim to model:
 
-- Provide short progress updates while working.
-- Keep final responses concise and actionable.
-- Explain what was changed and why, especially for non-trivial edits.
-- Mention limitations clearly if anything could not be completed.
+- feedline loss or feedline transformation
+- choke or common-mode behavior
+- terrain, clutter, or full propagation prediction
+- multi-element arrays or beam design
+- exact NEC-grade current distribution or pattern analysis
 
-## Formatting Rules Applied in Responses
+Heuristic estimates are acceptable when they are clearly labeled as heuristics and their limits are documented.
 
-- Use GitHub-flavored Markdown when helpful.
-- Use numbered lists with 1. 2. 3. style when numbering is needed.
-- Keep structure proportional to task complexity.
+## Modeling Posture
 
-## File Referencing Convention
+Rusty Wire should prefer transparent, cited formulas over opaque tuning.
 
-- Use markdown links for workspace file references.
-- Include line anchors when citing exact locations.
-- Avoid inline code formatting for file paths under this active rule set.
+When a result is based on reference material, the source should be documented in user-facing docs. When a result is based on a heuristic, fitted constant, or rule of thumb, that status should be explicit.
 
-## Safety and Policy Boundaries
+In practice this means:
 
-- Follow Microsoft content policies.
-- Refuse harmful, hateful, racist, sexist, lewd, or violent generation requests.
-- Avoid copyright-violating output.
+- reference formulas should be traceable in documentation
+- empirical constants should be easy to find and explain
+- order-of-magnitude estimates should not be presented as high-precision predictions
+- output wording should match model confidence
 
-## Frontend Design Guidance (When Applicable)
+If a feature risks implying more certainty than the underlying model supports, the output or documentation should be corrected.
 
-- Favor intentional visual direction over generic boilerplate UI.
-- Use expressive typography, deliberate color systems, and meaningful motion.
-- Preserve existing design system patterns when already established.
+## Architecture Rules
 
-## Project-Specific Memory Preferences Observed
+Rusty Wire's core architectural rule is that the application layer remains I/O-free.
 
-- Keep CLI mode and interactive mode aligned for user-facing features where practical.
-- Preferred Rusty Wire pre-push sequence:
-  - cargo fmt
-  - cargo check
-  - cargo test
+The intended layering is:
 
----
+- `bands.rs` and `calculations.rs` contain reusable domain logic
+- `app.rs` orchestrates validation, request handling, and shared result/view data
+- `cli.rs` owns clap parsing, interactive prompts, and terminal printing
+- `tui/` owns ratatui state, rendering, and event handling
+- `export.rs` owns file export formatting and path validation
 
-If you want, I can also export this as a machine-readable customization file (for example a workspace instruction under .github/) in a follow-up step.
+Additional rules:
+
+- front-ends should share the same app-layer behavior instead of reimplementing business logic
+- CLI-only shadow types should stay separate from domain types
+- new features should be added to the app layer first when they affect more than one front-end
+- result formatting should move toward reusable structured view data rather than ad hoc printing paths
+
+If a change blurs these boundaries, it should be treated as design debt and justified explicitly.
+
+## UX Principles
+
+User-facing behavior should stay aligned across normal CLI mode, interactive mode, and the TUI where practical.
+
+That includes:
+
+- consistent naming for antenna models, regions, units, and exports
+- consistent defaults and fallback behavior
+- equivalent output semantics even when presentation differs by front-end
+- clear validation errors rather than silent correction, except where a documented default is intentionally reused
+
+When parity is not practical, the difference should be deliberate and documented.
+
+## Documentation and Release Discipline
+
+Documentation is part of the product, not an afterthought.
+
+Changes that alter behavior, options, or release expectations should keep these documents current:
+
+- `README.md` for the public feature surface and examples
+- `docs/cli-guide.md` for option and workflow details
+- `docs/CHANGELOG.md` for notable user-visible changes
+- `docs/math.md` or related technical docs when formulas or heuristics change
+
+Packaging metadata should stay in sync with the crate version, and release automation should keep enforcing that contract.
+
+## Testing Expectations
+
+The default quality bar is:
+
+- `cargo fmt`
+- `cargo check`
+- `cargo test`
+
+For changes that touch heuristics, optimizer behavior, band tables, exports, or packaging logic, the corresponding higher-level regression checks should also be updated or rerun.
+
+Tests should favor meaningful behavioral guarantees over test-count growth for its own sake.
+
+## Near-Term Steering
+
+The next stage of the project is to strengthen the shared app layer so the current TUI and a future GUI can reuse the same validated behavior.
+
+That implies:
+
+- keeping app-layer contracts stable and explicit
+- continuing to improve interactive-mode testability
+- separating view-friendly result data from terminal-specific rendering
+- resisting front-end shortcuts that duplicate core logic
+
+## Decision Rule
+
+When two implementations are both workable, prefer the one that:
+
+1. keeps the app layer clean and reusable
+2. makes assumptions easier to explain to users
+3. preserves CLI, interactive, and TUI parity
+4. reduces maintenance cost for future front-ends
