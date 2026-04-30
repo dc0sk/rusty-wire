@@ -13,6 +13,31 @@ All notable changes to Rusty Wire are documented here.
 
 ---
 
+## [2.14.0] - 2026-04-30
+
+### Added
+- **HTML export format**: `--export html` / `--export htm` on the CLI, `H` key in the TUI. Generates a self-contained HTML document with embedded CSS for both calculation results and advise output. Output files default to `rusty-wire-results.html` / `rusty-wire-advise.html`. All HTML strings are escaped via `html_escape()` to prevent injection.
+- **TUI export preview overlay**: every export key (`e`, `E`, `m`, `t`, `y`, `H`) and the corresponding advise variants now opens a centered scrollable preview overlay first. Press `Enter` to write to disk or `Esc`/`q` to cancel. Up/Down/PageUp/PageDown scroll inside the preview.
+- **TUI collapsible result panels**: per-band results blocks can be collapsed (`▶` / `▼` indicators). Use `[`/`]` to move the band cursor and `Space`/`Enter` to toggle the highlighted band. The active band is shown in yellow.
+- **TUI saved sessions**: full `AppConfig` snapshots can be saved with a name, then recalled later.
+  - `S` opens a single-line name-input overlay; `Enter` saves to `~/.config/rusty-wire/sessions.toml`, `Esc` cancels.
+  - `O` opens a session picker overlay (arrow keys / `jk` to move, `Enter` to load, `d` to delete, `Esc`/`q` to close).
+  - Loading a session resyncs all preset indices (VF, transformer ratio, wire window, height, ground class, conductor diameter, step) so the config panel reflects the loaded values.
+- **TUI visual highlighting**: recommended transformer ratio is shown in green/bold with a `✓` marker; bands skipped by the user are shown in yellow with a `⚠` marker.
+
+### Changed
+- `hint_text()` extended to display overlay-specific keymaps for the export preview, session save, and session picker overlays.
+- `.gitignore` now excludes default export artifacts (`rusty-wire-results.*`, `rusty-wire-advise.*`).
+
+### Internal
+- New module `src/sessions.rs` — `SessionConfig`, `NamedSession`, `SessionStore` (TOML-backed) with `save`/`load_config`/`list`/`load_all`/`delete`.
+- New helper `sync_indices_from_config()` in the TUI to mirror an `AppConfig` back to the `*_idx` preset fields.
+
+### Test count
+310 lib + 56 CLI + 14 corpus + 12 contract + 5 tolerance + 3 doc = 400 passing; 2 ignored.
+
+---
+
 ## [2.13.0] - 2026-04-30
 
 ### Added

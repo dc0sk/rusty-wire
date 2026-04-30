@@ -384,7 +384,10 @@ fn generate_tradeoff_note(
         if ratio.impedance_ratio() >= 49.0 {
             return format!(
                 "Standard EFHW match ({} ratio, SWR ≈ {:.1}:1 into {:.0} Ω, loss {:.2} dB).",
-                ratio.as_label(), swr_at_target, target_z, mismatch_loss_db
+                ratio.as_label(),
+                swr_at_target,
+                target_z,
+                mismatch_loss_db
             );
         }
     }
@@ -1531,7 +1534,11 @@ pub fn results_overview_view(results: &AppResults) -> ResultsOverviewView {
             "Ratio", "Target Z", "SWR", "Efficiency", "Loss"
         ));
         for entry in &cmp.entries {
-            let marker = if entry.is_best { "  \u{2190} recommended" } else { "" };
+            let marker = if entry.is_best {
+                "  \u{2190} recommended"
+            } else {
+                ""
+            };
             header_lines.push(format!(
                 "  {:<5}  {:>5.0} \u{03a9}  {:>4.2}:1  {:>9.2}%  {:.3} dB{}",
                 entry.ratio.as_label(),
@@ -1584,7 +1591,14 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
     let layout = results_section_layout(results);
     let band_views = band_display_rows(results)
         .iter()
-        .map(|row| band_display_view(row, results.config.units, results.config.antenna_model, results.config.transformer_ratio))
+        .map(|row| {
+            band_display_view(
+                row,
+                results.config.units,
+                results.config.antenna_model,
+                results.config.transformer_ratio,
+            )
+        })
         .collect();
 
     let mut sections = Vec::new();
@@ -2030,7 +2044,10 @@ pub fn trap_dipole_guidance_display_lines(
     ));
 
     for section in &view.sections {
-        lines.push(format!("  \u{2500}\u{2500} {} \u{2500}\u{2500}", section.label));
+        lines.push(format!(
+            "  \u{2500}\u{2500} {} \u{2500}\u{2500}",
+            section.label
+        ));
         lines.push(format!(
             "  Trap resonant frequency:  {:.3} MHz",
             section.trap_freq_mhz
@@ -3224,9 +3241,7 @@ pub fn band_display_view(
     // SWR is computed at resonance (X=0) against the transformer output impedance.
     let show_feedpoint = matches!(
         antenna_model,
-        Some(AntennaModel::Dipole)
-            | Some(AntennaModel::InvertedVDipole)
-            | None
+        Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) | None
     );
     if show_feedpoint {
         let r = c.dipole_feedpoint_r_ohm;
@@ -4272,7 +4287,12 @@ mod tests {
         let results = run_calculation(AppConfig::default());
         let rows = band_display_rows(&results);
 
-        let view = band_display_view(&rows[0], UnitSystem::Metric, Some(AntennaModel::Dipole), TransformerRatio::R1To1);
+        let view = band_display_view(
+            &rows[0],
+            UnitSystem::Metric,
+            Some(AntennaModel::Dipole),
+            TransformerRatio::R1To1,
+        );
         assert!(!view.title.is_empty());
         assert!(!view.lines.is_empty());
         assert!(view.lines[0].starts_with("  Frequency:"));
@@ -5084,7 +5104,10 @@ mod state_machine_tests {
         for ex in &s.component_examples {
             let lc = ex.ind_uh * ex.cap_pf;
             let expected = 25_330.0 / (s.trap_freq_mhz * s.trap_freq_mhz);
-            assert!((lc - expected).abs() / expected < 0.001, "L×C mismatch: {lc} vs {expected}");
+            assert!(
+                (lc - expected).abs() / expected < 0.001,
+                "L×C mismatch: {lc} vs {expected}"
+            );
         }
     }
 
@@ -5120,8 +5143,15 @@ mod state_machine_tests {
     fn trap_dipole_guidance_appears_in_results_display_document() {
         let results = make_trap_dipole_results(vec![4, 6]);
         let doc = results_display_document(&results);
-        let all_lines: Vec<&str> = doc.sections.iter().flat_map(|s| s.lines.iter().map(|l| l.as_str())).collect();
+        let all_lines: Vec<&str> = doc
+            .sections
+            .iter()
+            .flat_map(|s| s.lines.iter().map(|l| l.as_str()))
+            .collect();
         let combined = all_lines.join("\n");
-        assert!(combined.contains("Trap dipole guidance"), "guidance section should appear in doc");
+        assert!(
+            combined.contains("Trap dipole guidance"),
+            "guidance section should appear in doc"
+        );
     }
 }

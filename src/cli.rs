@@ -822,9 +822,8 @@ fn print_advise_candidates(
 
     // Apply sustainability gate: remove rejected candidates when --fnec-gate is set.
     if fnec_gate && config.validate_with_fnec {
-        view.candidates.retain(|c| {
-            !matches!(c.validation_status, Some(ValidationStatus::Rejected))
-        });
+        view.candidates
+            .retain(|c| !matches!(c.validation_status, Some(ValidationStatus::Rejected)));
     }
 
     if view.candidates.is_empty() {
@@ -844,9 +843,16 @@ fn print_advise_candidates(
             "EFHW transformer comparison (feedpoint R: {:.0} \u{03a9}):",
             cmp.feedpoint_r_ohm
         );
-        println!("  {:<5}  {:<8}  {:<6}  {:<11}  {}", "Ratio", "Target Z", "SWR", "Efficiency", "Loss");
+        println!(
+            "  {:<5}  {:<8}  {:<6}  {:<11}  {}",
+            "Ratio", "Target Z", "SWR", "Efficiency", "Loss"
+        );
         for entry in &cmp.entries {
-            let marker = if entry.is_best { "  <- recommended" } else { "" };
+            let marker = if entry.is_best {
+                "  <- recommended"
+            } else {
+                ""
+            };
             println!(
                 "  {:<5}  {:>5.0} \u{03a9}  {:>4.2}:1  {:>9.2}%  {:.3} dB{}",
                 entry.ratio.as_label(),
@@ -907,10 +913,26 @@ fn print_advise_candidates(
     // Validation summary when fnec was active.
     if config.validate_with_fnec {
         let total = view.candidates.len();
-        let passed = view.candidates.iter().filter(|c| c.validation_status == Some(ValidationStatus::Passed)).count();
-        let warned = view.candidates.iter().filter(|c| c.validation_status == Some(ValidationStatus::Warning)).count();
-        let rejected = view.candidates.iter().filter(|c| c.validation_status == Some(ValidationStatus::Rejected)).count();
-        let skipped = view.candidates.iter().filter(|c| matches!(c.validation_status, Some(ValidationStatus::Skipped) | None)).count();
+        let passed = view
+            .candidates
+            .iter()
+            .filter(|c| c.validation_status == Some(ValidationStatus::Passed))
+            .count();
+        let warned = view
+            .candidates
+            .iter()
+            .filter(|c| c.validation_status == Some(ValidationStatus::Warning))
+            .count();
+        let rejected = view
+            .candidates
+            .iter()
+            .filter(|c| c.validation_status == Some(ValidationStatus::Rejected))
+            .count();
+        let skipped = view
+            .candidates
+            .iter()
+            .filter(|c| matches!(c.validation_status, Some(ValidationStatus::Skipped) | None))
+            .count();
         println!();
         println!(
             "Validation summary: {total} candidates — {passed} passed, {warned} warning, {rejected} rejected, {skipped} skipped"
@@ -999,8 +1021,7 @@ fn run_transformer_sweep(
     let feedpoint_r =
         crate::app::optimize_transformer_candidates(&base_config).assumed_feedpoint_ohm;
 
-    let mut results_by_ratio: Vec<(crate::calculations::TransformerRatio, AppResults)> =
-        Vec::new();
+    let mut results_by_ratio: Vec<(crate::calculations::TransformerRatio, AppResults)> = Vec::new();
     for &ratio in ratios {
         let mut sweep_config = base_config.clone();
         sweep_config.transformer_ratio = ratio;
@@ -2437,7 +2458,10 @@ mod tests {
 
         let exports = interactive_export_prompt(&mut input, &mut output, &results);
 
-        assert_eq!(exports.iter().map(|(f, _)| f).collect::<Vec<_>>(), vec![&ExportFormat::Yaml]);
+        assert_eq!(
+            exports.iter().map(|(f, _)| f).collect::<Vec<_>>(),
+            vec![&ExportFormat::Yaml]
+        );
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
         assert!(!rendered.contains("unknown format"));
     }

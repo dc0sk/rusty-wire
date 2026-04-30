@@ -972,64 +972,331 @@ pub fn to_html(
 
     macro_rules! col {
         ($hdr:expr, $vals:expr) => {
-            Col { header: $hdr, values: $vals }
+            Col {
+                header: $hdr,
+                values: $vals,
+            }
         };
     }
 
     let mut cols: Vec<Col> = vec![
-        col!("Band", calculations.iter().map(|c| html_escape(&c.band_name)).collect()),
-        col!("Ratio", calculations.iter().map(|c| html_escape(c.transformer_ratio_label)).collect()),
-        col!("Freq (MHz)", calculations.iter().map(|c| format!("{:.3}", c.frequency_mhz)).collect()),
+        col!(
+            "Band",
+            calculations
+                .iter()
+                .map(|c| html_escape(&c.band_name))
+                .collect()
+        ),
+        col!(
+            "Ratio",
+            calculations
+                .iter()
+                .map(|c| html_escape(c.transformer_ratio_label))
+                .collect()
+        ),
+        col!(
+            "Freq (MHz)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.3}", c.frequency_mhz))
+                .collect()
+        ),
     ];
 
     match units {
         UnitSystem::Metric | UnitSystem::Both => {
-            cols.push(col!("Half-wave (m)", calculations.iter().map(|c| format!("{:.2}", c.half_wave_m)).collect()));
-            cols.push(col!("Half-wave corr (m)", calculations.iter().map(|c| format!("{:.2}", c.corrected_half_wave_m)).collect()));
-            cols.push(col!("Full-wave (m)", calculations.iter().map(|c| format!("{:.2}", c.full_wave_m)).collect()));
-            cols.push(col!("Full-wave corr (m)", calculations.iter().map(|c| format!("{:.2}", c.corrected_full_wave_m)).collect()));
-            cols.push(col!("Quarter-wave (m)", calculations.iter().map(|c| format!("{:.2}", c.quarter_wave_m)).collect()));
-            cols.push(col!("Quarter-wave corr (m)", calculations.iter().map(|c| format!("{:.2}", c.corrected_quarter_wave_m)).collect()));
-            cols.push(col!("EFHW (m)", calculations.iter().map(|c| format!("{:.2}", c.end_fed_half_wave_m)).collect()));
-            cols.push(col!("Loop circ (m)", calculations.iter().map(|c| format!("{:.2}", c.full_wave_loop_circumference_m)).collect()));
-            cols.push(col!("Loop side (m)", calculations.iter().map(|c| format!("{:.2}", c.full_wave_loop_square_side_m)).collect()));
-            cols.push(col!("Inv-V total (m)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_total_m)).collect()));
-            cols.push(col!("Inv-V leg (m)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_leg_m)).collect()));
-            cols.push(col!("Inv-V span 90° (m)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_span_90_m)).collect()));
-            cols.push(col!("Inv-V span 120° (m)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_span_120_m)).collect()));
-            cols.push(col!("OCFD 33 short (m)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_33_short_leg_m)).collect()));
-            cols.push(col!("OCFD 33 long (m)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_33_long_leg_m)).collect()));
-            cols.push(col!("OCFD 20 short (m)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_20_short_leg_m)).collect()));
-            cols.push(col!("OCFD 20 long (m)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_20_long_leg_m)).collect()));
-            cols.push(col!("Trap total (m)", calculations.iter().map(|c| format!("{:.2}", c.trap_dipole_total_m)).collect()));
-            cols.push(col!("Trap leg (m)", calculations.iter().map(|c| format!("{:.2}", c.trap_dipole_leg_m)).collect()));
+            cols.push(col!(
+                "Half-wave (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.half_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Half-wave corr (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.corrected_half_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Full-wave (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.full_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Full-wave corr (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.corrected_full_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Quarter-wave (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.quarter_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Quarter-wave corr (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.corrected_quarter_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "EFHW (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.end_fed_half_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Loop circ (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.full_wave_loop_circumference_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Loop side (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.full_wave_loop_square_side_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Inv-V total (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.inverted_v_total_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Inv-V leg (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.inverted_v_leg_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Inv-V span 90° (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.inverted_v_span_90_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Inv-V span 120° (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.inverted_v_span_120_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "OCFD 33 short (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.ocfd_33_short_leg_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "OCFD 33 long (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.ocfd_33_long_leg_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "OCFD 20 short (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.ocfd_20_short_leg_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "OCFD 20 long (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.ocfd_20_long_leg_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Trap total (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.trap_dipole_total_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Trap leg (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.trap_dipole_leg_m))
+                    .collect()
+            ));
         }
         _ => {}
     }
     if matches!(units, UnitSystem::Imperial | UnitSystem::Both) {
-        cols.push(col!("Half-wave (ft)", calculations.iter().map(|c| format!("{:.2}", c.half_wave_ft)).collect()));
-        cols.push(col!("Half-wave corr (ft)", calculations.iter().map(|c| format!("{:.2}", c.corrected_half_wave_ft)).collect()));
-        cols.push(col!("Full-wave (ft)", calculations.iter().map(|c| format!("{:.2}", c.full_wave_ft)).collect()));
-        cols.push(col!("Full-wave corr (ft)", calculations.iter().map(|c| format!("{:.2}", c.corrected_full_wave_ft)).collect()));
-        cols.push(col!("Quarter-wave (ft)", calculations.iter().map(|c| format!("{:.2}", c.quarter_wave_ft)).collect()));
-        cols.push(col!("Quarter-wave corr (ft)", calculations.iter().map(|c| format!("{:.2}", c.corrected_quarter_wave_ft)).collect()));
-        cols.push(col!("EFHW (ft)", calculations.iter().map(|c| format!("{:.2}", c.end_fed_half_wave_ft)).collect()));
-        cols.push(col!("Loop circ (ft)", calculations.iter().map(|c| format!("{:.2}", c.full_wave_loop_circumference_ft)).collect()));
-        cols.push(col!("Loop side (ft)", calculations.iter().map(|c| format!("{:.2}", c.full_wave_loop_square_side_ft)).collect()));
-        cols.push(col!("Inv-V total (ft)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_total_ft)).collect()));
-        cols.push(col!("Inv-V leg (ft)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_leg_ft)).collect()));
-        cols.push(col!("Inv-V span 90° (ft)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_span_90_ft)).collect()));
-        cols.push(col!("Inv-V span 120° (ft)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_span_120_ft)).collect()));
-        cols.push(col!("OCFD 33 short (ft)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_33_short_leg_ft)).collect()));
-        cols.push(col!("OCFD 33 long (ft)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_33_long_leg_ft)).collect()));
-        cols.push(col!("OCFD 20 short (ft)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_20_short_leg_ft)).collect()));
-        cols.push(col!("OCFD 20 long (ft)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_20_long_leg_ft)).collect()));
-        cols.push(col!("Trap total (ft)", calculations.iter().map(|c| format!("{:.2}", c.trap_dipole_total_ft)).collect()));
-        cols.push(col!("Trap leg (ft)", calculations.iter().map(|c| format!("{:.2}", c.trap_dipole_leg_ft)).collect()));
+        cols.push(col!(
+            "Half-wave (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.half_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Half-wave corr (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.corrected_half_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Full-wave (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.full_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Full-wave corr (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.corrected_full_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Quarter-wave (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.quarter_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Quarter-wave corr (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.corrected_quarter_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "EFHW (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.end_fed_half_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Loop circ (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.full_wave_loop_circumference_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Loop side (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.full_wave_loop_square_side_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Inv-V total (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.inverted_v_total_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Inv-V leg (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.inverted_v_leg_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Inv-V span 90° (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.inverted_v_span_90_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Inv-V span 120° (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.inverted_v_span_120_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "OCFD 33 short (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.ocfd_33_short_leg_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "OCFD 33 long (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.ocfd_33_long_leg_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "OCFD 20 short (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.ocfd_20_short_leg_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "OCFD 20 long (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.ocfd_20_long_leg_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Trap total (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.trap_dipole_total_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Trap leg (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.trap_dipole_leg_ft))
+                .collect()
+        ));
     }
-    cols.push(col!("Skip min (km)", calculations.iter().map(|c| format!("{:.0}", c.skip_distance_min_km)).collect()));
-    cols.push(col!("Skip max (km)", calculations.iter().map(|c| format!("{:.0}", c.skip_distance_max_km)).collect()));
-    cols.push(col!("Skip avg (km)", calculations.iter().map(|c| format!("{:.0}", c.skip_distance_avg_km)).collect()));
+    cols.push(col!(
+        "Skip min (km)",
+        calculations
+            .iter()
+            .map(|c| format!("{:.0}", c.skip_distance_min_km))
+            .collect()
+    ));
+    cols.push(col!(
+        "Skip max (km)",
+        calculations
+            .iter()
+            .map(|c| format!("{:.0}", c.skip_distance_max_km))
+            .collect()
+    ));
+    cols.push(col!(
+        "Skip avg (km)",
+        calculations
+            .iter()
+            .map(|c| format!("{:.0}", c.skip_distance_avg_km))
+            .collect()
+    ));
 
     for col in &cols {
         out.push_str(&format!("<th>{}</th>\n", col.header));
@@ -1189,90 +1456,291 @@ pub fn to_yaml(
         match units {
             UnitSystem::Metric => {
                 out.push_str(&format!("    half_wave_m: {:.2}\n", c.half_wave_m));
-                out.push_str(&format!("    half_wave_corrected_m: {:.2}\n", c.corrected_half_wave_m));
+                out.push_str(&format!(
+                    "    half_wave_corrected_m: {:.2}\n",
+                    c.corrected_half_wave_m
+                ));
                 out.push_str(&format!("    full_wave_m: {:.2}\n", c.full_wave_m));
-                out.push_str(&format!("    full_wave_corrected_m: {:.2}\n", c.corrected_full_wave_m));
+                out.push_str(&format!(
+                    "    full_wave_corrected_m: {:.2}\n",
+                    c.corrected_full_wave_m
+                ));
                 out.push_str(&format!("    quarter_wave_m: {:.2}\n", c.quarter_wave_m));
-                out.push_str(&format!("    quarter_wave_corrected_m: {:.2}\n", c.corrected_quarter_wave_m));
-                out.push_str(&format!("    end_fed_half_wave_m: {:.2}\n", c.end_fed_half_wave_m));
-                out.push_str(&format!("    full_wave_loop_circumference_m: {:.2}\n", c.full_wave_loop_circumference_m));
-                out.push_str(&format!("    full_wave_loop_square_side_m: {:.2}\n", c.full_wave_loop_square_side_m));
-                out.push_str(&format!("    inverted_v_total_m: {:.2}\n", c.inverted_v_total_m));
-                out.push_str(&format!("    inverted_v_leg_m: {:.2}\n", c.inverted_v_leg_m));
-                out.push_str(&format!("    inverted_v_span_90_m: {:.2}\n", c.inverted_v_span_90_m));
-                out.push_str(&format!("    inverted_v_span_120_m: {:.2}\n", c.inverted_v_span_120_m));
-                out.push_str(&format!("    ocfd_33_short_leg_m: {:.2}\n", c.ocfd_33_short_leg_m));
-                out.push_str(&format!("    ocfd_33_long_leg_m: {:.2}\n", c.ocfd_33_long_leg_m));
-                out.push_str(&format!("    ocfd_20_short_leg_m: {:.2}\n", c.ocfd_20_short_leg_m));
-                out.push_str(&format!("    ocfd_20_long_leg_m: {:.2}\n", c.ocfd_20_long_leg_m));
-                out.push_str(&format!("    trap_dipole_total_m: {:.2}\n", c.trap_dipole_total_m));
-                out.push_str(&format!("    trap_dipole_leg_m: {:.2}\n", c.trap_dipole_leg_m));
+                out.push_str(&format!(
+                    "    quarter_wave_corrected_m: {:.2}\n",
+                    c.corrected_quarter_wave_m
+                ));
+                out.push_str(&format!(
+                    "    end_fed_half_wave_m: {:.2}\n",
+                    c.end_fed_half_wave_m
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_circumference_m: {:.2}\n",
+                    c.full_wave_loop_circumference_m
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_square_side_m: {:.2}\n",
+                    c.full_wave_loop_square_side_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_total_m: {:.2}\n",
+                    c.inverted_v_total_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_leg_m: {:.2}\n",
+                    c.inverted_v_leg_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_90_m: {:.2}\n",
+                    c.inverted_v_span_90_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_120_m: {:.2}\n",
+                    c.inverted_v_span_120_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_short_leg_m: {:.2}\n",
+                    c.ocfd_33_short_leg_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_long_leg_m: {:.2}\n",
+                    c.ocfd_33_long_leg_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_short_leg_m: {:.2}\n",
+                    c.ocfd_20_short_leg_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_long_leg_m: {:.2}\n",
+                    c.ocfd_20_long_leg_m
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_total_m: {:.2}\n",
+                    c.trap_dipole_total_m
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_leg_m: {:.2}\n",
+                    c.trap_dipole_leg_m
+                ));
             }
             UnitSystem::Imperial => {
                 out.push_str(&format!("    half_wave_ft: {:.2}\n", c.half_wave_ft));
-                out.push_str(&format!("    half_wave_corrected_ft: {:.2}\n", c.corrected_half_wave_ft));
+                out.push_str(&format!(
+                    "    half_wave_corrected_ft: {:.2}\n",
+                    c.corrected_half_wave_ft
+                ));
                 out.push_str(&format!("    full_wave_ft: {:.2}\n", c.full_wave_ft));
-                out.push_str(&format!("    full_wave_corrected_ft: {:.2}\n", c.corrected_full_wave_ft));
+                out.push_str(&format!(
+                    "    full_wave_corrected_ft: {:.2}\n",
+                    c.corrected_full_wave_ft
+                ));
                 out.push_str(&format!("    quarter_wave_ft: {:.2}\n", c.quarter_wave_ft));
-                out.push_str(&format!("    quarter_wave_corrected_ft: {:.2}\n", c.corrected_quarter_wave_ft));
-                out.push_str(&format!("    end_fed_half_wave_ft: {:.2}\n", c.end_fed_half_wave_ft));
-                out.push_str(&format!("    full_wave_loop_circumference_ft: {:.2}\n", c.full_wave_loop_circumference_ft));
-                out.push_str(&format!("    full_wave_loop_square_side_ft: {:.2}\n", c.full_wave_loop_square_side_ft));
-                out.push_str(&format!("    inverted_v_total_ft: {:.2}\n", c.inverted_v_total_ft));
-                out.push_str(&format!("    inverted_v_leg_ft: {:.2}\n", c.inverted_v_leg_ft));
-                out.push_str(&format!("    inverted_v_span_90_ft: {:.2}\n", c.inverted_v_span_90_ft));
-                out.push_str(&format!("    inverted_v_span_120_ft: {:.2}\n", c.inverted_v_span_120_ft));
-                out.push_str(&format!("    ocfd_33_short_leg_ft: {:.2}\n", c.ocfd_33_short_leg_ft));
-                out.push_str(&format!("    ocfd_33_long_leg_ft: {:.2}\n", c.ocfd_33_long_leg_ft));
-                out.push_str(&format!("    ocfd_20_short_leg_ft: {:.2}\n", c.ocfd_20_short_leg_ft));
-                out.push_str(&format!("    ocfd_20_long_leg_ft: {:.2}\n", c.ocfd_20_long_leg_ft));
-                out.push_str(&format!("    trap_dipole_total_ft: {:.2}\n", c.trap_dipole_total_ft));
-                out.push_str(&format!("    trap_dipole_leg_ft: {:.2}\n", c.trap_dipole_leg_ft));
+                out.push_str(&format!(
+                    "    quarter_wave_corrected_ft: {:.2}\n",
+                    c.corrected_quarter_wave_ft
+                ));
+                out.push_str(&format!(
+                    "    end_fed_half_wave_ft: {:.2}\n",
+                    c.end_fed_half_wave_ft
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_circumference_ft: {:.2}\n",
+                    c.full_wave_loop_circumference_ft
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_square_side_ft: {:.2}\n",
+                    c.full_wave_loop_square_side_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_total_ft: {:.2}\n",
+                    c.inverted_v_total_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_leg_ft: {:.2}\n",
+                    c.inverted_v_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_90_ft: {:.2}\n",
+                    c.inverted_v_span_90_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_120_ft: {:.2}\n",
+                    c.inverted_v_span_120_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_short_leg_ft: {:.2}\n",
+                    c.ocfd_33_short_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_long_leg_ft: {:.2}\n",
+                    c.ocfd_33_long_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_short_leg_ft: {:.2}\n",
+                    c.ocfd_20_short_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_long_leg_ft: {:.2}\n",
+                    c.ocfd_20_long_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_total_ft: {:.2}\n",
+                    c.trap_dipole_total_ft
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_leg_ft: {:.2}\n",
+                    c.trap_dipole_leg_ft
+                ));
             }
             UnitSystem::Both => {
                 out.push_str(&format!("    half_wave_m: {:.2}\n", c.half_wave_m));
-                out.push_str(&format!("    half_wave_corrected_m: {:.2}\n", c.corrected_half_wave_m));
+                out.push_str(&format!(
+                    "    half_wave_corrected_m: {:.2}\n",
+                    c.corrected_half_wave_m
+                ));
                 out.push_str(&format!("    full_wave_m: {:.2}\n", c.full_wave_m));
-                out.push_str(&format!("    full_wave_corrected_m: {:.2}\n", c.corrected_full_wave_m));
+                out.push_str(&format!(
+                    "    full_wave_corrected_m: {:.2}\n",
+                    c.corrected_full_wave_m
+                ));
                 out.push_str(&format!("    quarter_wave_m: {:.2}\n", c.quarter_wave_m));
-                out.push_str(&format!("    quarter_wave_corrected_m: {:.2}\n", c.corrected_quarter_wave_m));
-                out.push_str(&format!("    end_fed_half_wave_m: {:.2}\n", c.end_fed_half_wave_m));
-                out.push_str(&format!("    full_wave_loop_circumference_m: {:.2}\n", c.full_wave_loop_circumference_m));
-                out.push_str(&format!("    full_wave_loop_square_side_m: {:.2}\n", c.full_wave_loop_square_side_m));
-                out.push_str(&format!("    inverted_v_total_m: {:.2}\n", c.inverted_v_total_m));
-                out.push_str(&format!("    inverted_v_leg_m: {:.2}\n", c.inverted_v_leg_m));
-                out.push_str(&format!("    inverted_v_span_90_m: {:.2}\n", c.inverted_v_span_90_m));
-                out.push_str(&format!("    inverted_v_span_120_m: {:.2}\n", c.inverted_v_span_120_m));
-                out.push_str(&format!("    ocfd_33_short_leg_m: {:.2}\n", c.ocfd_33_short_leg_m));
-                out.push_str(&format!("    ocfd_33_long_leg_m: {:.2}\n", c.ocfd_33_long_leg_m));
-                out.push_str(&format!("    ocfd_20_short_leg_m: {:.2}\n", c.ocfd_20_short_leg_m));
-                out.push_str(&format!("    ocfd_20_long_leg_m: {:.2}\n", c.ocfd_20_long_leg_m));
-                out.push_str(&format!("    trap_dipole_total_m: {:.2}\n", c.trap_dipole_total_m));
-                out.push_str(&format!("    trap_dipole_leg_m: {:.2}\n", c.trap_dipole_leg_m));
+                out.push_str(&format!(
+                    "    quarter_wave_corrected_m: {:.2}\n",
+                    c.corrected_quarter_wave_m
+                ));
+                out.push_str(&format!(
+                    "    end_fed_half_wave_m: {:.2}\n",
+                    c.end_fed_half_wave_m
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_circumference_m: {:.2}\n",
+                    c.full_wave_loop_circumference_m
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_square_side_m: {:.2}\n",
+                    c.full_wave_loop_square_side_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_total_m: {:.2}\n",
+                    c.inverted_v_total_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_leg_m: {:.2}\n",
+                    c.inverted_v_leg_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_90_m: {:.2}\n",
+                    c.inverted_v_span_90_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_120_m: {:.2}\n",
+                    c.inverted_v_span_120_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_short_leg_m: {:.2}\n",
+                    c.ocfd_33_short_leg_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_long_leg_m: {:.2}\n",
+                    c.ocfd_33_long_leg_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_short_leg_m: {:.2}\n",
+                    c.ocfd_20_short_leg_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_long_leg_m: {:.2}\n",
+                    c.ocfd_20_long_leg_m
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_total_m: {:.2}\n",
+                    c.trap_dipole_total_m
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_leg_m: {:.2}\n",
+                    c.trap_dipole_leg_m
+                ));
                 out.push_str(&format!("    half_wave_ft: {:.2}\n", c.half_wave_ft));
-                out.push_str(&format!("    half_wave_corrected_ft: {:.2}\n", c.corrected_half_wave_ft));
+                out.push_str(&format!(
+                    "    half_wave_corrected_ft: {:.2}\n",
+                    c.corrected_half_wave_ft
+                ));
                 out.push_str(&format!("    full_wave_ft: {:.2}\n", c.full_wave_ft));
-                out.push_str(&format!("    full_wave_corrected_ft: {:.2}\n", c.corrected_full_wave_ft));
+                out.push_str(&format!(
+                    "    full_wave_corrected_ft: {:.2}\n",
+                    c.corrected_full_wave_ft
+                ));
                 out.push_str(&format!("    quarter_wave_ft: {:.2}\n", c.quarter_wave_ft));
-                out.push_str(&format!("    quarter_wave_corrected_ft: {:.2}\n", c.corrected_quarter_wave_ft));
-                out.push_str(&format!("    end_fed_half_wave_ft: {:.2}\n", c.end_fed_half_wave_ft));
-                out.push_str(&format!("    full_wave_loop_circumference_ft: {:.2}\n", c.full_wave_loop_circumference_ft));
-                out.push_str(&format!("    full_wave_loop_square_side_ft: {:.2}\n", c.full_wave_loop_square_side_ft));
-                out.push_str(&format!("    inverted_v_total_ft: {:.2}\n", c.inverted_v_total_ft));
-                out.push_str(&format!("    inverted_v_leg_ft: {:.2}\n", c.inverted_v_leg_ft));
-                out.push_str(&format!("    inverted_v_span_90_ft: {:.2}\n", c.inverted_v_span_90_ft));
-                out.push_str(&format!("    inverted_v_span_120_ft: {:.2}\n", c.inverted_v_span_120_ft));
-                out.push_str(&format!("    ocfd_33_short_leg_ft: {:.2}\n", c.ocfd_33_short_leg_ft));
-                out.push_str(&format!("    ocfd_33_long_leg_ft: {:.2}\n", c.ocfd_33_long_leg_ft));
-                out.push_str(&format!("    ocfd_20_short_leg_ft: {:.2}\n", c.ocfd_20_short_leg_ft));
-                out.push_str(&format!("    ocfd_20_long_leg_ft: {:.2}\n", c.ocfd_20_long_leg_ft));
-                out.push_str(&format!("    trap_dipole_total_ft: {:.2}\n", c.trap_dipole_total_ft));
-                out.push_str(&format!("    trap_dipole_leg_ft: {:.2}\n", c.trap_dipole_leg_ft));
+                out.push_str(&format!(
+                    "    quarter_wave_corrected_ft: {:.2}\n",
+                    c.corrected_quarter_wave_ft
+                ));
+                out.push_str(&format!(
+                    "    end_fed_half_wave_ft: {:.2}\n",
+                    c.end_fed_half_wave_ft
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_circumference_ft: {:.2}\n",
+                    c.full_wave_loop_circumference_ft
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_square_side_ft: {:.2}\n",
+                    c.full_wave_loop_square_side_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_total_ft: {:.2}\n",
+                    c.inverted_v_total_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_leg_ft: {:.2}\n",
+                    c.inverted_v_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_90_ft: {:.2}\n",
+                    c.inverted_v_span_90_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_120_ft: {:.2}\n",
+                    c.inverted_v_span_120_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_short_leg_ft: {:.2}\n",
+                    c.ocfd_33_short_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_long_leg_ft: {:.2}\n",
+                    c.ocfd_33_long_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_short_leg_ft: {:.2}\n",
+                    c.ocfd_20_short_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_long_leg_ft: {:.2}\n",
+                    c.ocfd_20_long_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_total_ft: {:.2}\n",
+                    c.trap_dipole_total_ft
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_leg_ft: {:.2}\n",
+                    c.trap_dipole_leg_ft
+                ));
             }
         }
-        out.push_str(&format!("    skip_distance_min_km: {:.0}\n", c.skip_distance_min_km));
-        out.push_str(&format!("    skip_distance_max_km: {:.0}\n", c.skip_distance_max_km));
-        out.push_str(&format!("    skip_distance_avg_km: {:.0}\n", c.skip_distance_avg_km));
+        out.push_str(&format!(
+            "    skip_distance_min_km: {:.0}\n",
+            c.skip_distance_min_km
+        ));
+        out.push_str(&format!(
+            "    skip_distance_max_km: {:.0}\n",
+            c.skip_distance_max_km
+        ));
+        out.push_str(&format!(
+            "    skip_distance_avg_km: {:.0}\n",
+            c.skip_distance_avg_km
+        ));
 
         let rec_yaml = match (recommendation, units) {
             (Some(r), UnitSystem::Metric) => format!(
@@ -1333,12 +1801,30 @@ pub fn to_advise_yaml(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]
     for (idx, c) in candidates.iter().enumerate() {
         out.push_str(&format!("  - rank: {}\n", idx + 1));
         out.push_str(&format!("    ratio: \"{}\"\n", c.ratio.as_label()));
-        out.push_str(&format!("    recommended_length_m: {:.2}\n", c.recommended_length_m));
-        out.push_str(&format!("    recommended_length_ft: {:.2}\n", c.recommended_length_ft));
-        out.push_str(&format!("    clearance_pct: {:.2}\n", c.min_resonance_clearance_pct));
-        out.push_str(&format!("    estimated_efficiency_pct: {:.2}\n", c.estimated_efficiency_pct));
-        out.push_str(&format!("    mismatch_loss_db: {:.3}\n", c.mismatch_loss_db));
-        out.push_str(&format!("    average_length_shift_pct: {:.2}\n", c.average_length_shift_pct));
+        out.push_str(&format!(
+            "    recommended_length_m: {:.2}\n",
+            c.recommended_length_m
+        ));
+        out.push_str(&format!(
+            "    recommended_length_ft: {:.2}\n",
+            c.recommended_length_ft
+        ));
+        out.push_str(&format!(
+            "    clearance_pct: {:.2}\n",
+            c.min_resonance_clearance_pct
+        ));
+        out.push_str(&format!(
+            "    estimated_efficiency_pct: {:.2}\n",
+            c.estimated_efficiency_pct
+        ));
+        out.push_str(&format!(
+            "    mismatch_loss_db: {:.3}\n",
+            c.mismatch_loss_db
+        ));
+        out.push_str(&format!(
+            "    average_length_shift_pct: {:.2}\n",
+            c.average_length_shift_pct
+        ));
         out.push_str(&format!("    score: {:.2}\n", c.score));
         out.push_str(&format!(
             "    tradeoff_note: \"{}\"\n",
@@ -1346,10 +1832,9 @@ pub fn to_advise_yaml(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]
         ));
         out.push_str(&format!("    validated: {}\n", c.validated));
         match c.validation_status {
-            Some(status) => out.push_str(&format!(
-                "    validation_status: \"{}\"\n",
-                status.as_str()
-            )),
+            Some(status) => {
+                out.push_str(&format!("    validation_status: \"{}\"\n", status.as_str()))
+            }
             None => out.push_str("    validation_status: null\n"),
         }
         match &c.validation_note {
@@ -1373,7 +1858,10 @@ fn json_escape(input: &str) -> String {
 
 /// Escape a string for embedding inside a YAML double-quoted scalar.
 fn yaml_escape(input: &str) -> String {
-    input.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
+    input
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
 }
 
 fn html_escape(input: &str) -> String {
@@ -1621,7 +2109,8 @@ mod tests {
     fn advise_markdown_includes_validation_columns() {
         let markdown = to_advise_markdown(450.0, &sample_advise_candidates());
 
-        assert!(markdown.contains("| Validated | Validation Status | Validation Note | Tradeoff Note |"));
+        assert!(markdown
+            .contains("| Validated | Validation Status | Validation Note | Tradeoff Note |"));
         assert!(markdown.contains("| 1 | 1:9"));
         assert!(markdown.contains("| yes | passed | NEC cross-check OK |"));
         assert!(markdown.contains("Good match: 95.2% efficiency"));
@@ -1640,8 +2129,8 @@ mod tests {
 
     #[test]
     fn to_yaml_produces_valid_structure() {
-        use crate::app::AppConfig;
         use crate::app::run_calculation;
+        use crate::app::AppConfig;
         let config = AppConfig {
             band_indices: vec![4, 6], // 40m + 20m
             ..Default::default()
@@ -1654,18 +2143,30 @@ mod tests {
             results.config.wire_min_m,
             results.config.wire_max_m,
         );
-        assert!(yaml.starts_with("---\n"), "should start with YAML document marker");
+        assert!(
+            yaml.starts_with("---\n"),
+            "should start with YAML document marker"
+        );
         assert!(yaml.contains("results:"), "should have results key");
-        assert!(yaml.contains("band: \"40m\"") || yaml.contains("band: \""), "should have band field");
+        assert!(
+            yaml.contains("band: \"40m\"") || yaml.contains("band: \""),
+            "should have band field"
+        );
         assert!(yaml.contains("frequency_mhz:"), "should have frequency_mhz");
-        assert!(yaml.contains("half_wave_m:"), "should have half_wave_m in metric");
-        assert!(!yaml.contains("half_wave_ft:"), "should not have ft in metric mode");
+        assert!(
+            yaml.contains("half_wave_m:"),
+            "should have half_wave_m in metric"
+        );
+        assert!(
+            !yaml.contains("half_wave_ft:"),
+            "should not have ft in metric mode"
+        );
     }
 
     #[test]
     fn to_yaml_imperial_units_omits_metric_fields() {
-        use crate::app::AppConfig;
         use crate::app::run_calculation;
+        use crate::app::AppConfig;
         let config = AppConfig {
             band_indices: vec![4],
             units: UnitSystem::Imperial,
@@ -1686,29 +2187,56 @@ mod tests {
     #[test]
     fn to_advise_yaml_includes_all_candidate_fields() {
         let yaml = to_advise_yaml(450.0, &sample_advise_candidates());
-        assert!(yaml.starts_with("---\n"), "should start with document marker");
-        assert!(yaml.contains("assumed_feedpoint_ohm: 450"), "should include feedpoint");
+        assert!(
+            yaml.starts_with("---\n"),
+            "should start with document marker"
+        );
+        assert!(
+            yaml.contains("assumed_feedpoint_ohm: 450"),
+            "should include feedpoint"
+        );
         assert!(yaml.contains("candidates:"), "should have candidates key");
         assert!(yaml.contains("rank: 1"), "should have rank");
         assert!(yaml.contains("ratio: \"1:9\""), "should have ratio");
         assert!(yaml.contains("tradeoff_note:"), "should have tradeoff note");
-        assert!(yaml.contains("Good match: 95.2% efficiency"), "should include note text");
-        assert!(yaml.contains("validated: true"), "should have validated flag");
-        assert!(yaml.contains("validation_status: \"passed\""), "should have status");
-        assert!(yaml.contains("validation_note: \"NEC cross-check OK\""), "should have note");
+        assert!(
+            yaml.contains("Good match: 95.2% efficiency"),
+            "should include note text"
+        );
+        assert!(
+            yaml.contains("validated: true"),
+            "should have validated flag"
+        );
+        assert!(
+            yaml.contains("validation_status: \"passed\""),
+            "should have status"
+        );
+        assert!(
+            yaml.contains("validation_note: \"NEC cross-check OK\""),
+            "should have note"
+        );
     }
 
     #[test]
     fn default_output_name_yaml() {
-        assert_eq!(default_output_name(ExportFormat::Yaml), "rusty-wire-results.yaml");
-        assert_eq!(default_advise_output_name(ExportFormat::Yaml), "rusty-wire-advise.yaml");
+        assert_eq!(
+            default_output_name(ExportFormat::Yaml),
+            "rusty-wire-results.yaml"
+        );
+        assert_eq!(
+            default_advise_output_name(ExportFormat::Yaml),
+            "rusty-wire-advise.yaml"
+        );
     }
 
     #[test]
     fn to_html_contains_doctype_and_table() {
-        use crate::app::AppConfig;
         use crate::app::run_calculation;
-        let results = run_calculation(AppConfig { band_indices: vec![4, 6], ..Default::default() });
+        use crate::app::AppConfig;
+        let results = run_calculation(AppConfig {
+            band_indices: vec![4, 6],
+            ..Default::default()
+        });
         let html = to_html(
             &results.calculations,
             results.recommendation.as_ref(),
@@ -1719,15 +2247,21 @@ mod tests {
         assert!(html.starts_with("<!DOCTYPE html>"), "should have DOCTYPE");
         assert!(html.contains("<table>"), "should have table");
         assert!(html.contains("Half-wave (m)"), "should have metric header");
-        assert!(html.contains("Half-wave (ft)"), "should have imperial header");
+        assert!(
+            html.contains("Half-wave (ft)"),
+            "should have imperial header"
+        );
         assert!(html.contains("Band Calculations"), "should have heading");
     }
 
     #[test]
     fn to_html_metric_only_no_ft_headers() {
-        use crate::app::AppConfig;
         use crate::app::run_calculation;
-        let results = run_calculation(AppConfig { band_indices: vec![4], ..Default::default() });
+        use crate::app::AppConfig;
+        let results = run_calculation(AppConfig {
+            band_indices: vec![4],
+            ..Default::default()
+        });
         let html = to_html(
             &results.calculations,
             results.recommendation.as_ref(),
@@ -1736,13 +2270,16 @@ mod tests {
             results.config.wire_max_m,
         );
         assert!(html.contains("Half-wave (m)"), "should have metric header");
-        assert!(!html.contains("Half-wave (ft)"), "should not have imperial header");
+        assert!(
+            !html.contains("Half-wave (ft)"),
+            "should not have imperial header"
+        );
     }
 
     #[test]
     fn to_html_imperial_only_no_m_headers() {
-        use crate::app::AppConfig;
         use crate::app::run_calculation;
+        use crate::app::AppConfig;
         let config = AppConfig {
             band_indices: vec![4],
             units: UnitSystem::Imperial,
@@ -1756,8 +2293,14 @@ mod tests {
             results.config.wire_min_m,
             results.config.wire_max_m,
         );
-        assert!(!html.contains("Half-wave (m)"), "should not have metric header");
-        assert!(html.contains("Half-wave (ft)"), "should have imperial header");
+        assert!(
+            !html.contains("Half-wave (m)"),
+            "should not have metric header"
+        );
+        assert!(
+            html.contains("Half-wave (ft)"),
+            "should have imperial header"
+        );
     }
 
     #[test]
@@ -1781,7 +2324,13 @@ mod tests {
 
     #[test]
     fn default_output_name_html() {
-        assert_eq!(default_output_name(ExportFormat::Html), "rusty-wire-results.html");
-        assert_eq!(default_advise_output_name(ExportFormat::Html), "rusty-wire-advise.html");
+        assert_eq!(
+            default_output_name(ExportFormat::Html),
+            "rusty-wire-results.html"
+        );
+        assert_eq!(
+            default_advise_output_name(ExportFormat::Html),
+            "rusty-wire-advise.html"
+        );
     }
 }

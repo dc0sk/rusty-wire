@@ -341,12 +341,24 @@ pub fn calculate_for_band_with_environment(
     let nominal_feedpoint_r = nec_calibrated_dipole_r(antenna_height_m, ground_class);
 
     // Use the NEC-calibrated nominal for all transformer-ratio length corrections.
-    let corrected_half_wave_m =
-        impedance_corrected_length_m(half_wave_m, nominal_feedpoint_r, transformer, conductor_diameter_mm);
-    let corrected_full_wave_m =
-        impedance_corrected_length_m(full_wave_m, nominal_feedpoint_r, transformer, conductor_diameter_mm);
-    let corrected_quarter_wave_m =
-        impedance_corrected_length_m(quarter_wave_m, nominal_feedpoint_r, transformer, conductor_diameter_mm);
+    let corrected_half_wave_m = impedance_corrected_length_m(
+        half_wave_m,
+        nominal_feedpoint_r,
+        transformer,
+        conductor_diameter_mm,
+    );
+    let corrected_full_wave_m = impedance_corrected_length_m(
+        full_wave_m,
+        nominal_feedpoint_r,
+        transformer,
+        conductor_diameter_mm,
+    );
+    let corrected_quarter_wave_m = impedance_corrected_length_m(
+        quarter_wave_m,
+        nominal_feedpoint_r,
+        transformer,
+        conductor_diameter_mm,
+    );
     let corrected_half_wave_ft = corrected_half_wave_m * METERS_TO_FEET;
     let corrected_full_wave_ft = corrected_full_wave_m * METERS_TO_FEET;
     let corrected_quarter_wave_ft = corrected_quarter_wave_m * METERS_TO_FEET;
@@ -468,9 +480,9 @@ pub fn calculate_for_band_with_environment(
 /// Ground-class offset at 10 m is applied as a calibrated delta.
 pub fn nec_calibrated_dipole_r(antenna_height_m: f64, ground_class: GroundClass) -> f64 {
     // Anchor table: resistance at each height with "good" ground (from NEC corpus).
-    const H7_GOOD: f64 = 73.03;   // 7 m AGL, good soil
-    const H10_GOOD: f64 = 52.84;  // 10 m AGL, good soil
-    const H12_GOOD: f64 = 45.56;  // 12 m AGL, good soil
+    const H7_GOOD: f64 = 73.03; // 7 m AGL, good soil
+    const H10_GOOD: f64 = 52.84; // 10 m AGL, good soil
+    const H12_GOOD: f64 = 45.56; // 12 m AGL, good soil
 
     // Ground-class correction deltas at 10 m AGL (NEC corpus deltas relative to "good"):
     //   average - good ≈ +1.51 Ω;  poor - good ≈ +3.54 Ω
@@ -1472,12 +1484,30 @@ mod tests {
 
     #[test]
     fn transformer_ratio_parse_all_colon_formats() {
-        assert_eq!(TransformerRatio::parse("1:5"), Some(TransformerRatio::R1To5));
-        assert_eq!(TransformerRatio::parse("1:6"), Some(TransformerRatio::R1To6));
-        assert_eq!(TransformerRatio::parse("1:9"), Some(TransformerRatio::R1To9));
-        assert_eq!(TransformerRatio::parse("1:16"), Some(TransformerRatio::R1To16));
-        assert_eq!(TransformerRatio::parse("1:49"), Some(TransformerRatio::R1To49));
-        assert_eq!(TransformerRatio::parse("1:56"), Some(TransformerRatio::R1To56));
+        assert_eq!(
+            TransformerRatio::parse("1:5"),
+            Some(TransformerRatio::R1To5)
+        );
+        assert_eq!(
+            TransformerRatio::parse("1:6"),
+            Some(TransformerRatio::R1To6)
+        );
+        assert_eq!(
+            TransformerRatio::parse("1:9"),
+            Some(TransformerRatio::R1To9)
+        );
+        assert_eq!(
+            TransformerRatio::parse("1:16"),
+            Some(TransformerRatio::R1To16)
+        );
+        assert_eq!(
+            TransformerRatio::parse("1:49"),
+            Some(TransformerRatio::R1To49)
+        );
+        assert_eq!(
+            TransformerRatio::parse("1:56"),
+            Some(TransformerRatio::R1To56)
+        );
     }
 
     #[test]
@@ -1485,9 +1515,18 @@ mod tests {
         assert_eq!(TransformerRatio::parse("5"), Some(TransformerRatio::R1To5));
         assert_eq!(TransformerRatio::parse("6"), Some(TransformerRatio::R1To6));
         assert_eq!(TransformerRatio::parse("9"), Some(TransformerRatio::R1To9));
-        assert_eq!(TransformerRatio::parse("16"), Some(TransformerRatio::R1To16));
-        assert_eq!(TransformerRatio::parse("49"), Some(TransformerRatio::R1To49));
-        assert_eq!(TransformerRatio::parse("56"), Some(TransformerRatio::R1To56));
+        assert_eq!(
+            TransformerRatio::parse("16"),
+            Some(TransformerRatio::R1To16)
+        );
+        assert_eq!(
+            TransformerRatio::parse("49"),
+            Some(TransformerRatio::R1To49)
+        );
+        assert_eq!(
+            TransformerRatio::parse("56"),
+            Some(TransformerRatio::R1To56)
+        );
     }
 
     #[test]
@@ -1502,8 +1541,20 @@ mod tests {
     #[test]
     fn skip_scaling_at_height_7m_reduces_distance() {
         let band = sample_band();
-        let h7 = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 7.0, GroundClass::Average);
-        let h10 = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0, GroundClass::Average);
+        let h7 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            7.0,
+            GroundClass::Average,
+        );
+        let h10 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
         assert!(h7.skip_distance_min_km < h10.skip_distance_min_km);
         assert!(h7.skip_distance_max_km < h10.skip_distance_max_km);
     }
@@ -1511,8 +1562,20 @@ mod tests {
     #[test]
     fn skip_scaling_at_height_12m_increases_distance() {
         let band = sample_band();
-        let h10 = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0, GroundClass::Average);
-        let h12 = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 12.0, GroundClass::Average);
+        let h10 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let h12 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            12.0,
+            GroundClass::Average,
+        );
         assert!(h12.skip_distance_min_km > h10.skip_distance_min_km);
         assert!(h12.skip_distance_max_km > h10.skip_distance_max_km);
     }
@@ -1521,8 +1584,20 @@ mod tests {
     fn skip_scaling_fallback_height_is_interpolated() {
         let band = sample_band();
         // 15m is outside presets — exercises the fallback branch
-        let h15 = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 15.0, GroundClass::Average);
-        let h10 = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0, GroundClass::Average);
+        let h15 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            15.0,
+            GroundClass::Average,
+        );
+        let h10 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
         // Factor at 15m = (1 + (15-10)*0.035).clamp(0.70, 1.20) = 1.175
         assert!(h15.skip_distance_max_km > h10.skip_distance_max_km);
         assert!(h15.skip_distance_max_km <= h10.skip_distance_max_km * 1.21);
@@ -1532,18 +1607,45 @@ mod tests {
     fn skip_scaling_fallback_height_clamps_at_minimum() {
         let band = sample_band();
         // Very low height should clamp to 0.70 factor
-        let h1 = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 1.0, GroundClass::Average);
-        let h10 = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0, GroundClass::Average);
+        let h1 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            1.0,
+            GroundClass::Average,
+        );
+        let h10 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
         // Factor = (1 + (1-10)*0.035).clamp(0.70, 1.20) = max(0.685, 0.70) = 0.70
         let ratio = h1.skip_distance_max_km / h10.skip_distance_max_km;
-        assert!((ratio - 0.70).abs() < 1e-9, "expected clamp to 0.70, got ratio {ratio}");
+        assert!(
+            (ratio - 0.70).abs() < 1e-9,
+            "expected clamp to 0.70, got ratio {ratio}"
+        );
     }
 
     #[test]
     fn ground_class_poor_reduces_skip() {
         let band = sample_band();
-        let avg = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0, GroundClass::Average);
-        let poor = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0, GroundClass::Poor);
+        let avg = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let poor = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Poor,
+        );
         assert!(poor.skip_distance_min_km < avg.skip_distance_min_km);
         assert!(poor.skip_distance_max_km < avg.skip_distance_max_km);
     }
@@ -1551,8 +1653,20 @@ mod tests {
     #[test]
     fn ground_class_good_increases_skip() {
         let band = sample_band();
-        let avg = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0, GroundClass::Average);
-        let good = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0, GroundClass::Good);
+        let avg = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let good = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Good,
+        );
         assert!(good.skip_distance_min_km > avg.skip_distance_min_km);
         assert!(good.skip_distance_max_km > avg.skip_distance_max_km);
     }
@@ -1572,7 +1686,10 @@ mod tests {
         let display = format!("{calc}");
         assert!(display.contains("20m"), "band name missing from display");
         assert!(display.contains("14.175"), "frequency missing from display");
-        assert!(display.contains("1:1"), "transformer ratio missing from display");
+        assert!(
+            display.contains("1:1"),
+            "transformer ratio missing from display"
+        );
         assert!(display.contains("Half-wave"), "half-wave label missing");
         assert!(display.contains("Skip distance"), "skip distance missing");
     }
@@ -1661,9 +1778,27 @@ mod tests {
     #[test]
     fn non_unity_transformer_changes_corrected_length() {
         let band = sample_band();
-        let r1to1 = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To1, 10.0, GroundClass::Average);
-        let r1to49 = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To49, 10.0, GroundClass::Average);
-        let r1to64 = calculate_for_band_with_velocity(&band, 0.95, TransformerRatio::R1To64, 10.0, GroundClass::Average);
+        let r1to1 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let r1to49 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To49,
+            10.0,
+            GroundClass::Average,
+        );
+        let r1to64 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To64,
+            10.0,
+            GroundClass::Average,
+        );
         // All transformers produce positive lengths
         assert!(r1to49.corrected_half_wave_m > 0.0);
         assert!(r1to64.corrected_half_wave_m > 0.0);

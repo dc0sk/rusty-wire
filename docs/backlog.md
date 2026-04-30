@@ -14,17 +14,11 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## CLI / Analysis
 
-- HTML export target (YAML shipped in v2.13.0)
 - Persistent user preferences file (default units, region, mode)
 
 ## TUI (2.x, `ratatui`)
 
 - **Band selection refinement**: expand region-specific preset coverage and add a "Custom" preset that opens a band-checklist panel where the user can tick individual bands — similar to a multi-select dialog — replacing the fixed preset table for advanced users.
-- Live recalculation as inputs change (with debounce for non-resonant search)
-- Collapsible result panels per antenna model
-- Visual highlighting of recommended transformer ratio and skipped bands
-- Export preview before writing files
-- Saved sessions / named configurations
 
 ## GUI (3.x, `iced`)
 

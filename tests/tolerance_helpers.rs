@@ -54,9 +54,7 @@ pub fn check_tolerance(
 /// # Returns
 ///
 /// List of failures (empty if all pass)
-pub fn check_tolerance_batch(
-    metrics: Vec<(&str, f64, f64, f64, f64)>,
-) -> Vec<(String, String)> {
+pub fn check_tolerance_batch(metrics: Vec<(&str, f64, f64, f64, f64)>) -> Vec<(String, String)> {
     metrics
         .iter()
         .filter_map(|(name, measured, expected, rel_tol, abs_tol)| {

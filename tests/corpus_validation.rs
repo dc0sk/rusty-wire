@@ -4,7 +4,6 @@
 /// reference sources (NEC, ITU-R standards, published data).
 ///
 /// See docs/corpus-guide.md for methodology and docs/requirements.md for tolerance matrix.
-
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -20,8 +19,10 @@ fn temp_test_dir(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system clock should be after unix epoch")
         .as_nanos();
-    let dir = std::env::temp_dir()
-        .join(format!("rusty-wire-corpus-{name}-{}-{unique}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "rusty-wire-corpus-{name}-{}-{unique}",
+        std::process::id()
+    ));
     fs::create_dir_all(&dir).expect("failed to create temp test dir");
     dir
 }
@@ -98,14 +99,20 @@ fn corpus_infrastructure_ready() {
     // This test verifies that the corpus directory structure exists
     let corpus_dir = PathBuf::from("corpus");
     assert!(corpus_dir.exists(), "corpus/ directory should exist");
-    
+
     let reference_file = corpus_dir.join("reference-results.json");
-    assert!(reference_file.exists(), "corpus/reference-results.json should exist");
-    
-    let content = fs::read_to_string(&reference_file)
-        .expect("failed to read reference-results.json");
-    assert!(content.contains("schema_version"), "reference-results.json should have schema_version");
-    
+    assert!(
+        reference_file.exists(),
+        "corpus/reference-results.json should exist"
+    );
+
+    let content =
+        fs::read_to_string(&reference_file).expect("failed to read reference-results.json");
+    assert!(
+        content.contains("schema_version"),
+        "reference-results.json should have schema_version"
+    );
+
     println!("✅ Corpus infrastructure is ready for seed cases");
     println!("   See docs/corpus-guide.md for adding NEC reference cases");
 }
@@ -160,7 +167,7 @@ fn corpus_resonant_dipole_40m_nec() {
 
     // NEC reference: free-space half-wave dipole impedance at 7.1 MHz
     // from fnec-rust (Hallén solver validated against Python MoM)
-    let nec_z_re = 62.94_f64;  // Real part (Ω)
+    let nec_z_re = 62.94_f64; // Real part (Ω)
     let nec_z_im = -69.28_f64; // Imaginary part (Ω) — capacitive; see notes in nec-requirements.md
 
     // Sanity checks on rusty-wire's resonant dipole length
@@ -211,8 +218,18 @@ fn corpus_inverted_v_40m_nec() {
 #[test]
 fn corpus_nec_dipole_10m_good_ground() {
     let output = binary()
-        .args(["--freq", "7.1", "--antenna", "dipole", "--mode", "resonant",
-               "--height", "10", "--ground", "good"])
+        .args([
+            "--freq",
+            "7.1",
+            "--antenna",
+            "dipole",
+            "--mode",
+            "resonant",
+            "--height",
+            "10",
+            "--ground",
+            "good",
+        ])
         .output()
         .expect("failed to run rusty-wire");
 
@@ -254,8 +271,18 @@ fn corpus_nec_dipole_10m_good_ground() {
 #[test]
 fn corpus_nec_dipole_7m_good_ground() {
     let output = binary()
-        .args(["--freq", "7.1", "--antenna", "dipole", "--mode", "resonant",
-               "--height", "7", "--ground", "good"])
+        .args([
+            "--freq",
+            "7.1",
+            "--antenna",
+            "dipole",
+            "--mode",
+            "resonant",
+            "--height",
+            "7",
+            "--ground",
+            "good",
+        ])
         .output()
         .expect("failed to run rusty-wire");
 
@@ -294,8 +321,18 @@ fn corpus_nec_dipole_7m_good_ground() {
 #[test]
 fn corpus_nec_dipole_12m_good_ground() {
     let output = binary()
-        .args(["--freq", "7.1", "--antenna", "dipole", "--mode", "resonant",
-               "--height", "12", "--ground", "good"])
+        .args([
+            "--freq",
+            "7.1",
+            "--antenna",
+            "dipole",
+            "--mode",
+            "resonant",
+            "--height",
+            "12",
+            "--ground",
+            "good",
+        ])
         .output()
         .expect("failed to run rusty-wire");
 
@@ -334,8 +371,18 @@ fn corpus_nec_dipole_12m_good_ground() {
 #[test]
 fn corpus_nec_efhw_40m() {
     let output = binary()
-        .args(["--freq", "7.1", "--antenna", "efhw", "--mode", "resonant",
-               "--height", "7", "--ground", "good"])
+        .args([
+            "--freq",
+            "7.1",
+            "--antenna",
+            "efhw",
+            "--mode",
+            "resonant",
+            "--height",
+            "7",
+            "--ground",
+            "good",
+        ])
         .output()
         .expect("failed to run rusty-wire");
 
@@ -381,8 +428,18 @@ fn corpus_nec_efhw_40m() {
 #[test]
 fn corpus_nec_inverted_v_40m_90deg() {
     let output = binary()
-        .args(["--freq", "7.1", "--antenna", "inverted-v", "--mode", "resonant",
-               "--height", "12", "--ground", "good"])
+        .args([
+            "--freq",
+            "7.1",
+            "--antenna",
+            "inverted-v",
+            "--mode",
+            "resonant",
+            "--height",
+            "12",
+            "--ground",
+            "good",
+        ])
         .output()
         .expect("failed to run rusty-wire");
 
@@ -850,8 +907,12 @@ fn corpus_test_plan() {
     println!("  3.  skip_distance_40m_height_12m          - height scaling (h=12m, avg)");
     println!("  4.  skip_distance_40m_ground_poor         - ground-class scaling (poor)");
     println!("  5.  skip_distance_40m_ground_good         - ground-class scaling (good)");
-    println!("  6.  non_resonant_multi_band_40m_20m       - non-resonant frequency proportionality");
-    println!("  7.  corpus_resonant_dipole_40m_nec        - NEC baseline: dipole free-space (GAP-011)");
+    println!(
+        "  6.  non_resonant_multi_band_40m_20m       - non-resonant frequency proportionality"
+    );
+    println!(
+        "  7.  corpus_resonant_dipole_40m_nec        - NEC baseline: dipole free-space (GAP-011)"
+    );
     println!("  8.  corpus_nec_dipole_10m_good_ground     - NEC: dipole 10m AGL, good ground");
     println!("  9.  corpus_nec_dipole_7m_good_ground      - NEC: dipole 7m AGL, good ground");
     println!("  10. corpus_nec_dipole_12m_good_ground     - NEC: dipole 12m AGL, good ground");

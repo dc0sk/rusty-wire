@@ -14,7 +14,7 @@
       "checksums": [
         {
           "algorithm": "SHA1",
-          "checksumValue": "99d9e137b099a7219f7f0a956dfd57a5a083a36e"
+          "checksumValue": "54a8a1dad30beebffef91279be9230530936f6fb"
         }
       ],
       "fileName": "./Cargo.lock",
@@ -28,7 +28,7 @@
       "checksums": [
         {
           "algorithm": "SHA1",
-          "checksumValue": "99d9e137b099a7219f7f0a956dfd57a5a083a36e"
+          "checksumValue": "54a8a1dad30beebffef91279be9230530936f6fb"
         }
       ],
       "fileName": "./Cargo.lock",
@@ -42,7 +42,7 @@
       "checksums": [
         {
           "algorithm": "SHA1",
-          "checksumValue": "99d9e137b099a7219f7f0a956dfd57a5a083a36e"
+          "checksumValue": "54a8a1dad30beebffef91279be9230530936f6fb"
         }
       ],
       "fileName": "./Cargo.lock",
@@ -56,7 +56,7 @@
       "checksums": [
         {
           "algorithm": "SHA1",
-          "checksumValue": "99d9e137b099a7219f7f0a956dfd57a5a083a36e"
+          "checksumValue": "54a8a1dad30beebffef91279be9230530936f6fb"
         }
       ],
       "fileName": "./Cargo.lock",
@@ -909,12 +909,12 @@
       "versionInfo": "1.0.22"
     },
     {
-      "SPDXID": "SPDXRef-Package-rusty-wire-2.7.0",
+      "SPDXID": "SPDXRef-Package-rusty-wire-2.14.0",
       "downloadLocation": "NONE",
       "licenseConcluded": "GPL-2.0-or-later",
       "licenseDeclared": "GPL-2.0-or-later",
       "name": "rusty-wire",
-      "versionInfo": "2.7.0"
+      "versionInfo": "2.14.0"
     },
     {
       "SPDXID": "SPDXRef-Package-ryu-1.0.23",
@@ -1622,22 +1622,22 @@
       "spdxElementId": "SPDXRef-DOCUMENT"
     },
     {
-      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.7.0",
+      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.14.0",
       "relationshipType": "GENERATED_FROM",
       "spdxElementId": "SPDXRef-File-rusty-wire"
     },
     {
-      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.7.0",
+      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.14.0",
       "relationshipType": "GENERATED_FROM",
       "spdxElementId": "SPDXRef-File-rusty_wire"
     },
     {
-      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.7.0",
+      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.14.0",
       "relationshipType": "GENERATED_FROM",
       "spdxElementId": "SPDXRef-File-tui"
     },
     {
-      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.7.0",
+      "relatedSpdxElement": "SPDXRef-Package-rusty-wire-2.14.0",
       "relationshipType": "GENERATED_FROM",
       "spdxElementId": "SPDXRef-File-tui-doc-snapshots"
     },
@@ -2119,27 +2119,27 @@
     {
       "relatedSpdxElement": "SPDXRef-Package-clap-4.6.0",
       "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-rusty-wire-2.7.0"
+      "spdxElementId": "SPDXRef-Package-rusty-wire-2.14.0"
     },
     {
       "relatedSpdxElement": "SPDXRef-Package-crossterm-0.28.1",
       "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-rusty-wire-2.7.0"
+      "spdxElementId": "SPDXRef-Package-rusty-wire-2.14.0"
     },
     {
       "relatedSpdxElement": "SPDXRef-Package-ratatui-0.29.0",
       "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-rusty-wire-2.7.0"
+      "spdxElementId": "SPDXRef-Package-rusty-wire-2.14.0"
     },
     {
       "relatedSpdxElement": "SPDXRef-Package-serde-1.0.228",
       "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-rusty-wire-2.7.0"
+      "spdxElementId": "SPDXRef-Package-rusty-wire-2.14.0"
     },
     {
       "relatedSpdxElement": "SPDXRef-Package-toml-0.8.23",
       "relationshipType": "DEPENDS_ON",
-      "spdxElementId": "SPDXRef-Package-rusty-wire-2.7.0"
+      "spdxElementId": "SPDXRef-Package-rusty-wire-2.14.0"
     },
     {
       "relatedSpdxElement": "SPDXRef-Package-serde--derive-1.0.228",

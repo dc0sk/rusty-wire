@@ -61,8 +61,8 @@ use ratatui::Terminal;
 
 use crate::app::{
     apply_action, band_listing_view, build_advise_candidates, execute_request_checked,
-    parse_band_selection, results_display_document, AdviseView, AntennaModel, AppAction,
-    AppConfig, AppRequest, AppState, CalcMode, ExportFormat, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
+    parse_band_selection, results_display_document, AdviseView, AntennaModel, AppAction, AppConfig,
+    AppRequest, AppState, CalcMode, ExportFormat, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
 };
 use crate::band_presets::load_named_presets;
 use crate::bands::ITURegion;
@@ -711,7 +711,10 @@ impl TuiState {
     fn dispatch(&mut self, action: AppAction) {
         // Schedule a debounced auto-recalculation for any config-change action.
         // RunCalculation itself must NOT set this or we'd loop.
-        let is_config_change = !matches!(action, AppAction::RunCalculation | AppAction::ClearResults | AppAction::ClearError);
+        let is_config_change = !matches!(
+            action,
+            AppAction::RunCalculation | AppAction::ClearResults | AppAction::ClearError
+        );
         let region_change = match &action {
             AppAction::SetItuRegion(region) => Some((
                 *region,
@@ -858,9 +861,7 @@ impl TuiState {
     fn try_export(&mut self, format: ExportFormat) {
         if self.show_advise_panel {
             let Some(ref view) = self.advise_view else {
-                self.export_status = Some(
-                    "No advise results — run advise first (a).".into(),
-                );
+                self.export_status = Some("No advise results — run advise first (a).".into());
                 return;
             };
             let content = match format {
@@ -945,7 +946,12 @@ impl TuiState {
                 self.export_status = Some("Advise data lost — cannot write.".into());
                 return;
             };
-            export_advise(format, filename, view.assumed_feedpoint_ohm, &view.candidates)
+            export_advise(
+                format,
+                filename,
+                view.assumed_feedpoint_ohm,
+                &view.candidates,
+            )
         } else {
             let Some(ref results) = self.app.results else {
                 self.export_status = Some("Results lost — cannot write.".into());
@@ -1098,8 +1104,7 @@ impl TuiState {
                                 self.export_status = Some(format!("Session \"{name}\" saved."));
                             }
                             Err(err) => {
-                                self.export_status =
-                                    Some(format!("Session save failed: {err}"));
+                                self.export_status = Some(format!("Session save failed: {err}"));
                             }
                         }
                     }
@@ -1145,14 +1150,11 @@ impl TuiState {
                         .get(self.session_picker_cursor)
                         .cloned()
                     {
-                        if let Some(config) =
-                            crate::sessions::SessionStore::load_config(&name)
-                        {
+                        if let Some(config) = crate::sessions::SessionStore::load_config(&name) {
                             self.app.config = config.clone();
                             // Sync TUI preset indices to the loaded config.
                             self.sync_indices_from_config(&config);
-                            self.export_status =
-                                Some(format!("Session \"{name}\" loaded."));
+                            self.export_status = Some(format!("Session \"{name}\" loaded."));
                         }
                     }
                     self.show_session_picker = false;
@@ -1165,11 +1167,9 @@ impl TuiState {
                     {
                         match crate::sessions::SessionStore::delete(&name) {
                             Ok(_) => {
-                                self.export_status =
-                                    Some(format!("Session \"{name}\" deleted."));
+                                self.export_status = Some(format!("Session \"{name}\" deleted."));
                                 // Refresh list.
-                                self.session_picker_items =
-                                    crate::sessions::SessionStore::list();
+                                self.session_picker_items = crate::sessions::SessionStore::list();
                                 self.session_picker_cursor = self
                                     .session_picker_cursor
                                     .min(self.session_picker_items.len().saturating_sub(1));
@@ -1178,8 +1178,7 @@ impl TuiState {
                                 }
                             }
                             Err(err) => {
-                                self.export_status =
-                                    Some(format!("Delete failed: {err}"));
+                                self.export_status = Some(format!("Delete failed: {err}"));
                             }
                         }
                     }
@@ -1520,8 +1519,7 @@ fn render_config_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
                         .add_modifier(Modifier::BOLD),
                 )
             } else if is_transformer_field
-                && recommended_ratio
-                    .is_some_and(|r| r == state.app.config.transformer_ratio)
+                && recommended_ratio.is_some_and(|r| r == state.app.config.transformer_ratio)
             {
                 // Current transformer ratio is the recommended one → green highlight.
                 (
@@ -1703,15 +1701,24 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
     if let Some(ref cmp) = view.efhw_comparison {
         out.push(Line::from(""));
         out.push(Line::from(Span::styled(
-            format!("EFHW transformer comparison (feedpoint R: {:.0} \u{03a9}):", cmp.feedpoint_r_ohm),
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            format!(
+                "EFHW transformer comparison (feedpoint R: {:.0} \u{03a9}):",
+                cmp.feedpoint_r_ohm
+            ),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         )));
         out.push(Line::from(format!(
             "  {:<5}  {:<8}  {:<6}  {:<11}  {}",
             "Ratio", "Target Z", "SWR", "Efficiency", "Loss"
         )));
         for entry in &cmp.entries {
-            let marker = if entry.is_best { "  \u{2190} recommended" } else { "" };
+            let marker = if entry.is_best {
+                "  \u{2190} recommended"
+            } else {
+                ""
+            };
             let style = if entry.is_best {
                 Style::default().fg(Color::Green)
             } else {
@@ -1739,10 +1746,12 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
             Some(crate::fnec_validation::ValidationStatus::Rejected) => {
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
             }
-            Some(crate::fnec_validation::ValidationStatus::Warning) => {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-            }
-            _ => Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            Some(crate::fnec_validation::ValidationStatus::Warning) => Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+            _ => Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
         };
         let badge = match candidate.validation_status {
             Some(crate::fnec_validation::ValidationStatus::Passed) => "  [PASSED]",
@@ -1947,10 +1956,7 @@ fn render_export_preview(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let inner = block.inner(popup_area);
     f.render_widget(block, popup_area);
 
-    let lines: Vec<Line<'static>> = content
-        .lines()
-        .map(|l| Line::from(l.to_string()))
-        .collect();
+    let lines: Vec<Line<'static>> = content.lines().map(|l| Line::from(l.to_string())).collect();
 
     let para = Paragraph::new(lines)
         .scroll((state.preview_scroll, 0))
@@ -1991,8 +1997,8 @@ fn render_session_name_input(f: &mut ratatui::Frame, area: Rect, state: &TuiStat
     let input = Paragraph::new(input_text).style(Style::default().fg(Color::White));
     f.render_widget(input, rows[1]);
 
-    let hint = Paragraph::new("Enter: save   Esc: cancel")
-        .style(Style::default().fg(Color::DarkGray));
+    let hint =
+        Paragraph::new("Enter: save   Esc: cancel").style(Style::default().fg(Color::DarkGray));
     f.render_widget(hint, rows[2]);
 }
 
@@ -2658,7 +2664,10 @@ mod tests {
 
         assert_eq!(state.results_scroll, 0);
         assert!(state.app.results.is_some());
-        assert!(state.pending_recalc.is_none(), "explicit r should not leave a pending recalc");
+        assert!(
+            state.pending_recalc.is_none(),
+            "explicit r should not leave a pending recalc"
+        );
     }
 
     #[test]
@@ -2668,7 +2677,10 @@ mod tests {
 
         state.handle_key(press(KeyCode::Right)); // change a config field
 
-        assert!(state.pending_recalc.is_some(), "config change should schedule auto-recalc");
+        assert!(
+            state.pending_recalc.is_some(),
+            "config change should schedule auto-recalc"
+        );
     }
 
     #[test]
@@ -2679,8 +2691,14 @@ mod tests {
 
         state.auto_recalculate();
 
-        assert_eq!(state.results_scroll, 5, "auto-recalc should preserve scroll position");
-        assert!(state.pending_recalc.is_none(), "auto_recalculate should clear the pending flag");
+        assert_eq!(
+            state.results_scroll, 5,
+            "auto-recalc should preserve scroll position"
+        );
+        assert!(
+            state.pending_recalc.is_none(),
+            "auto_recalculate should clear the pending flag"
+        );
         assert!(state.app.results.is_some());
     }
 
@@ -3041,7 +3059,7 @@ mod tests {
 
     #[test]
     fn toggle_band_at_cursor_collapses_and_expands() {
-        use crate::app::{AppConfig, run_calculation};
+        use crate::app::{run_calculation, AppConfig};
         let mut state = TuiState::new(None);
         let results = run_calculation(AppConfig {
             band_indices: vec![4, 6], // 40m + 20m
@@ -3055,16 +3073,22 @@ mod tests {
         state.toggle_band_at_cursor();
         let doc = results_display_document(state.app.results.as_ref().unwrap());
         let title = &doc.band_views[0].title;
-        assert!(state.collapsed_bands.contains(title), "band 0 should be collapsed");
+        assert!(
+            state.collapsed_bands.contains(title),
+            "band 0 should be collapsed"
+        );
 
         // Second toggle expands it again.
         state.toggle_band_at_cursor();
-        assert!(!state.collapsed_bands.contains(title), "band 0 should be expanded again");
+        assert!(
+            !state.collapsed_bands.contains(title),
+            "band 0 should be expanded again"
+        );
     }
 
     #[test]
     fn move_band_cursor_clamps_at_boundaries() {
-        use crate::app::{AppConfig, run_calculation};
+        use crate::app::{run_calculation, AppConfig};
         let mut state = TuiState::new(None);
         let results = run_calculation(AppConfig {
             band_indices: vec![4, 6],
@@ -3099,7 +3123,7 @@ mod tests {
 
     #[test]
     fn results_focus_space_key_toggles_band() {
-        use crate::app::{AppConfig, run_calculation};
+        use crate::app::{run_calculation, AppConfig};
         let mut state = TuiState::new(None);
         let results = run_calculation(AppConfig {
             band_indices: vec![4, 6],
@@ -3117,7 +3141,7 @@ mod tests {
 
     #[test]
     fn results_focus_bracket_keys_move_band_cursor() {
-        use crate::app::{AppConfig, run_calculation};
+        use crate::app::{run_calculation, AppConfig};
         let mut state = TuiState::new(None);
         let results = run_calculation(AppConfig {
             band_indices: vec![4, 6],

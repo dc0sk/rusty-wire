@@ -326,7 +326,10 @@ mod tests {
         assert_eq!(restored.antenna_model, original.antenna_model);
         assert_eq!(restored.antenna_height_m, original.antenna_height_m);
         assert_eq!(restored.ground_class, original.ground_class);
-        assert_eq!(restored.conductor_diameter_mm, original.conductor_diameter_mm);
+        assert_eq!(
+            restored.conductor_diameter_mm,
+            original.conductor_diameter_mm
+        );
         assert_eq!(restored.validate_with_fnec, original.validate_with_fnec);
     }
 
@@ -349,7 +352,10 @@ mod tests {
         config.antenna_model = None;
         let session = SessionConfig::from_app_config(&config);
         let toml_str = toml::to_string_pretty(&session).expect("should serialise");
-        assert!(!toml_str.contains("antenna_model"), "None should omit the key");
+        assert!(
+            !toml_str.contains("antenna_model"),
+            "None should omit the key"
+        );
     }
 
     #[test]
