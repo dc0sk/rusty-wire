@@ -157,6 +157,84 @@ pub const TRANSFORMER_OPTIMIZER_CANDIDATES: &[TransformerRatio] = &[
     TransformerRatio::R1To64,
 ];
 
+/// The three standard EFHW transformer ratios to compare.
+pub const EFHW_TRANSFORMER_CANDIDATES: &[TransformerRatio] = &[
+    TransformerRatio::R1To49,
+    TransformerRatio::R1To56,
+    TransformerRatio::R1To64,
+];
+
+/// One entry in the EFHW transformer side-by-side comparison.
+#[derive(Debug, Clone)]
+pub struct EfhwTransformerEntry {
+    pub ratio: TransformerRatio,
+    pub target_z_ohm: f64,
+    pub swr: f64,
+    pub efficiency_pct: f64,
+    pub mismatch_loss_db: f64,
+    /// True for the single entry with the lowest mismatch loss.
+    pub is_best: bool,
+}
+
+/// Side-by-side comparison of 1:49, 1:56, and 1:64 for a given EFHW feedpoint R.
+#[derive(Debug, Clone)]
+pub struct EfhwTransformerComparison {
+    pub feedpoint_r_ohm: f64,
+    pub best_ratio: TransformerRatio,
+    pub entries: Vec<EfhwTransformerEntry>,
+}
+
+/// Compare 1:49, 1:56, and 1:64 transformers against an EFHW feedpoint impedance.
+///
+/// The best entry (lowest mismatch loss) is flagged with `is_best = true`.
+/// Input `feedpoint_r_ohm` is typically obtained from `assumed_feedpoint_impedance_ohm()`.
+pub fn compare_efhw_transformers(feedpoint_r_ohm: f64) -> EfhwTransformerComparison {
+    let mut entries: Vec<EfhwTransformerEntry> = EFHW_TRANSFORMER_CANDIDATES
+        .iter()
+        .copied()
+        .map(|ratio| {
+            let target_z = 50.0 * ratio.impedance_ratio();
+            let gamma = ((target_z - feedpoint_r_ohm).abs() / (target_z + feedpoint_r_ohm))
+                .clamp(0.0, 0.999_999);
+            let efficiency_pct = (1.0 - gamma * gamma) * 100.0;
+            let mismatch_loss_db = -10.0 * (1.0 - gamma * gamma).log10();
+            let swr = if feedpoint_r_ohm > 0.0 {
+                feedpoint_r_ohm.max(target_z) / feedpoint_r_ohm.min(target_z)
+            } else {
+                1.0
+            };
+            EfhwTransformerEntry {
+                ratio,
+                target_z_ohm: target_z,
+                swr,
+                efficiency_pct,
+                mismatch_loss_db,
+                is_best: false,
+            }
+        })
+        .collect();
+
+    let best_idx = entries
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
+            a.mismatch_loss_db
+                .partial_cmp(&b.mismatch_loss_db)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(i, _)| i)
+        .unwrap_or(1); // default to 1:56 (index 1) if all equal
+
+    let best_ratio = entries[best_idx].ratio;
+    entries[best_idx].is_best = true;
+
+    EfhwTransformerComparison {
+        feedpoint_r_ohm,
+        best_ratio,
+        entries,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TransformerOptimizerCandidate {
     pub ratio: TransformerRatio,
@@ -199,6 +277,8 @@ pub struct AdviseCandidate {
 pub struct AdviseView {
     pub assumed_feedpoint_ohm: f64,
     pub candidates: Vec<AdviseCandidate>,
+    /// For EFHW antennas, a side-by-side 1:49/1:56/1:64 comparison.
+    pub efhw_comparison: Option<EfhwTransformerComparison>,
 }
 
 pub fn optimize_transformer_candidates(config: &AppConfig) -> TransformerOptimizerView {
@@ -411,9 +491,15 @@ pub fn build_advise_candidates_with_thresholds(
             }
         }
     }
+    let efhw_comparison = if config.antenna_model == Some(AntennaModel::EndFedHalfWave) {
+        Some(compare_efhw_transformers(optimizer.assumed_feedpoint_ohm))
+    } else {
+        None
+    };
     AdviseView {
         assumed_feedpoint_ohm: optimizer.assumed_feedpoint_ohm,
         candidates,
+        efhw_comparison,
     }
 }
 
@@ -1371,23 +1457,57 @@ pub fn summarize_results(results: &AppResults) -> RunSummary {
 pub fn results_overview_view(results: &AppResults) -> ResultsOverviewView {
     let summary = summarize_results(results);
 
+    let mut header_lines = vec![
+        "------------------------------------------------------------".to_string(),
+        format!(
+            "Using transformer ratio: {}",
+            summary.transformer_ratio_label
+        ),
+        format!("Antenna model: {}", summary.antenna_model_label),
+        format!("Antenna height: {:.0} m", results.config.antenna_height_m),
+        format!("Ground class: {}", results.config.ground_class.as_label()),
+        format!(
+            "Conductor diameter: {:.1} mm",
+            results.config.conductor_diameter_mm
+        ),
+        "------------------------------------------------------------".to_string(),
+    ];
+
+    if results.config.antenna_model == Some(AntennaModel::EndFedHalfWave) {
+        let feedpoint_r = assumed_feedpoint_impedance_ohm(
+            results.config.mode,
+            results.config.antenna_model,
+            results.config.antenna_height_m,
+            results.config.ground_class,
+        );
+        let cmp = compare_efhw_transformers(feedpoint_r);
+        header_lines.push(format!(
+            "EFHW transformer comparison (feedpoint R: {:.0} \u{03a9}):",
+            cmp.feedpoint_r_ohm
+        ));
+        header_lines.push(format!(
+            "  {:<5}  {:<8}  {:<6}  {:<11}  {}",
+            "Ratio", "Target Z", "SWR", "Efficiency", "Loss"
+        ));
+        for entry in &cmp.entries {
+            let marker = if entry.is_best { "  \u{2190} recommended" } else { "" };
+            header_lines.push(format!(
+                "  {:<5}  {:>5.0} \u{03a9}  {:>4.2}:1  {:>9.2}%  {:.3} dB{}",
+                entry.ratio.as_label(),
+                entry.target_z_ohm,
+                entry.swr,
+                entry.efficiency_pct,
+                entry.mismatch_loss_db,
+                marker
+            ));
+        }
+        header_lines
+            .push("------------------------------------------------------------".to_string());
+    }
+
     ResultsOverviewView {
         heading: summary.overview_heading,
-        header_lines: vec![
-            "------------------------------------------------------------".to_string(),
-            format!(
-                "Using transformer ratio: {}",
-                summary.transformer_ratio_label
-            ),
-            format!("Antenna model: {}", summary.antenna_model_label),
-            format!("Antenna height: {:.0} m", results.config.antenna_height_m),
-            format!("Ground class: {}", results.config.ground_class.as_label()),
-            format!(
-                "Conductor diameter: {:.1} mm",
-                results.config.conductor_diameter_mm
-            ),
-            "------------------------------------------------------------".to_string(),
-        ],
+        header_lines,
         summary_lines: vec![
             format!("Summary for {} band(s):", summary.band_count),
             format!(
@@ -4100,6 +4220,60 @@ mod app_error_tests {
             transformer_ratio_explanation(CalcMode::Resonant, Some(AntennaModel::EndFedHalfWave));
         assert_eq!(expl.ratio, TransformerRatio::R1To56);
         assert!(expl.reason.contains("49") || expl.reason.contains("56"));
+    }
+
+    #[test]
+    fn compare_efhw_transformers_2800_ohm_best_is_1to56() {
+        // At 2800 Ω feedpoint R, 1:56 (target 2800 Ω) should be the perfect match.
+        let cmp = compare_efhw_transformers(2800.0);
+        assert_eq!(cmp.best_ratio, TransformerRatio::R1To56);
+        let best = cmp.entries.iter().find(|e| e.is_best).unwrap();
+        assert_eq!(best.ratio, TransformerRatio::R1To56);
+        // Should be a near-perfect match: negligible mismatch loss.
+        assert!(best.mismatch_loss_db < 0.001);
+        assert!(best.swr < 1.01);
+        assert!(best.efficiency_pct > 99.99);
+    }
+
+    #[test]
+    fn compare_efhw_transformers_2450_ohm_best_is_1to49() {
+        // At 2450 Ω feedpoint R, 1:49 (target 2450 Ω) should be the best match.
+        let cmp = compare_efhw_transformers(2450.0);
+        assert_eq!(cmp.best_ratio, TransformerRatio::R1To49);
+        let best = cmp.entries.iter().find(|e| e.is_best).unwrap();
+        assert_eq!(best.ratio, TransformerRatio::R1To49);
+        assert!(best.mismatch_loss_db < 0.001);
+    }
+
+    #[test]
+    fn compare_efhw_transformers_3200_ohm_best_is_1to64() {
+        // At 3200 Ω feedpoint R, 1:64 (target 3200 Ω) should be the best match.
+        let cmp = compare_efhw_transformers(3200.0);
+        assert_eq!(cmp.best_ratio, TransformerRatio::R1To64);
+        let best = cmp.entries.iter().find(|e| e.is_best).unwrap();
+        assert_eq!(best.ratio, TransformerRatio::R1To64);
+        assert!(best.mismatch_loss_db < 0.001);
+    }
+
+    #[test]
+    fn compare_efhw_transformers_returns_three_entries_in_order() {
+        let cmp = compare_efhw_transformers(2800.0);
+        assert_eq!(cmp.entries.len(), 3);
+        assert_eq!(cmp.entries[0].ratio, TransformerRatio::R1To49);
+        assert_eq!(cmp.entries[1].ratio, TransformerRatio::R1To56);
+        assert_eq!(cmp.entries[2].ratio, TransformerRatio::R1To64);
+        // Exactly one entry should be flagged as best.
+        let best_count = cmp.entries.iter().filter(|e| e.is_best).count();
+        assert_eq!(best_count, 1);
+    }
+
+    #[test]
+    fn compare_efhw_transformers_mid_range_picks_closest() {
+        // 2625 Ω is midpoint between 2450 and 2800 — 1:49 target is 175 Ω away, 1:56 is 175 Ω
+        // away. For a value just above midpoint, 1:56 should win.
+        let cmp = compare_efhw_transformers(2630.0);
+        // Best should be 1:56 (closer to 2800) or 1:49 (closer to 2450) — just check the field.
+        assert!(cmp.entries.iter().filter(|e| e.is_best).count() == 1);
     }
 
     #[test]

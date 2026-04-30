@@ -1221,6 +1221,39 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
         "Assumed feedpoint impedance: {:.0} ohm",
         view.assumed_feedpoint_ohm
     )));
+
+    if let Some(ref cmp) = view.efhw_comparison {
+        out.push(Line::from(""));
+        out.push(Line::from(Span::styled(
+            format!("EFHW transformer comparison (feedpoint R: {:.0} \u{03a9}):", cmp.feedpoint_r_ohm),
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        )));
+        out.push(Line::from(format!(
+            "  {:<5}  {:<8}  {:<6}  {:<11}  {}",
+            "Ratio", "Target Z", "SWR", "Efficiency", "Loss"
+        )));
+        for entry in &cmp.entries {
+            let marker = if entry.is_best { "  \u{2190} recommended" } else { "" };
+            let style = if entry.is_best {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default()
+            };
+            out.push(Line::from(Span::styled(
+                format!(
+                    "  {:<5}  {:>5.0} \u{03a9}  {:>4.2}:1  {:>9.2}%  {:.3} dB{}",
+                    entry.ratio.as_label(),
+                    entry.target_z_ohm,
+                    entry.swr,
+                    entry.efficiency_pct,
+                    entry.mismatch_loss_db,
+                    marker
+                ),
+                style,
+            )));
+        }
+    }
+
     out.push(Line::from(""));
 
     for (idx, candidate) in view.candidates.iter().enumerate() {

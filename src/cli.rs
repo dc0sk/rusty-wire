@@ -809,6 +809,28 @@ fn print_advise_candidates(
         "Assumed feedpoint impedance: {:.0} ohm",
         view.assumed_feedpoint_ohm
     );
+
+    if let Some(ref cmp) = view.efhw_comparison {
+        println!(
+            "EFHW transformer comparison (feedpoint R: {:.0} \u{03a9}):",
+            cmp.feedpoint_r_ohm
+        );
+        println!("  {:<5}  {:<8}  {:<6}  {:<11}  {}", "Ratio", "Target Z", "SWR", "Efficiency", "Loss");
+        for entry in &cmp.entries {
+            let marker = if entry.is_best { "  <- recommended" } else { "" };
+            println!(
+                "  {:<5}  {:>5.0} \u{03a9}  {:>4.2}:1  {:>9.2}%  {:.3} dB{}",
+                entry.ratio.as_label(),
+                entry.target_z_ohm,
+                entry.swr,
+                entry.efficiency_pct,
+                entry.mismatch_loss_db,
+                marker
+            );
+        }
+        println!("------------------------------------------------------------");
+    }
+
     println!("Ranked combinations (wire length + balun/unun ratio):");
     println!();
 
