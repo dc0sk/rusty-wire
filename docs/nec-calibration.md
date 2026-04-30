@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/nec-calibration.md
+status: living
+last_updated: 2026-04-30
+---
+
 # NEC Calibration Workflow
 
 This page describes how to calibrate Rusty Wire practical-model constants against NEC/reference sweeps.

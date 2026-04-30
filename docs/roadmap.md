@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/roadmap.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Roadmap
 
 This document captures the milestone plan and near-term priorities after the 2.3.0 release.
@@ -59,7 +66,7 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 - Implemented first pass: standardized antenna-height presets (7 m, 10 m, 12 m) with height-aware skip-distance scaling.
 - Implemented second pass: ground-class presets (poor/average/good) with additional skip-distance scaling.
 - Implemented third pass: optional conductor-diameter input (`--conductor-mm 1.0..4.0`) with first-order impedance/length correction.
-- Next pass: calibrate feedpoint/mismatch estimates against NEC reference sweeps.
+- Next pass: calibrate feedpoint/mismatch estimates against NEC reference sweeps. *(Deferred — GAP-011; NEC sweeps postponed as of 2026-04-30)*
 
 ### 4) Interactive-mode testability
 - Refactor interactive prompts to accept injected I/O (already partially done)

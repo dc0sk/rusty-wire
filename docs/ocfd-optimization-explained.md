@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/ocfd-optimization-explained.md
+status: living
+last_updated: 2026-04-30
+---
+
 # How OCFD Split Optimization Works
 
 Last updated: 2026-04-10

@@ -1,0 +1,131 @@
+name: Documentation Validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  frontmatter:
+    name: Validate documentation frontmatter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check YAML frontmatter in docs
+        run: |
+          #!/bin/bash
+          set -e
+          ERRORS=0
+          
+          for doc in docs/*.md; do
+            if [[ ! -f "$doc" ]]; then
+              continue
+            fi
+            
+            # Check if file starts with YAML frontmatter
+            if ! head -1 "$doc" | grep -q "^---"; then
+              echo "❌ $doc: Missing opening --- frontmatter marker"
+              ((ERRORS++))
+              continue
+            fi
+            
+            # Extract frontmatter
+            FRONTMATTER=$(sed -n '/^---$/,/^---$/p' "$doc" | head -n -1 | tail -n +2)
+            
+            # Check required fields
+            if ! echo "$FRONTMATTER" | grep -q "^project:"; then
+              echo "❌ $doc: Missing 'project' field in frontmatter"
+              ((ERRORS++))
+            fi
+            
+            if ! echo "$FRONTMATTER" | grep -q "^doc:"; then
+              echo "❌ $doc: Missing 'doc' field in frontmatter"
+              ((ERRORS++))
+            fi
+            
+            if ! echo "$FRONTMATTER" | grep -q "^status:"; then
+              echo "❌ $doc: Missing 'status' field in frontmatter"
+              ((ERRORS++))
+            fi
+            
+            if ! echo "$FRONTMATTER" | grep -q "^last_updated:"; then
+              echo "❌ $doc: Missing 'last_updated' field in frontmatter"
+              ((ERRORS++))
+            fi
+            
+            # Validate status value
+            STATUS=$(echo "$FRONTMATTER" | grep "^status:" | cut -d' ' -f2)
+            if [[ ! "$STATUS" =~ ^(living|completed|deprecated)$ ]]; then
+              echo "❌ $doc: Invalid status value '$STATUS' (must be: living, completed, or deprecated)"
+              ((ERRORS++))
+            fi
+            
+            if [ $ERRORS -eq 0 ]; then
+              echo "✅ $doc: Valid frontmatter"
+            fi
+          done
+          
+          if [ $ERRORS -gt 0 ]; then
+            echo ""
+            echo "Frontmatter validation failed with $ERRORS errors"
+            exit 1
+          fi
+
+  version-bump:
+    name: Verify documentation updates on version bump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check version bump documentation
+        run: |
+          #!/bin/bash
+          set -e
+          
+          # Get current version from Cargo.toml
+          CURRENT_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          
+          # Check if version changed in this PR/push
+          if git diff HEAD~1 Cargo.toml 2>/dev/null | grep -q "^+version"; then
+            echo "ℹ️  Version bump detected: $CURRENT_VERSION"
+            
+            # Check if CHANGELOG was updated
+            if ! git diff HEAD~1 docs/CHANGELOG.md 2>/dev/null | grep -q "## \[$CURRENT_VERSION\]"; then
+              echo "❌ docs/CHANGELOG.md was not updated for version $CURRENT_VERSION"
+              exit 1
+            fi
+            echo "✅ docs/CHANGELOG.md was updated"
+            
+            # Check if releasenotes was updated
+            if ! git diff HEAD~1 docs/releasenotes.md 2>/dev/null | grep -q "## \[$CURRENT_VERSION\]"; then
+              echo "❌ docs/releasenotes.md was not updated for version $CURRENT_VERSION"
+              exit 1
+            fi
+            echo "✅ docs/releasenotes.md was updated"
+          else
+            echo "✅ No version bump detected"
+          fi
+
+  requirements-coverage:
+    name: Verify requirements traceability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check requirements documentation exists
+        run: |
+          if [ ! -f "docs/requirements.md" ]; then
+            echo "❌ docs/requirements.md is missing"
+            exit 1
+          fi
+          echo "✅ docs/requirements.md exists"
+          
+          # Verify it has required sections
+          for section in "Scope Decisions" "Functional Requirements" "Non-Functional Requirements" "Gap List"; do
+            if ! grep -q "## $section" docs/requirements.md; then
+              echo "⚠️  Warning: '$section' section not found in docs/requirements.md"
+            else
+              echo "✅ Found '$section' section"
+            fi
+          done

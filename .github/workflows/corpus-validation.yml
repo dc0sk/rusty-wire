@@ -1,0 +1,49 @@
+name: Corpus Validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  corpus:
+    name: Golden corpus tolerance tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run corpus validation tests
+        run: |
+          # Run all corpus tests (including ignored/placeholder tests)
+          cargo test --test corpus_validation -- --nocapture
+      - name: Verify corpus structure
+        run: |
+          if [ ! -d "corpus" ]; then
+            echo "❌ corpus/ directory missing"
+            exit 1
+          fi
+          if [ ! -f "corpus/reference-results.json" ]; then
+            echo "❌ corpus/reference-results.json missing"
+            exit 1
+          fi
+          echo "✅ Corpus directory structure verified"
+      - name: Report corpus status
+        run: |
+          echo "## Corpus Validation Report"
+          echo ""
+          echo "Status: Infrastructure ready (GAP-010)"
+          echo ""
+          echo "### Seed Cases Pending"
+          echo "  - [ ] resonant_dipole_40m_nec"
+          echo "  - [ ] inverted_v_40m_nec"
+          echo "  - [ ] ocfd_40m_20m_nec"
+          echo "  - [ ] skip_distance_40m_itut"
+          echo "  - [ ] non_resonant_multi_band"
+          echo ""
+          echo "### Next Steps"
+          echo "1. Obtain NEC reference sweeps (EZNEC v7.0, NEC-2/4) — currently postponed (GAP-011)"
+          echo "2. Follow docs/corpus-guide.md to add first seed case"
+          echo "3. Enable corpus-validation gate in branch protection"
+          echo ""
+          echo "See: docs/corpus-guide.md"

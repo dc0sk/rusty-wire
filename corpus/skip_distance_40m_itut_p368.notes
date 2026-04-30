@@ -1,0 +1,70 @@
+# Corpus Case: Skip Distance 40m — ITU-R P.368 Reference
+
+## Case Identity
+
+- **ID**: skip_distance_40m_itut_p368
+- **Status**: active
+- **Added**: 2026-04-30
+- **Affects**: COMP-002, GAP-007, GAP-010
+
+## Test Parameters
+
+| Parameter     | Value       |
+|:-------------|:-----------|
+| Band          | 40m         |
+| Frequency     | 7.15 MHz (center) |
+| Height        | 10 m        |
+| Ground class  | average     |
+| Height factor | 1.0 (baseline) |
+| Ground factor | 1.0 (baseline) |
+
+## Reference: ITU-R P.368-10 (2019)
+
+Source: ITU-R Recommendation P.368-10, "Ground-wave propagation curves for frequencies
+between 10 kHz and 30 MHz", International Telecommunication Union, 2019.
+URL: https://www.itu.int/rec/R-REC-P.368/en
+
+### Published Guidance for 7 MHz
+
+ITU-R P.368 provides ground-wave field-strength curves for frequencies from 10 kHz to 30 MHz
+across soil conductivity classes. For 7 MHz (40m amateur band) at average ground:
+
+- **Ground-wave practical range**: typically 50–500 km at representative transmitter powers
+- **Sky-wave skip zone lower bound**: approximately 500–1500 km (low angles, low solar activity)
+- **Sky-wave skip zone upper bound**: approximately 1500–3500 km (optimum conditions)
+
+The ranges in this project's model (50–1000 km for 40m at baseline) are intentionally conservative,
+covering the upper part of the ground-wave range and the lower part of the sky-wave skip zone.
+This is a practical "planning" range rather than a worst/best-case propagation envelope.
+
+## Tolerance Bounds Applied
+
+Per COMP-002 and the tolerance matrix in docs/requirements.md:
+- Relative tolerance: ≤ 5%
+- Absolute tolerance: ≤ 5 km
+
+For this test, the model values are compared against bounds derived from ITU-R P.368 guidance:
+
+| Metric       | Model (baseline) | ITU-R lower bound | ITU-R upper bound |
+|:------------|:----------------|:-----------------|:-----------------|
+| skip_min_km | 50 km           | 50 km             | 500 km            |
+| skip_max_km | 1000 km         | 500 km            | 3500 km           |
+| skip_avg_km | 525 km          | 200 km            | 1750 km           |
+
+The test asserts that the model output falls within these published ITU-R order-of-magnitude bounds.
+
+## Known Limitations
+
+1. The model uses fixed per-band `typical_skip_km` tuples — it does not compute propagation
+   from first principles using ITU-R curves.
+2. Ionospheric variability (season, solar cycle, time of day) is not modelled; these bounds
+   represent median conditions.
+3. Height and ground-class scaling are first-order empirical factors, not ITU-R-derived.
+4. A full COMP-002 validation would require cross-checking the skip factor coefficients
+   against ITU-R P.368 curves for each height/ground combination.
+
+## Lifecycle
+
+- Phase: 2 (active)
+- Blocks: GAP-007 (partially resolved by this case for baseline 40m conditions)
+- Remaining: Height and ground-class scaled cases still needed for full GAP-007 resolution

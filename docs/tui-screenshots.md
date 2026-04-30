@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/tui-screenshots.md
+status: living
+last_updated: 2026-04-30
+---
+
 # TUI Screenshot Plan
 
 Use this checklist when preparing or refreshing TUI screenshots for docs and releases.

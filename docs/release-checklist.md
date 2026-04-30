@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/release-checklist.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Release Checklist
 
 Use this checklist for each version bump and release tag.

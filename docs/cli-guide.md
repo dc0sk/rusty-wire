@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/cli-guide.md
+status: living
+last_updated: 2026-04-30
+---
+
 # CLI Guide
 
 **Version 2.7.0**

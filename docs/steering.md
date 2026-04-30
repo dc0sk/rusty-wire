@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/steering.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Project Steering
 
 This document captures the design goals, constraints, and trade-offs that should guide work on Rusty Wire.

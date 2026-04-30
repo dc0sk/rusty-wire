@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/copilot-memories.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Rusty Wire Copilot Memory Export
 
 This file is the canonical snapshot of the current Copilot memory state for this repository.
