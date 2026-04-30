@@ -381,3 +381,119 @@ mod tests {
         assert_eq!(config.band_indices, vec![4]);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Persistence roundtrip tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod persistence_tests {
+    use super::*;
+    use crate::test_env::with_temp_home;
+
+    fn sample_config() -> AppConfig {
+        use crate::app::{AntennaModel, CalcMode, UnitSystem};
+        use crate::bands::ITURegion;
+        use crate::calculations::{GroundClass, TransformerRatio};
+        AppConfig {
+            band_indices: vec![4, 6],
+            velocity_factor: 0.97,
+            mode: CalcMode::Resonant,
+            wire_min_m: 10.0,
+            wire_max_m: 40.0,
+            step_m: 0.1,
+            units: UnitSystem::Both,
+            itu_region: ITURegion::Region1,
+            transformer_ratio: TransformerRatio::R1To9,
+            antenna_model: Some(AntennaModel::EndFedHalfWave),
+            antenna_height_m: 12.0,
+            ground_class: GroundClass::Good,
+            conductor_diameter_mm: 2.0,
+            custom_freq_mhz: None,
+            freq_list_mhz: vec![],
+            validate_with_fnec: false,
+        }
+    }
+
+    #[test]
+    fn save_and_list_round_trips() {
+        with_temp_home(|| {
+            let cfg = sample_config();
+            SessionStore::save("my-session", &cfg).expect("save");
+            let names = SessionStore::list();
+            assert_eq!(names, vec!["my-session"]);
+        });
+    }
+
+    #[test]
+    fn save_load_config_round_trips_fields() {
+        with_temp_home(|| {
+            let cfg = sample_config();
+            SessionStore::save("round-trip", &cfg).expect("save");
+            let loaded = SessionStore::load_config("round-trip").expect("load");
+            assert_eq!(loaded.band_indices, cfg.band_indices);
+            assert_eq!(loaded.velocity_factor, cfg.velocity_factor);
+            assert_eq!(loaded.mode, cfg.mode);
+            assert_eq!(loaded.units, cfg.units);
+            assert_eq!(loaded.antenna_model, cfg.antenna_model);
+            assert_eq!(loaded.transformer_ratio, cfg.transformer_ratio);
+        });
+    }
+
+    #[test]
+    fn save_overwrites_existing_session() {
+        with_temp_home(|| {
+            let mut cfg = sample_config();
+            SessionStore::save("overwrite-me", &cfg).expect("first save");
+            cfg.velocity_factor = 0.85;
+            SessionStore::save("overwrite-me", &cfg).expect("second save");
+            let names = SessionStore::list();
+            assert_eq!(
+                names.len(),
+                1,
+                "should still be one session after overwrite"
+            );
+            let loaded = SessionStore::load_config("overwrite-me").expect("load");
+            assert_eq!(loaded.velocity_factor, 0.85);
+        });
+    }
+
+    #[test]
+    fn delete_removes_session_and_returns_true() {
+        with_temp_home(|| {
+            let cfg = sample_config();
+            SessionStore::save("to-delete", &cfg).expect("save");
+            let removed = SessionStore::delete("to-delete").expect("delete");
+            assert!(removed);
+            assert!(SessionStore::list().is_empty());
+        });
+    }
+
+    #[test]
+    fn delete_missing_session_returns_false() {
+        with_temp_home(|| {
+            let removed = SessionStore::delete("does-not-exist").expect("delete");
+            assert!(!removed);
+        });
+    }
+
+    #[test]
+    fn load_config_missing_session_returns_none() {
+        with_temp_home(|| {
+            let result = SessionStore::load_config("ghost");
+            assert!(result.is_none());
+        });
+    }
+
+    #[test]
+    fn multiple_sessions_preserved_in_insertion_order() {
+        with_temp_home(|| {
+            let cfg = sample_config();
+            SessionStore::save("alpha", &cfg).expect("save alpha");
+            SessionStore::save("beta", &cfg).expect("save beta");
+            SessionStore::save("gamma", &cfg).expect("save gamma");
+            let names = SessionStore::list();
+            assert_eq!(names, vec!["alpha", "beta", "gamma"]);
+        });
+    }
+}
