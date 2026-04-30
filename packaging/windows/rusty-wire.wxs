@@ -25,7 +25,7 @@
     <Package InstallerVersion="200"
              Compressed="yes"
              InstallScope="perMachine"
-             Description="rusty-wire – antenna modelling and band planning tool"
+             Description="rusty-wire - antenna modelling and band planning tool"
              Manufacturer="dc0sk" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of rusty-wire is already installed." />
