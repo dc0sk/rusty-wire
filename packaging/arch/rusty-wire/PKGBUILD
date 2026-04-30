@@ -1,6 +1,6 @@
 # Maintainer: Simon Keimer <dc0sk@example.com>
 pkgname=rusty-wire
-pkgver=2.7.0
+pkgver=2.9.0
 pkgrel=1
 pkgdesc="Wire antenna length calculator for amateur radio operators – CLI and TUI"
 arch=('x86_64' 'aarch64')
@@ -10,7 +10,7 @@ depends=()
 makedepends=('cargo' 'rust')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 # Run `makepkg -g` after downloading the source to fill in the correct checksum:
-sha256sums=('3a08282ef10ca942959787d6a696d51a411f2a8b3c78729e7488eccc3caaabe0')
+sha256sums=('b50bc410479c4a30e9a0ce161f71251d01e3f491524e0f7888c830188410344c')
 
 prepare() {
     cd "$pkgname-$pkgver"
