@@ -277,6 +277,10 @@ struct TuiState {
     export_preview: Option<(ExportFormat, bool, String)>,
     /// Vertical scroll offset for the export preview overlay.
     preview_scroll: u16,
+    /// Set of band titles whose detail lines are collapsed in the results panel.
+    collapsed_bands: std::collections::HashSet<String>,
+    /// Index of the band currently selected for toggle in the results panel.
+    results_band_cursor: usize,
 }
 
 impl TuiState {
@@ -356,6 +360,8 @@ impl TuiState {
             pending_recalc: None,
             export_preview: None,
             preview_scroll: 0,
+            collapsed_bands: std::collections::HashSet::new(),
+            results_band_cursor: 0,
         }
     }
 
@@ -769,6 +775,8 @@ impl TuiState {
     fn run_calculation(&mut self) {
         self.results_scroll = 0;
         self.pending_recalc = None;
+        self.collapsed_bands.clear();
+        self.results_band_cursor = 0;
         self.dispatch(AppAction::RunCalculation);
     }
 
@@ -778,6 +786,55 @@ impl TuiState {
     fn auto_recalculate(&mut self) {
         self.pending_recalc = None;
         self.dispatch(AppAction::RunCalculation);
+    }
+
+    /// Number of band sections in the current results (0 if none).
+    fn band_count(&self) -> usize {
+        self.app
+            .results
+            .as_ref()
+            .map(|r| {
+                let doc = results_display_document(r);
+                doc.band_views.len()
+            })
+            .unwrap_or(0)
+    }
+
+    /// Toggle collapse of the band at `results_band_cursor`.
+    fn toggle_band_at_cursor(&mut self) {
+        if self.show_advise_panel {
+            return;
+        }
+        let Some(ref results) = self.app.results else {
+            return;
+        };
+        let doc = results_display_document(results);
+        if doc.band_views.is_empty() {
+            return;
+        }
+        let idx = self.results_band_cursor.min(doc.band_views.len() - 1);
+        let title = doc.band_views[idx].title.clone();
+        if self.collapsed_bands.contains(&title) {
+            self.collapsed_bands.remove(&title);
+        } else {
+            self.collapsed_bands.insert(title);
+        }
+    }
+
+    /// Move the band cursor forward (next=true) or backward.
+    fn move_band_cursor(&mut self, next: bool) {
+        if self.show_advise_panel {
+            return;
+        }
+        let count = self.band_count();
+        if count == 0 {
+            return;
+        }
+        if next {
+            self.results_band_cursor = (self.results_band_cursor + 1).min(count - 1);
+        } else {
+            self.results_band_cursor = self.results_band_cursor.saturating_sub(1);
+        }
     }
 
     /// Build a preview string for the given format and open the preview overlay.
@@ -1130,6 +1187,15 @@ impl TuiState {
                 KeyCode::PageUp => {
                     self.results_scroll = self.results_scroll.saturating_sub(10);
                 }
+                KeyCode::Char(' ') | KeyCode::Enter => {
+                    self.toggle_band_at_cursor();
+                }
+                KeyCode::Char(']') | KeyCode::Char('n') => {
+                    self.move_band_cursor(true);
+                }
+                KeyCode::Char('[') | KeyCode::Char('p') => {
+                    self.move_band_cursor(false);
+                }
                 _ => {}
             },
         }
@@ -1333,6 +1399,7 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         ]
     } else if let Some(ref results) = state.app.results {
         let doc = results_display_document(results);
+        let band_count = doc.band_views.len();
         let mut out: Vec<Line<'static>> = Vec::new();
 
         out.push(Line::from(Span::styled(
@@ -1346,17 +1413,28 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         }
         out.push(Line::from(""));
 
-        for band_view in &doc.band_views {
-            out.push(Line::from(Span::styled(
-                band_view.title.clone(),
+        for (i, band_view) in doc.band_views.iter().enumerate() {
+            let is_cursor = state.focus == Focus::Results
+                && i == state.results_band_cursor.min(band_count.saturating_sub(1));
+            let is_collapsed = state.collapsed_bands.contains(&band_view.title);
+            let indicator = if is_collapsed { "▶ " } else { "▼ " };
+            let title_text = format!("{}{}", indicator, band_view.title);
+            let header_style = if is_cursor {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
                 Style::default()
                     .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            )));
-            for l in &band_view.lines {
-                out.push(Line::from(l.clone()));
+                    .add_modifier(Modifier::BOLD)
+            };
+            out.push(Line::from(Span::styled(title_text, header_style)));
+            if !is_collapsed {
+                for l in &band_view.lines {
+                    out.push(Line::from(l.clone()));
+                }
+                out.push(Line::from(""));
             }
-            out.push(Line::from(""));
         }
 
         for l in &doc.summary_lines {
@@ -1562,7 +1640,7 @@ fn hint_text(focus: Focus, show_band_checklist: bool, show_preview: bool) -> &'s
             " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  s:prefs  i:info  Tab:→results  q:quit"
         }
         Focus::Results => {
-            " ↑↓/jk:scroll  PgUp/Dn:page  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  s:prefs  i:info  Tab:→config   q:quit"
+            " ↑↓/jk:scroll  PgUp/Dn:page  [/]:band  Space:collapse  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  Tab:→config  q:quit"
         }
     }
 }
@@ -2648,5 +2726,100 @@ mod tests {
 
         assert!(state.quit);
         assert!(!state.show_info_popup);
+    }
+
+    #[test]
+    fn toggle_band_at_cursor_collapses_and_expands() {
+        use crate::app::{AppConfig, run_calculation};
+        let mut state = TuiState::new(None);
+        let results = run_calculation(AppConfig {
+            band_indices: vec![4, 6], // 40m + 20m
+            ..Default::default()
+        });
+        state.app.results = Some(results);
+        state.focus = Focus::Results;
+        state.results_band_cursor = 0;
+
+        // First toggle collapses band 0.
+        state.toggle_band_at_cursor();
+        let doc = results_display_document(state.app.results.as_ref().unwrap());
+        let title = &doc.band_views[0].title;
+        assert!(state.collapsed_bands.contains(title), "band 0 should be collapsed");
+
+        // Second toggle expands it again.
+        state.toggle_band_at_cursor();
+        assert!(!state.collapsed_bands.contains(title), "band 0 should be expanded again");
+    }
+
+    #[test]
+    fn move_band_cursor_clamps_at_boundaries() {
+        use crate::app::{AppConfig, run_calculation};
+        let mut state = TuiState::new(None);
+        let results = run_calculation(AppConfig {
+            band_indices: vec![4, 6],
+            ..Default::default()
+        });
+        state.app.results = Some(results);
+        state.focus = Focus::Results;
+        state.results_band_cursor = 0;
+
+        // Move backward from 0 stays at 0.
+        state.move_band_cursor(false);
+        assert_eq!(state.results_band_cursor, 0);
+
+        // Move forward twice reaches the last band (idx 1 for 2 bands).
+        state.move_band_cursor(true);
+        assert_eq!(state.results_band_cursor, 1);
+        state.move_band_cursor(true);
+        assert_eq!(state.results_band_cursor, 1, "should clamp at last band");
+    }
+
+    #[test]
+    fn run_calculation_resets_collapsed_bands_and_cursor() {
+        let mut state = TuiState::new(None);
+        state.collapsed_bands.insert("40m".to_string());
+        state.results_band_cursor = 3;
+
+        state.run_calculation();
+
+        assert!(state.collapsed_bands.is_empty());
+        assert_eq!(state.results_band_cursor, 0);
+    }
+
+    #[test]
+    fn results_focus_space_key_toggles_band() {
+        use crate::app::{AppConfig, run_calculation};
+        let mut state = TuiState::new(None);
+        let results = run_calculation(AppConfig {
+            band_indices: vec![4, 6],
+            ..Default::default()
+        });
+        state.app.results = Some(results);
+        state.focus = Focus::Results;
+        state.results_band_cursor = 0;
+
+        state.handle_key(press(KeyCode::Char(' ')));
+
+        let doc = results_display_document(state.app.results.as_ref().unwrap());
+        assert!(state.collapsed_bands.contains(&doc.band_views[0].title));
+    }
+
+    #[test]
+    fn results_focus_bracket_keys_move_band_cursor() {
+        use crate::app::{AppConfig, run_calculation};
+        let mut state = TuiState::new(None);
+        let results = run_calculation(AppConfig {
+            band_indices: vec![4, 6],
+            ..Default::default()
+        });
+        state.app.results = Some(results);
+        state.focus = Focus::Results;
+        state.results_band_cursor = 0;
+
+        state.handle_key(press(KeyCode::Char(']')));
+        assert_eq!(state.results_band_cursor, 1);
+
+        state.handle_key(press(KeyCode::Char('[')));
+        assert_eq!(state.results_band_cursor, 0);
     }
 }
