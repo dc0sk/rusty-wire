@@ -1,18 +1,153 @@
+---
+project: rusty-wire
+doc: docs/CHANGELOG.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Changelog
 
 All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+---
+
+## [2.15.0] - 2026-04-30
+
 ### Added
-- **TUI advise panel toggle**: press `a` in the TUI to toggle ranked wire + balun/unun candidates directly in the results panel. The view reuses app-layer optimizer ranking and auto-hides whenever configuration changes to avoid stale recommendations.
+- **`RequestContext` on `AppRequest`/`AppResponse`**: optional `request_id: u64` + `timestamp_secs: u64` fields, making the app-layer boundary IPC- and async-friendly for future GUI front-ends.
+- **TUI overlay integration tests**: state-driven tests for session-save, session-picker, and export-preview overlays (no terminal required; drives `handle_key` directly).
+- **Persistence roundtrip tests**: `SessionStore` save/list/delete and `UserPrefs` save/load tests using a `tempfile`-based `HOME` override with a shared `ENV_MUTEX`.
+- **Canonical TUI screenshot renderer** (`scripts/render-tui-snapshots.py`): parses the `tui-doc-snapshots` HTML output and renders each section to a PNG via Pillow + DejaVu Sans Mono.
+- **Branch-protection script** (`scripts/protect-main-branch.sh`): applies GitHub REST API branch-protection rules to `main` given a `GITHUB_TOKEN`.
+
+### Refactored
+- **`src/app.rs` → `src/app/`**: split the ~5 100-line god module into `mod.rs`, `state.rs`, and `advise.rs` with full backward-compatible re-exports.
+- **`trait ExportFormatter`**: extracted from `src/export.rs`; all `export_results` / `export_advise` paths delegate through the trait, removing inline match duplication.
+
+---
+
+## [2.14.0] - 2026-04-30
+
+### Added
+- **HTML export format**: `--export html` / `--export htm` on the CLI, `H` key in the TUI. Generates a self-contained HTML document with embedded CSS for both calculation results and advise output. Output files default to `rusty-wire-results.html` / `rusty-wire-advise.html`. All HTML strings are escaped via `html_escape()` to prevent injection.
+- **TUI export preview overlay**: every export key (`e`, `E`, `m`, `t`, `y`, `H`) and the corresponding advise variants now opens a centered scrollable preview overlay first. Press `Enter` to write to disk or `Esc`/`q` to cancel. Up/Down/PageUp/PageDown scroll inside the preview.
+- **TUI collapsible result panels**: per-band results blocks can be collapsed (`▶` / `▼` indicators). Use `[`/`]` to move the band cursor and `Space`/`Enter` to toggle the highlighted band. The active band is shown in yellow.
+- **TUI saved sessions**: full `AppConfig` snapshots can be saved with a name, then recalled later.
+  - `S` opens a single-line name-input overlay; `Enter` saves to `~/.config/rusty-wire/sessions.toml`, `Esc` cancels.
+  - `O` opens a session picker overlay (arrow keys / `jk` to move, `Enter` to load, `d` to delete, `Esc`/`q` to close).
+  - Loading a session resyncs all preset indices (VF, transformer ratio, wire window, height, ground class, conductor diameter, step) so the config panel reflects the loaded values.
+- **TUI visual highlighting**: recommended transformer ratio is shown in green/bold with a `✓` marker; bands skipped by the user are shown in yellow with a `⚠` marker.
 
 ### Changed
-- **Interactive-mode test coverage** (slices 1–5): extended injected-I/O unit tests to cover all remaining interactive prompt paths — export format normalization (uppercase tokens), menu option 4 (ITU region change), menu option 5 (project info), deduplication of alias formats, mixed valid/invalid abort behavior, multi-format defaults, and single-format explicit output paths. Unit test count: 255 (up from 242 at v2.7.0).
+- `hint_text()` extended to display overlay-specific keymaps for the export preview, session save, and session picker overlays.
+- `.gitignore` now excludes default export artifacts (`rusty-wire-results.*`, `rusty-wire-advise.*`).
+
+### Internal
+- New module `src/sessions.rs` — `SessionConfig`, `NamedSession`, `SessionStore` (TOML-backed) with `save`/`load_config`/`list`/`load_all`/`delete`.
+- New helper `sync_indices_from_config()` in the TUI to mirror an `AppConfig` back to the `*_idx` preset fields.
+
+### Test count
+310 lib + 56 CLI + 14 corpus + 12 contract + 5 tolerance + 3 doc = 400 passing; 2 ignored.
+
+---
+
+## [2.13.0] - 2026-04-30
+
+### Added
+- **YAML export format**: `--export yaml` / `--export yml` on the CLI, `y` key in the TUI. Generates a valid YAML document (`---` marker, `results:` list for calculation output, `candidates:` list for advise output). All unit systems (Metric/Imperial/Both) are supported. Output files default to `rusty-wire-results.yaml` / `rusty-wire-advise.yaml`.
+
+### Test count
+293 lib + 56 CLI + 14 corpus + 12 contract + 5 tolerance = 380 passing; 2 ignored.
+
+---
+
+## [2.12.0] - 2026-04-30
+
+### Added
+- **EFHW transformer comparison** (`compare_efhw_transformers()`): for EFHW mode the results header now shows a ranked comparison table for 1:49, 1:56, and 1:64 transformer ratios — SWR, efficiency %, and mismatch loss dB for the calculated feedpoint impedance, with the best ratio flagged. Visible in both CLI output and the TUI results panel.
+- **`--transformer-sweep <RATIOS>`**: like `--velocity-sweep` but iterates over a comma-separated list of transformer ratios (1:1, 1:4, 1:9, 1:49, 1:56, 1:64). Prints a table of SWR, efficiency, and per-band resonant lengths (or non-resonant wire length) for each ratio.
+- **Sustainability gating for advise output** (`--fnec-gate`): when combined with `--validate-with-fnec`, removes `Rejected` candidates from the `--advise` output. Candidates receive `[PASSED]`/`[WARNING]`/`[REJECTED]`/`[ERROR]` status badges in CLI; TUI advise panel colours candidate titles and fnec status lines green/yellow/red accordingly. A validation summary is printed at the end of the advise block.
+- **Trap dipole guidance** (`trap_dipole_guidance_view()`): in trap dipole mode with ≥ 2 bands selected, a structured guidance section is appended to the results document (CLI and TUI). For each adjacent band pair the section shows:
+  - Recommended trap resonant frequency (upper-band centre)
+  - Inner section per side: feedpoint to trap (quarter-wave at upper band × VF)
+  - Outer section per side: trap to tip (for lower-band resonance)
+  - Full tip-to-tip span
+  - Three example L/C component pairs (standard capacitor values, solved inductance), with a note to target coil Qu > 200 and use silver-mica or NP0 capacitors.
+
+### Test count
+288 lib + 56 CLI + 14 corpus + 12 contract + 5 tolerance = 375 passing; 2 ignored.
+
+---
+
+## [2.11.0] - 2026-04-30
+
+### Added
+- **Advise mode tradeoff notes**: each `--advise` candidate now includes a one-sentence tradeoff note generated from the NEC-calibrated feedpoint impedance, transformer target impedance, mismatch loss, and resonance clearance. Examples:
+  - `Best match: SWR ≈ 1.1:1 into 50 Ω, wide resonance clearance (18%).`
+  - `Good match: 97.6% efficiency, 0.11 dB loss, SWR ≈ 1.4:1 into 100 Ω.`
+  - `High mismatch: 1.80 dB loss (SWR 3.8:1 into 200 Ω); ATU strongly recommended.`
+  - Notes also shown in TUI advise panel (yellow text).
+- **Tradeoff note in all export formats**: CSV adds `tradeoff_note` column; JSON adds `"tradeoff_note"` field; Markdown adds `| Tradeoff Note |` column; TXT adds `note: …` line per candidate. **Roadmap items 3a/3b closed.**
+
+---
+
+## [2.10.0] - 2026-04-30
+
+### Added
+- **NEC-calibrated feedpoint resistance and SWR estimate**: `nec_calibrated_dipole_r()` replaces the hardcoded 73 Ω free-space nominal with height/ground-aware values derived from the fnec-rust corpus sweeps. The band display now shows `Est. feedpoint R: XX.X Ω (NEC-calibrated, SWR ≈ N.N:1 into ZZ Ω)` for dipole-family antennas. The transformer optimizer also uses the calibrated value for mismatch-gamma and loss calculations. **GAP-011 item 3c closed.**
+
+  Reference anchor points (7.1 MHz, 2 mm wire, 51 segments, 0.95 VF cut):
+
+  | Height | Ground | R (Ω) | SWR into 50 Ω |
+  |--------|--------|--------|---------------|
+  | 7 m    | good   | 73.0   | 1.5:1         |
+  | 10 m   | poor   | 56.4   | 1.1:1         |
+  | 10 m   | average| 54.4   | 1.1:1         |
+  | 10 m   | good   | 52.8   | 1.1:1         |
+  | 12 m   | good   | 45.6   | 1.1:1         |
+
+---
+
+## [2.9.0] - 2026-04-30
+
+### Added
+- **TUI `--tui` flag**: single binary now supports both CLI and TUI modes; use `rusty-wire --tui` or `-t` to launch the full-screen ratatui interface with all feature parity
+- **TUI keybinding documentation**: updated README with comprehensive TUI keybinding table and feature list
+- **Phase 2 NEC corpus integration**: imported 11 NEC reference decks from fnec-rust project (`corpus/dipole-40m-freesp.nec`, 5 ground variants, 3 height-aware, `efhw-40m.nec`, `inverted-v-40m-90deg.nec`); populated `corpus/reference-results.json` with fnec-rust Hallén solver impedance values
+- **5 new Phase 2 corpus tests**: `corpus_nec_dipole_10m_good_ground`, `corpus_nec_dipole_7m_good_ground`, `corpus_nec_dipole_12m_good_ground`, `corpus_nec_efhw_40m`, `corpus_nec_inverted_v_40m_90deg` — all CI-gated; total active corpus tests: 14
+
+### Fixed
+- **CLI `--freq` space-separated parsing bug**: `run_from_args` was calling `get_matches_from` without the required argv[0] placeholder, causing `--freq 7.1` (space-separated) to fail with "unexpected argument"; prepend dummy `"rusty-wire"` fixes parsing
+- **Tolerance helper batch test**: test values were outside their own declared tolerance bands
 
 ### Infrastructure
-- **Packaging version sync guardrails**: added `scripts/sync-packaging-version.sh` (one-command Arch/Debian version patch), `scripts/check-packaging-version-sync.sh` (CI validation), and `.github/workflows/packaging-version-sync.yml` (PR + main branch enforcement). Debian changelog fixed from 2.6.0-1 to 2.7.0-1.
+- **nec-requirements roadmap updated**: Phase 2 NEC deck generation delegated to fnec-rust project for external generation, ensuring cross-tool consistency and enabling future imports
+- **Test count**: 362 passing across all layers (275 lib + 56 CLI + 14 corpus + 12 contract + 5 tolerance); 2 ignored
+
+---
+
+## [2.8.0] — 2026-04-30
+
+### Added
+- **NEC-requirements roadmap**: added comprehensive `docs/nec-requirements.md` with Phase 2/3 specifications for 14+ NEC decks (ground variants, height-aware, inverted-V, EFHW, conductor correction). Includes templates, execution procedures, tolerance gates, and integration plan for full COMP-001 resonant tolerance verification.
+- **Minimal NEC baseline (GAP-011)**: created 40m free-space resonant dipole NEC deck (`corpus/dipole-40m-freesp.nec`, fnec-rust reference: Z = 62.94 − j69.28 Ω) and enabled corpus test `corpus_resonant_dipole_40m_nec` for CI-gated baseline validation. Non-NEC corpus complete (6 skip-distance + 1 non-resonant multi-band + 1 NEC baseline = 9 active tests).
+
+### Infrastructure
+- **NEC reference integration**: fnec-rust Hallén solver validated against Python MoM for NEC-2 impedance reference generation; corpus test framework ready for 14+ additional NEC decks (Phase 3).
+- **Requirements gap closure**: GAP-011 status changed from "deferred" to "partial"; COMP-001 now has baseline dipole (free space) CI-gated with remaining antenna types and ground variants specified for Phase 3 continuation.
+
+### Changed
+- **Interactive-mode test coverage** (slices 1–5): extended injected-I/O unit tests to cover all remaining interactive prompt paths — export format normalization (uppercase tokens), menu option 4 (ITU region change), menu option 5 (project info), deduplication of alias formats, mixed valid/invalid abort behavior, multi-format defaults, and single-format explicit output paths. Unit test count: 275 (up from 242 at v2.7.0).
 - **Release tag version gate**: `.github/workflows/release-packaging.yml` now runs a `verify-tag-version-sync` job first; all release steps are gated on Cargo.toml, PKGBUILD, and Debian changelog being at the same version as the pushed tag.
+- **Requirements document**: added `docs/requirements.md` covering functional/non-functional requirements, component contracts, parameter contracts (PAR-001/PAR-002), gap register, and full traceability matrix.
+- **Export format contract tests**: `tests/export_format_contract.rs` locks PAR-001 v1 (CSV) and PAR-002 v1 (JSON) output schema against accidental breaking changes.
+- **Corpus validation infrastructure**: `tests/corpus_validation.rs` + `corpus/` directory with `reference-results.json` and `skip_distance_40m_itut_p368.notes` seed case; see `docs/corpus-guide.md`.
+- **CI coverage gate**: `.github/workflows/coverage.yml` using `cargo-tarpaulin` with 90% threshold (NFR-003).
+- **CI corpus validation**: `.github/workflows/corpus-validation.yml` runs corpus tests and structure verification on PR and main push.
+- **Pre-commit hook**: `.githooks/pre-commit` runs `cargo fmt --check`, `cargo clippy`, and `cargo test` before each commit.
+- **Makefile**: 11 make targets (`check`, `test`, `coverage`, `corpus`, `contract`, `lint`, `fmt`, `build`, `docs-validate`, `clean`, `help`) wrapping common dev-cycle commands.
 
 ## [2.7.0] — 2026-04-29
 

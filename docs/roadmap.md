@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/roadmap.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Roadmap
 
 This document captures the milestone plan and near-term priorities after the 2.3.0 release.
@@ -15,7 +22,15 @@ New ideas that are not yet agreed on go to `docs/backlog.md` first.
 
 ---
 
-## Recently Completed (2.3.0 and earlier)
+## Recently Completed
+
+### v2.12.0
+- ✅ **EFHW transformer comparison**: ranked 1:49/1:56/1:64 table in results header and TUI panel, showing SWR/efficiency/loss per ratio.
+- ✅ **`--transformer-sweep`**: sweep over comma-separated transformer ratios; shows SWR, efficiency, and per-band lengths per ratio.
+- ✅ **Sustainability gating (`--fnec-gate`)**: removes `Rejected` candidates from `--advise` output; status badges in CLI and colour-coded TUI panel.
+- ✅ **Trap dipole guidance**: structured section with trap frequency, inner/outer leg lengths, full span, and example L/C component pairs per band pair.
+
+### v2.3.0 and earlier
 
 - clap-based CLI with `--interactive`, named band/range selection, ITU region support
 - antenna model expansion: dipole, inverted-v, EFHW, loop, OCFD; recommended transformer defaults
@@ -40,36 +55,38 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 - Introduce view-friendly metadata where useful: recommended-transformer explanations, skipped-band reasons, per-band annotations
 
 ### 2) Custom-band and frequency input
-- Support user-defined band presets via a config file (`bands.toml` or similar)
+- ✅ Support user-defined band presets via a config file (`bands.toml` or similar) — v2.16.0
 - `--freq-list <f1,f2,...>` for multiple explicit frequencies in one run
 
 ### 3) Additional antenna models
-- Trap dipole and other multi-section models
+- ✅ Trap dipole multi-section model with structured guidance (trap freq, leg lengths, component examples) — v2.12.0
 - Evaluate antenna-specific feed recommendations at the app layer
 
 ### 3a) Balun optimizer foundation (prerequisite for advise mode)
-- Add an app-layer optimizer that ranks balun/unun ratios for the selected band set and antenna assumptions
-- Surface optimizer output as structured view data usable by CLI/TUI/GUI
+- ✅ App-layer optimizer ranks balun/unun ratios for the selected band set and antenna assumptions
+- ✅ Optimizer output surfaced as structured `TransformerOptimizerView` / `AdviseView` usable by CLI/TUI/GUI
 
 ### 3b) `advise` candidate ranking mode
-- Add a user-facing flow where a named/explicit band set produces ranked wire-length + balun/unun candidates
-- Include compact scoring metadata (efficiency estimate and tradeoff notes) per candidate
+- ✅ User-facing `--advise` flag produces ranked wire-length + balun/unun candidates
+- ✅ Compact scoring metadata per candidate: efficiency %, mismatch loss dB, resonance clearance %, score
+- ✅ Tradeoff notes (v2.11.0): one-sentence human-readable summary per candidate — best match, SWR into target impedance, ATU advice. Available in CLI output and all export formats (CSV, JSON, Markdown, TXT). **GAP items 3a/3b closed.**
 
 ### 3c) Practical-limits mitigation (height/ground/conductor realism)
 - Implemented first pass: standardized antenna-height presets (7 m, 10 m, 12 m) with height-aware skip-distance scaling.
 - Implemented second pass: ground-class presets (poor/average/good) with additional skip-distance scaling.
 - Implemented third pass: optional conductor-diameter input (`--conductor-mm 1.0..4.0`) with first-order impedance/length correction.
-- Next pass: calibrate feedpoint/mismatch estimates against NEC reference sweeps.
+- ✅ Implemented fourth pass: NEC-calibrated feedpoint resistance and mismatch/SWR estimates (v2.9.0). `nec_calibrated_dipole_r()` interpolates height/ground anchor points from fnec-rust corpus data (7/10/12 m AGL × poor/average/good). Band display now shows `Est. feedpoint R: XX.X Ω (NEC-calibrated, SWR ≈ N.N:1 into ZZ Ω)`. Transformer optimizer uses calibrated R for all dipole-family gamma and mismatch-loss calculations. **GAP-011 item 3c closed.**
 
 ### 4) Interactive-mode testability
 - Refactor interactive prompts to accept injected I/O (already partially done)
 - Add automated test coverage for all interactive prompt paths
 
 ### 5) TUI (`ratatui`)
-- Add `src/bin/tui.rs` (or `--tui` flag on the main binary)
-- Event loop: render `AppConfig` state → dispatch input actions → recalculate → re-render
-- Feature parity with current CLI/interactive: band selection, antenna model, calc mode, wire window, transformer, export
-- Shared `AppState` / `AppAction` types so GUI reuse is straightforward
+- ✅ Add `src/bin/tui.rs` (or `--tui` flag on the main binary)
+- ✅ Event loop: render `AppConfig` state → dispatch input actions → recalculate → re-render
+- ✅ Feature parity with current CLI/interactive: band selection, antenna model, calc mode, wire window, transformer, export
+- ✅ Shared `AppState` / `AppAction` types so GUI reuse is straightforward
+- **Status**: Completed in v2.8.0+. TUI accessible via `--tui` / `-t` flag with 35 comprehensive unit tests.
 
 ---
 

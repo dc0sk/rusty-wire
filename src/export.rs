@@ -3,11 +3,80 @@
 /// Each `to_*` function is a pure string transform; `export_results` is the
 /// only function that touches the file system.  Both are accessible from
 /// future GUI code (e.g. to pipe content into a preview widget).
+///
+/// `ExportFormatter` is implemented on `ExportFormat` so callers can dispatch
+/// through the trait without matching on the enum themselves.
 use crate::app::{AdviseCandidate, ExportFormat, UnitSystem};
 use crate::calculations::{NonResonantRecommendation, WireCalculation};
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
+
+// ---------------------------------------------------------------------------
+// Formatter trait
+// ---------------------------------------------------------------------------
+
+/// Produces export strings for results or advise output in a specific format.
+///
+/// Implemented on [`ExportFormat`] so front-ends can dispatch without
+/// an explicit match on the enum.
+pub trait ExportFormatter {
+    /// Format wire-calculation results as a string ready for writing to a file.
+    fn format_results(
+        &self,
+        calculations: &[WireCalculation],
+        recommendation: Option<&NonResonantRecommendation>,
+        units: UnitSystem,
+        wire_min_m: f64,
+        wire_max_m: f64,
+    ) -> String;
+
+    /// Format transformer-advise candidates as a string ready for writing to a file.
+    fn format_advise(&self, assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String;
+}
+
+impl ExportFormatter for ExportFormat {
+    fn format_results(
+        &self,
+        calculations: &[WireCalculation],
+        recommendation: Option<&NonResonantRecommendation>,
+        units: UnitSystem,
+        wire_min_m: f64,
+        wire_max_m: f64,
+    ) -> String {
+        match self {
+            ExportFormat::Csv => {
+                to_csv(calculations, recommendation, units, wire_min_m, wire_max_m)
+            }
+            ExportFormat::Html => {
+                to_html(calculations, recommendation, units, wire_min_m, wire_max_m)
+            }
+            ExportFormat::Json => {
+                to_json(calculations, recommendation, units, wire_min_m, wire_max_m)
+            }
+            ExportFormat::Markdown => {
+                to_markdown(calculations, recommendation, units, wire_min_m, wire_max_m)
+            }
+            ExportFormat::Txt => {
+                to_txt(calculations, recommendation, units, wire_min_m, wire_max_m)
+            }
+            ExportFormat::Yaml => {
+                to_yaml(calculations, recommendation, units, wire_min_m, wire_max_m)
+            }
+        }
+    }
+
+    fn format_advise(&self, assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
+        match self {
+            ExportFormat::Csv => to_advise_csv(assumed_feedpoint_ohm, candidates),
+            ExportFormat::Html => to_advise_html(assumed_feedpoint_ohm, candidates),
+            ExportFormat::Json => to_advise_json(assumed_feedpoint_ohm, candidates),
+            ExportFormat::Markdown => to_advise_markdown(assumed_feedpoint_ohm, candidates),
+            ExportFormat::Txt => to_advise_txt(assumed_feedpoint_ohm, candidates),
+            ExportFormat::Yaml => to_advise_yaml(assumed_feedpoint_ohm, candidates),
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // File-name helpers
@@ -16,18 +85,22 @@ use std::path::{Component, Path, PathBuf};
 pub fn default_output_name(format: ExportFormat) -> &'static str {
     match format {
         ExportFormat::Csv => "rusty-wire-results.csv",
+        ExportFormat::Html => "rusty-wire-results.html",
         ExportFormat::Json => "rusty-wire-results.json",
         ExportFormat::Markdown => "rusty-wire-results.md",
         ExportFormat::Txt => "rusty-wire-results.txt",
+        ExportFormat::Yaml => "rusty-wire-results.yaml",
     }
 }
 
 pub fn default_advise_output_name(format: ExportFormat) -> &'static str {
     match format {
         ExportFormat::Csv => "rusty-wire-advise.csv",
+        ExportFormat::Html => "rusty-wire-advise.html",
         ExportFormat::Json => "rusty-wire-advise.json",
         ExportFormat::Markdown => "rusty-wire-advise.md",
         ExportFormat::Txt => "rusty-wire-advise.txt",
+        ExportFormat::Yaml => "rusty-wire-advise.yaml",
     }
 }
 
@@ -89,23 +162,9 @@ pub fn export_results(
     wire_min_m: f64,
     wire_max_m: f64,
 ) -> io::Result<()> {
-    let output_path = validate_export_path(output)
-        .map_err(|msg| io::Error::new(io::ErrorKind::InvalidInput, msg))?;
-    if let Some(parent) = output_path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)?;
-        }
-    }
-
-    let content = match format {
-        ExportFormat::Csv => to_csv(calculations, recommendation, units, wire_min_m, wire_max_m),
-        ExportFormat::Json => to_json(calculations, recommendation, units, wire_min_m, wire_max_m),
-        ExportFormat::Markdown => {
-            to_markdown(calculations, recommendation, units, wire_min_m, wire_max_m)
-        }
-        ExportFormat::Txt => to_txt(calculations, recommendation, units, wire_min_m, wire_max_m),
-    };
-    fs::write(output_path, content)
+    let content =
+        format.format_results(calculations, recommendation, units, wire_min_m, wire_max_m);
+    write_export_file(output, content)
 }
 
 pub fn export_advise(
@@ -114,6 +173,12 @@ pub fn export_advise(
     assumed_feedpoint_ohm: f64,
     candidates: &[AdviseCandidate],
 ) -> io::Result<()> {
+    let content = format.format_advise(assumed_feedpoint_ohm, candidates);
+    write_export_file(output, content)
+}
+
+/// Write `content` to `output`, creating parent directories as needed.
+fn write_export_file(output: &str, content: String) -> io::Result<()> {
     let output_path = validate_export_path(output)
         .map_err(|msg| io::Error::new(io::ErrorKind::InvalidInput, msg))?;
     if let Some(parent) = output_path.parent() {
@@ -121,13 +186,6 @@ pub fn export_advise(
             fs::create_dir_all(parent)?;
         }
     }
-
-    let content = match format {
-        ExportFormat::Csv => to_advise_csv(assumed_feedpoint_ohm, candidates),
-        ExportFormat::Json => to_advise_json(assumed_feedpoint_ohm, candidates),
-        ExportFormat::Markdown => to_advise_markdown(assumed_feedpoint_ohm, candidates),
-        ExportFormat::Txt => to_advise_txt(assumed_feedpoint_ohm, candidates),
-    };
     fs::write(output_path, content)
 }
 
@@ -774,17 +832,18 @@ pub fn to_txt(
 
 pub fn to_advise_csv(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
     let mut out = String::from(
-        "rank,ratio,recommended_length_m,recommended_length_ft,clearance_pct,estimated_efficiency_pct,mismatch_loss_db,average_length_shift_pct,score,validated,validation_status,validation_note,assumed_feedpoint_ohm\n",
+        "rank,ratio,recommended_length_m,recommended_length_ft,clearance_pct,estimated_efficiency_pct,mismatch_loss_db,average_length_shift_pct,score,tradeoff_note,validated,validation_status,validation_note,assumed_feedpoint_ohm\n",
     );
     for (idx, c) in candidates.iter().enumerate() {
         let note = c.validation_note.as_deref().unwrap_or("");
         let escaped_note = csv_escape(note);
+        let escaped_tradeoff = csv_escape(&c.tradeoff_note);
         let status = c
             .validation_status
             .map(|value| value.as_str())
             .unwrap_or("");
         out.push_str(&format!(
-            "{},{},{:.2},{:.2},{:.2},{:.2},{:.3},{:.2},{:.2},{},\"{}\",\"{}\",{:.0}\n",
+            "{},{},{:.2},{:.2},{:.2},{:.2},{:.3},{:.2},{:.2},\"{}\",{},\"{}\",\"{}\",{:.0}\n",
             idx + 1,
             c.ratio.as_label(),
             c.recommended_length_m,
@@ -794,6 +853,7 @@ pub fn to_advise_csv(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate])
             c.mismatch_loss_db,
             c.average_length_shift_pct,
             c.score,
+            escaped_tradeoff,
             c.validated,
             status,
             escaped_note,
@@ -821,8 +881,9 @@ pub fn to_advise_json(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]
             .validation_status
             .map(|status| format!("\"{}\"", status.as_str()))
             .unwrap_or_else(|| "null".to_string());
+        let tradeoff_json = format!("\"{}\"", json_escape(&c.tradeoff_note));
         out.push_str(&format!(
-            "    {{\"rank\": {}, \"ratio\": \"{}\", \"recommended_length_m\": {:.2}, \"recommended_length_ft\": {:.2}, \"clearance_pct\": {:.2}, \"estimated_efficiency_pct\": {:.2}, \"mismatch_loss_db\": {:.3}, \"average_length_shift_pct\": {:.2}, \"score\": {:.2}, \"validated\": {}, \"validation_status\": {}, \"validation_note\": {}}}{}\n",
+            "    {{\"rank\": {}, \"ratio\": \"{}\", \"recommended_length_m\": {:.2}, \"recommended_length_ft\": {:.2}, \"clearance_pct\": {:.2}, \"estimated_efficiency_pct\": {:.2}, \"mismatch_loss_db\": {:.3}, \"average_length_shift_pct\": {:.2}, \"score\": {:.2}, \"tradeoff_note\": {}, \"validated\": {}, \"validation_status\": {}, \"validation_note\": {}}}{}\n",
             idx + 1,
             c.ratio.as_label(),
             c.recommended_length_m,
@@ -832,6 +893,7 @@ pub fn to_advise_json(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]
             c.mismatch_loss_db,
             c.average_length_shift_pct,
             c.score,
+            tradeoff_json,
             c.validated,
             status_json,
             note_json,
@@ -848,8 +910,8 @@ pub fn to_advise_markdown(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandid
         "Assumed feedpoint impedance: {:.0} ohm\n\n",
         assumed_feedpoint_ohm
     ));
-    out.push_str("| Rank | Ratio | Wire (m) | Wire (ft) | Clearance (%) | Efficiency (%) | Mismatch Loss (dB) | Shift (%) | Score | Validated | Validation Status | Validation Note |\n");
-    out.push_str("|------|-------|----------|-----------|---------------|----------------|--------------------|-----------|-------|-----------|-------------------|-----------------|\n");
+    out.push_str("| Rank | Ratio | Wire (m) | Wire (ft) | Clearance (%) | Efficiency (%) | Mismatch Loss (dB) | Shift (%) | Score | Validated | Validation Status | Validation Note | Tradeoff Note |\n");
+    out.push_str("|------|-------|----------|-----------|---------------|----------------|--------------------|-----------|-------|-----------|-------------------|-----------------|---------------|\n");
     for (idx, c) in candidates.iter().enumerate() {
         let status = c
             .validation_status
@@ -861,8 +923,9 @@ pub fn to_advise_markdown(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandid
             .unwrap_or("")
             .replace('|', "\\|")
             .replace('\n', " ");
+        let tradeoff = c.tradeoff_note.replace('|', "\\|").replace('\n', " ");
         out.push_str(&format!(
-            "| {} | {} | {:.2} | {:.2} | {:.2} | {:.2} | {:.3} | {:.2} | {:.2} | {} | {} | {} |\n",
+            "| {} | {} | {:.2} | {:.2} | {:.2} | {:.2} | {:.3} | {:.2} | {:.2} | {} | {} | {} | {} |\n",
             idx + 1,
             c.ratio.as_label(),
             c.recommended_length_m,
@@ -875,6 +938,7 @@ pub fn to_advise_markdown(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandid
             if c.validated { "yes" } else { "no" },
             status,
             note,
+            tradeoff,
         ));
     }
     out
@@ -900,9 +964,10 @@ pub fn to_advise_txt(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate])
             c.estimated_efficiency_pct, c.mismatch_loss_db, c.min_resonance_clearance_pct
         ));
         out.push_str(&format!(
-            "    score {:.2}  correction shift {:.2}%\n\n",
+            "    score {:.2}  correction shift {:.2}%\n",
             c.score, c.average_length_shift_pct
         ));
+        out.push_str(&format!("    note: {}\n", c.tradeoff_note));
         out.push_str(&format!(
             "    fnec validated {}\n",
             if c.validated { "yes" } else { "no" }
@@ -918,12 +983,943 @@ pub fn to_advise_txt(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate])
     out
 }
 
+pub fn to_html(
+    calculations: &[WireCalculation],
+    recommendation: Option<&NonResonantRecommendation>,
+    units: UnitSystem,
+    wire_min_m: f64,
+    wire_max_m: f64,
+) -> String {
+    let mut out = String::from(
+        "<!DOCTYPE html>\n\
+         <html lang=\"en\">\n\
+         <head>\n\
+         <meta charset=\"UTF-8\">\n\
+         <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n\
+         <title>Rusty Wire Results</title>\n\
+         <style>\n\
+         body{font-family:system-ui,sans-serif;margin:2rem;color:#222;}\n\
+         h1{color:#1a5276;}h2{color:#2874a6;margin-top:2rem;}\n\
+         table{border-collapse:collapse;font-size:0.85rem;width:100%;overflow-x:auto;display:block;}\n\
+         th{background:#2874a6;color:#fff;padding:6px 10px;text-align:left;white-space:nowrap;}\n\
+         td{border:1px solid #ccc;padding:5px 9px;white-space:nowrap;}\n\
+         tr:nth-child(even) td{background:#f4f6f9;}\n\
+         .note{color:#555;font-style:italic;margin-top:0.5rem;}\n\
+         </style>\n\
+         </head>\n\
+         <body>\n\
+         <h1>Rusty Wire Results</h1>\n",
+    );
+
+    out.push_str("<h2>Band Calculations</h2>\n<table>\n<thead><tr>\n");
+
+    // Build ordered column definitions: (header, value-fn) — unit-aware.
+    // We use a Vec<(&str, String)> per row to avoid repeating all three unit branches.
+    struct Col {
+        header: &'static str,
+        values: Vec<String>,
+    }
+
+    macro_rules! col {
+        ($hdr:expr, $vals:expr) => {
+            Col {
+                header: $hdr,
+                values: $vals,
+            }
+        };
+    }
+
+    let mut cols: Vec<Col> = vec![
+        col!(
+            "Band",
+            calculations
+                .iter()
+                .map(|c| html_escape(&c.band_name))
+                .collect()
+        ),
+        col!(
+            "Ratio",
+            calculations
+                .iter()
+                .map(|c| html_escape(c.transformer_ratio_label))
+                .collect()
+        ),
+        col!(
+            "Freq (MHz)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.3}", c.frequency_mhz))
+                .collect()
+        ),
+    ];
+
+    match units {
+        UnitSystem::Metric | UnitSystem::Both => {
+            cols.push(col!(
+                "Half-wave (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.half_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Half-wave corr (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.corrected_half_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Full-wave (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.full_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Full-wave corr (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.corrected_full_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Quarter-wave (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.quarter_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Quarter-wave corr (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.corrected_quarter_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "EFHW (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.end_fed_half_wave_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Loop circ (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.full_wave_loop_circumference_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Loop side (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.full_wave_loop_square_side_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Inv-V total (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.inverted_v_total_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Inv-V leg (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.inverted_v_leg_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Inv-V span 90° (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.inverted_v_span_90_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Inv-V span 120° (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.inverted_v_span_120_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "OCFD 33 short (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.ocfd_33_short_leg_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "OCFD 33 long (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.ocfd_33_long_leg_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "OCFD 20 short (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.ocfd_20_short_leg_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "OCFD 20 long (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.ocfd_20_long_leg_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Trap total (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.trap_dipole_total_m))
+                    .collect()
+            ));
+            cols.push(col!(
+                "Trap leg (m)",
+                calculations
+                    .iter()
+                    .map(|c| format!("{:.2}", c.trap_dipole_leg_m))
+                    .collect()
+            ));
+        }
+        _ => {}
+    }
+    if matches!(units, UnitSystem::Imperial | UnitSystem::Both) {
+        cols.push(col!(
+            "Half-wave (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.half_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Half-wave corr (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.corrected_half_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Full-wave (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.full_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Full-wave corr (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.corrected_full_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Quarter-wave (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.quarter_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Quarter-wave corr (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.corrected_quarter_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "EFHW (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.end_fed_half_wave_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Loop circ (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.full_wave_loop_circumference_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Loop side (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.full_wave_loop_square_side_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Inv-V total (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.inverted_v_total_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Inv-V leg (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.inverted_v_leg_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Inv-V span 90° (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.inverted_v_span_90_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Inv-V span 120° (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.inverted_v_span_120_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "OCFD 33 short (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.ocfd_33_short_leg_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "OCFD 33 long (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.ocfd_33_long_leg_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "OCFD 20 short (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.ocfd_20_short_leg_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "OCFD 20 long (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.ocfd_20_long_leg_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Trap total (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.trap_dipole_total_ft))
+                .collect()
+        ));
+        cols.push(col!(
+            "Trap leg (ft)",
+            calculations
+                .iter()
+                .map(|c| format!("{:.2}", c.trap_dipole_leg_ft))
+                .collect()
+        ));
+    }
+    cols.push(col!(
+        "Skip min (km)",
+        calculations
+            .iter()
+            .map(|c| format!("{:.0}", c.skip_distance_min_km))
+            .collect()
+    ));
+    cols.push(col!(
+        "Skip max (km)",
+        calculations
+            .iter()
+            .map(|c| format!("{:.0}", c.skip_distance_max_km))
+            .collect()
+    ));
+    cols.push(col!(
+        "Skip avg (km)",
+        calculations
+            .iter()
+            .map(|c| format!("{:.0}", c.skip_distance_avg_km))
+            .collect()
+    ));
+
+    for col in &cols {
+        out.push_str(&format!("<th>{}</th>\n", col.header));
+    }
+    out.push_str("</tr></thead>\n<tbody>\n");
+
+    for row_idx in 0..calculations.len() {
+        out.push_str("<tr>\n");
+        for col in &cols {
+            out.push_str(&format!("<td>{}</td>\n", col.values[row_idx]));
+        }
+        out.push_str("</tr>\n");
+    }
+    out.push_str("</tbody>\n</table>\n");
+
+    // Non-resonant recommendation
+    out.push_str("<h2>Non-Resonant Recommendation</h2>\n");
+    match (recommendation, units) {
+        (Some(r), UnitSystem::Metric) => {
+            out.push_str(&format!(
+                "<p><strong>{:.2} m</strong> — resonance clearance: {:.2}%</p>\n",
+                r.length_m, r.min_resonance_clearance_pct
+            ));
+        }
+        (Some(r), UnitSystem::Imperial) => {
+            out.push_str(&format!(
+                "<p><strong>{:.2} ft</strong> — resonance clearance: {:.2}%</p>\n",
+                r.length_ft, r.min_resonance_clearance_pct
+            ));
+        }
+        (Some(r), UnitSystem::Both) => {
+            out.push_str(&format!(
+                "<p><strong>{:.2} m ({:.2} ft)</strong> — resonance clearance: {:.2}%</p>\n",
+                r.length_m, r.length_ft, r.min_resonance_clearance_pct
+            ));
+        }
+        (None, _) => out.push_str("<p class=\"note\">No recommendation available.</p>\n"),
+    }
+
+    // Resonant points
+    out.push_str("<h2>Resonant Points in Search Window</h2>\n");
+    out.push_str(&format!(
+        "<p class=\"note\">Window: {:.2}–{:.2} m ({:.2}–{:.2} ft)</p>\n",
+        wire_min_m,
+        wire_max_m,
+        wire_min_m / 0.3048,
+        wire_max_m / 0.3048,
+    ));
+
+    let mut points_rows = String::new();
+    for c in calculations {
+        for (harmonic, len_m) in collect_band_resonant_points_m(c, wire_min_m, wire_max_m) {
+            let len_cell = match units {
+                UnitSystem::Metric => format!("{:.2} m", len_m),
+                UnitSystem::Imperial => format!("{:.2} ft", len_m / 0.3048),
+                UnitSystem::Both => format!("{:.2} m ({:.2} ft)", len_m, len_m / 0.3048),
+            };
+            points_rows.push_str(&format!(
+                "<tr><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+                html_escape(&c.band_name),
+                harmonic,
+                len_cell
+            ));
+        }
+    }
+    if points_rows.is_empty() {
+        out.push_str("<p class=\"note\">No resonant points in this window.</p>\n");
+    } else {
+        out.push_str("<table>\n<thead><tr><th>Band</th><th>Harmonic</th><th>Length</th></tr></thead>\n<tbody>\n");
+        out.push_str(&points_rows);
+        out.push_str("</tbody>\n</table>\n");
+    }
+
+    out.push_str("</body>\n</html>\n");
+    out
+}
+
+pub fn to_advise_html(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
+    let mut out = String::from(
+        "<!DOCTYPE html>\n\
+         <html lang=\"en\">\n\
+         <head>\n\
+         <meta charset=\"UTF-8\">\n\
+         <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n\
+         <title>Rusty Wire Advise</title>\n\
+         <style>\n\
+         body{font-family:system-ui,sans-serif;margin:2rem;color:#222;}\n\
+         h1{color:#1a5276;}h2{color:#2874a6;margin-top:2rem;}\n\
+         table{border-collapse:collapse;font-size:0.85rem;}\n\
+         th{background:#2874a6;color:#fff;padding:6px 10px;text-align:left;white-space:nowrap;}\n\
+         td{border:1px solid #ccc;padding:5px 9px;}\n\
+         tr:nth-child(even) td{background:#f4f6f9;}\n\
+         .note{color:#555;font-style:italic;}\n\
+         </style>\n\
+         </head>\n\
+         <body>\n\
+         <h1>Rusty Wire Advise Candidates</h1>\n",
+    );
+    out.push_str(&format!(
+        "<p>Assumed feedpoint impedance: <strong>{:.0} Ω</strong></p>\n",
+        assumed_feedpoint_ohm
+    ));
+    out.push_str(
+        "<table>\n<thead><tr>\
+         <th>Rank</th><th>Ratio</th>\
+         <th>Length (m)</th><th>Length (ft)</th>\
+         <th>Clearance (%)</th><th>Efficiency (%)</th>\
+         <th>Mismatch loss (dB)</th><th>Score</th>\
+         <th>Validated</th><th>Status</th><th>Tradeoff note</th>\
+         </tr></thead>\n<tbody>\n",
+    );
+    for (idx, c) in candidates.iter().enumerate() {
+        let status = c
+            .validation_status
+            .map(|s| s.as_str().to_string())
+            .unwrap_or_else(|| "—".to_string());
+        out.push_str(&format!(
+            "<tr><td>{rank}</td><td>{ratio}</td>\
+             <td>{len_m:.2}</td><td>{len_ft:.2}</td>\
+             <td>{clear:.2}</td><td>{eff:.2}</td>\
+             <td>{loss:.3}</td><td>{score:.2}</td>\
+             <td>{validated}</td><td>{status}</td><td>{note}</td></tr>\n",
+            rank = idx + 1,
+            ratio = html_escape(c.ratio.as_label()),
+            len_m = c.recommended_length_m,
+            len_ft = c.recommended_length_ft,
+            clear = c.min_resonance_clearance_pct,
+            eff = c.estimated_efficiency_pct,
+            loss = c.mismatch_loss_db,
+            score = c.score,
+            validated = if c.validated { "yes" } else { "no" },
+            status = html_escape(&status),
+            note = html_escape(&c.tradeoff_note),
+        ));
+    }
+    out.push_str("</tbody>\n</table>\n</body>\n</html>\n");
+    out
+}
+
+pub fn to_yaml(
+    calculations: &[WireCalculation],
+    recommendation: Option<&NonResonantRecommendation>,
+    units: UnitSystem,
+    wire_min_m: f64,
+    wire_max_m: f64,
+) -> String {
+    const FT: f64 = 3.280_84;
+    let mut out = String::from("---\n");
+    out.push_str("results:\n");
+    for c in calculations {
+        out.push_str(&format!("  - band: \"{}\"\n", yaml_escape(&c.band_name)));
+        out.push_str(&format!("    frequency_mhz: {:.3}\n", c.frequency_mhz));
+        out.push_str(&format!(
+            "    transformer_ratio: \"{}\"\n",
+            c.transformer_ratio_label
+        ));
+        match units {
+            UnitSystem::Metric => {
+                out.push_str(&format!("    half_wave_m: {:.2}\n", c.half_wave_m));
+                out.push_str(&format!(
+                    "    half_wave_corrected_m: {:.2}\n",
+                    c.corrected_half_wave_m
+                ));
+                out.push_str(&format!("    full_wave_m: {:.2}\n", c.full_wave_m));
+                out.push_str(&format!(
+                    "    full_wave_corrected_m: {:.2}\n",
+                    c.corrected_full_wave_m
+                ));
+                out.push_str(&format!("    quarter_wave_m: {:.2}\n", c.quarter_wave_m));
+                out.push_str(&format!(
+                    "    quarter_wave_corrected_m: {:.2}\n",
+                    c.corrected_quarter_wave_m
+                ));
+                out.push_str(&format!(
+                    "    end_fed_half_wave_m: {:.2}\n",
+                    c.end_fed_half_wave_m
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_circumference_m: {:.2}\n",
+                    c.full_wave_loop_circumference_m
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_square_side_m: {:.2}\n",
+                    c.full_wave_loop_square_side_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_total_m: {:.2}\n",
+                    c.inverted_v_total_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_leg_m: {:.2}\n",
+                    c.inverted_v_leg_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_90_m: {:.2}\n",
+                    c.inverted_v_span_90_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_120_m: {:.2}\n",
+                    c.inverted_v_span_120_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_short_leg_m: {:.2}\n",
+                    c.ocfd_33_short_leg_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_long_leg_m: {:.2}\n",
+                    c.ocfd_33_long_leg_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_short_leg_m: {:.2}\n",
+                    c.ocfd_20_short_leg_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_long_leg_m: {:.2}\n",
+                    c.ocfd_20_long_leg_m
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_total_m: {:.2}\n",
+                    c.trap_dipole_total_m
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_leg_m: {:.2}\n",
+                    c.trap_dipole_leg_m
+                ));
+            }
+            UnitSystem::Imperial => {
+                out.push_str(&format!("    half_wave_ft: {:.2}\n", c.half_wave_ft));
+                out.push_str(&format!(
+                    "    half_wave_corrected_ft: {:.2}\n",
+                    c.corrected_half_wave_ft
+                ));
+                out.push_str(&format!("    full_wave_ft: {:.2}\n", c.full_wave_ft));
+                out.push_str(&format!(
+                    "    full_wave_corrected_ft: {:.2}\n",
+                    c.corrected_full_wave_ft
+                ));
+                out.push_str(&format!("    quarter_wave_ft: {:.2}\n", c.quarter_wave_ft));
+                out.push_str(&format!(
+                    "    quarter_wave_corrected_ft: {:.2}\n",
+                    c.corrected_quarter_wave_ft
+                ));
+                out.push_str(&format!(
+                    "    end_fed_half_wave_ft: {:.2}\n",
+                    c.end_fed_half_wave_ft
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_circumference_ft: {:.2}\n",
+                    c.full_wave_loop_circumference_ft
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_square_side_ft: {:.2}\n",
+                    c.full_wave_loop_square_side_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_total_ft: {:.2}\n",
+                    c.inverted_v_total_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_leg_ft: {:.2}\n",
+                    c.inverted_v_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_90_ft: {:.2}\n",
+                    c.inverted_v_span_90_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_120_ft: {:.2}\n",
+                    c.inverted_v_span_120_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_short_leg_ft: {:.2}\n",
+                    c.ocfd_33_short_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_long_leg_ft: {:.2}\n",
+                    c.ocfd_33_long_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_short_leg_ft: {:.2}\n",
+                    c.ocfd_20_short_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_long_leg_ft: {:.2}\n",
+                    c.ocfd_20_long_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_total_ft: {:.2}\n",
+                    c.trap_dipole_total_ft
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_leg_ft: {:.2}\n",
+                    c.trap_dipole_leg_ft
+                ));
+            }
+            UnitSystem::Both => {
+                out.push_str(&format!("    half_wave_m: {:.2}\n", c.half_wave_m));
+                out.push_str(&format!(
+                    "    half_wave_corrected_m: {:.2}\n",
+                    c.corrected_half_wave_m
+                ));
+                out.push_str(&format!("    full_wave_m: {:.2}\n", c.full_wave_m));
+                out.push_str(&format!(
+                    "    full_wave_corrected_m: {:.2}\n",
+                    c.corrected_full_wave_m
+                ));
+                out.push_str(&format!("    quarter_wave_m: {:.2}\n", c.quarter_wave_m));
+                out.push_str(&format!(
+                    "    quarter_wave_corrected_m: {:.2}\n",
+                    c.corrected_quarter_wave_m
+                ));
+                out.push_str(&format!(
+                    "    end_fed_half_wave_m: {:.2}\n",
+                    c.end_fed_half_wave_m
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_circumference_m: {:.2}\n",
+                    c.full_wave_loop_circumference_m
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_square_side_m: {:.2}\n",
+                    c.full_wave_loop_square_side_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_total_m: {:.2}\n",
+                    c.inverted_v_total_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_leg_m: {:.2}\n",
+                    c.inverted_v_leg_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_90_m: {:.2}\n",
+                    c.inverted_v_span_90_m
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_120_m: {:.2}\n",
+                    c.inverted_v_span_120_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_short_leg_m: {:.2}\n",
+                    c.ocfd_33_short_leg_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_long_leg_m: {:.2}\n",
+                    c.ocfd_33_long_leg_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_short_leg_m: {:.2}\n",
+                    c.ocfd_20_short_leg_m
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_long_leg_m: {:.2}\n",
+                    c.ocfd_20_long_leg_m
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_total_m: {:.2}\n",
+                    c.trap_dipole_total_m
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_leg_m: {:.2}\n",
+                    c.trap_dipole_leg_m
+                ));
+                out.push_str(&format!("    half_wave_ft: {:.2}\n", c.half_wave_ft));
+                out.push_str(&format!(
+                    "    half_wave_corrected_ft: {:.2}\n",
+                    c.corrected_half_wave_ft
+                ));
+                out.push_str(&format!("    full_wave_ft: {:.2}\n", c.full_wave_ft));
+                out.push_str(&format!(
+                    "    full_wave_corrected_ft: {:.2}\n",
+                    c.corrected_full_wave_ft
+                ));
+                out.push_str(&format!("    quarter_wave_ft: {:.2}\n", c.quarter_wave_ft));
+                out.push_str(&format!(
+                    "    quarter_wave_corrected_ft: {:.2}\n",
+                    c.corrected_quarter_wave_ft
+                ));
+                out.push_str(&format!(
+                    "    end_fed_half_wave_ft: {:.2}\n",
+                    c.end_fed_half_wave_ft
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_circumference_ft: {:.2}\n",
+                    c.full_wave_loop_circumference_ft
+                ));
+                out.push_str(&format!(
+                    "    full_wave_loop_square_side_ft: {:.2}\n",
+                    c.full_wave_loop_square_side_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_total_ft: {:.2}\n",
+                    c.inverted_v_total_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_leg_ft: {:.2}\n",
+                    c.inverted_v_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_90_ft: {:.2}\n",
+                    c.inverted_v_span_90_ft
+                ));
+                out.push_str(&format!(
+                    "    inverted_v_span_120_ft: {:.2}\n",
+                    c.inverted_v_span_120_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_short_leg_ft: {:.2}\n",
+                    c.ocfd_33_short_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_33_long_leg_ft: {:.2}\n",
+                    c.ocfd_33_long_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_short_leg_ft: {:.2}\n",
+                    c.ocfd_20_short_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    ocfd_20_long_leg_ft: {:.2}\n",
+                    c.ocfd_20_long_leg_ft
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_total_ft: {:.2}\n",
+                    c.trap_dipole_total_ft
+                ));
+                out.push_str(&format!(
+                    "    trap_dipole_leg_ft: {:.2}\n",
+                    c.trap_dipole_leg_ft
+                ));
+            }
+        }
+        out.push_str(&format!(
+            "    skip_distance_min_km: {:.0}\n",
+            c.skip_distance_min_km
+        ));
+        out.push_str(&format!(
+            "    skip_distance_max_km: {:.0}\n",
+            c.skip_distance_max_km
+        ));
+        out.push_str(&format!(
+            "    skip_distance_avg_km: {:.0}\n",
+            c.skip_distance_avg_km
+        ));
+
+        let rec_yaml = match (recommendation, units) {
+            (Some(r), UnitSystem::Metric) => format!(
+                "best_non_resonant_m: {:.2}\n      resonance_clearance_pct: {:.2}",
+                r.length_m, r.min_resonance_clearance_pct
+            ),
+            (Some(r), UnitSystem::Imperial) => format!(
+                "best_non_resonant_ft: {:.2}\n      resonance_clearance_pct: {:.2}",
+                r.length_ft, r.min_resonance_clearance_pct
+            ),
+            (Some(r), UnitSystem::Both) => format!(
+                "best_non_resonant_m: {:.2}\n      best_non_resonant_ft: {:.2}\n      resonance_clearance_pct: {:.2}",
+                r.length_m, r.length_ft, r.min_resonance_clearance_pct
+            ),
+            (None, _) => String::new(),
+        };
+        if rec_yaml.is_empty() {
+            out.push_str("    non_resonant_recommendation: null\n");
+        } else {
+            out.push_str("    non_resonant_recommendation:\n");
+            for line in rec_yaml.lines() {
+                out.push_str(&format!("      {line}\n"));
+            }
+        }
+
+        let points = collect_band_resonant_points_m(c, wire_min_m, wire_max_m);
+        if points.is_empty() {
+            out.push_str("    resonant_points_in_window: []\n");
+        } else {
+            out.push_str("    resonant_points_in_window:\n");
+            for (harmonic, len_m) in points {
+                match units {
+                    UnitSystem::Metric => out.push_str(&format!(
+                        "      - harmonic: {harmonic}\n        length_m: {len_m:.2}\n"
+                    )),
+                    UnitSystem::Imperial => out.push_str(&format!(
+                        "      - harmonic: {harmonic}\n        length_ft: {:.2}\n",
+                        len_m * FT
+                    )),
+                    UnitSystem::Both => out.push_str(&format!(
+                        "      - harmonic: {harmonic}\n        length_m: {len_m:.2}\n        length_ft: {:.2}\n",
+                        len_m * FT
+                    )),
+                }
+            }
+        }
+    }
+    out
+}
+
+pub fn to_advise_yaml(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
+    let mut out = String::from("---\n");
+    out.push_str(&format!(
+        "assumed_feedpoint_ohm: {:.0}\n",
+        assumed_feedpoint_ohm
+    ));
+    out.push_str("candidates:\n");
+    for (idx, c) in candidates.iter().enumerate() {
+        out.push_str(&format!("  - rank: {}\n", idx + 1));
+        out.push_str(&format!("    ratio: \"{}\"\n", c.ratio.as_label()));
+        out.push_str(&format!(
+            "    recommended_length_m: {:.2}\n",
+            c.recommended_length_m
+        ));
+        out.push_str(&format!(
+            "    recommended_length_ft: {:.2}\n",
+            c.recommended_length_ft
+        ));
+        out.push_str(&format!(
+            "    clearance_pct: {:.2}\n",
+            c.min_resonance_clearance_pct
+        ));
+        out.push_str(&format!(
+            "    estimated_efficiency_pct: {:.2}\n",
+            c.estimated_efficiency_pct
+        ));
+        out.push_str(&format!(
+            "    mismatch_loss_db: {:.3}\n",
+            c.mismatch_loss_db
+        ));
+        out.push_str(&format!(
+            "    average_length_shift_pct: {:.2}\n",
+            c.average_length_shift_pct
+        ));
+        out.push_str(&format!("    score: {:.2}\n", c.score));
+        out.push_str(&format!(
+            "    tradeoff_note: \"{}\"\n",
+            yaml_escape(&c.tradeoff_note)
+        ));
+        out.push_str(&format!("    validated: {}\n", c.validated));
+        match c.validation_status {
+            Some(status) => {
+                out.push_str(&format!("    validation_status: \"{}\"\n", status.as_str()))
+            }
+            None => out.push_str("    validation_status: null\n"),
+        }
+        match &c.validation_note {
+            Some(note) => out.push_str(&format!(
+                "    validation_note: \"{}\"\n",
+                yaml_escape(&note.replace('\n', " "))
+            )),
+            None => out.push_str("    validation_note: null\n"),
+        }
+    }
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
 
 fn json_escape(input: &str) -> String {
     input.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Escape a string for embedding inside a YAML double-quoted scalar.
+fn yaml_escape(input: &str) -> String {
+    input
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+}
+
+fn html_escape(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 fn csv_escape(input: &str) -> String {
@@ -1110,6 +2106,7 @@ mod tests {
                 mismatch_loss_db: 0.123,
                 average_length_shift_pct: 1.4,
                 score: 94.7,
+                tradeoff_note: "Good match: 95.2% efficiency, 0.12 dB loss.".to_string(),
                 validated: true,
                 validation_status: Some(ValidationStatus::Passed),
                 validation_note: Some("NEC cross-check OK".to_string()),
@@ -1123,6 +2120,7 @@ mod tests {
                 mismatch_loss_db: 0.456,
                 average_length_shift_pct: 1.9,
                 score: 89.1,
+                tradeoff_note: "Good match: 91.0% efficiency, 0.46 dB loss.".to_string(),
                 validated: false,
                 validation_status: Some(ValidationStatus::Skipped),
                 validation_note: Some("fnec-rust not found in PATH".to_string()),
@@ -1134,9 +2132,11 @@ mod tests {
     fn advise_csv_includes_validation_columns() {
         let csv = to_advise_csv(450.0, &sample_advise_candidates());
 
+        assert!(csv.contains("tradeoff_note"));
         assert!(csv.contains("validated"));
         assert!(csv.contains("validation_status"));
         assert!(csv.contains("validation_note"));
+        assert!(csv.contains("Good match: 95.2% efficiency"));
         assert!(csv.contains("true,\"passed\",\"NEC cross-check OK\""));
         assert!(csv.contains("false,\"skipped\",\"fnec-rust not found in PATH\""));
     }
@@ -1145,6 +2145,8 @@ mod tests {
     fn advise_json_includes_validation_fields() {
         let json = to_advise_json(450.0, &sample_advise_candidates());
 
+        assert!(json.contains("\"tradeoff_note\""));
+        assert!(json.contains("Good match: 95.2% efficiency"));
         assert!(json.contains("\"validated\": true"));
         assert!(json.contains("\"validated\": false"));
         assert!(json.contains("\"validation_status\": \"passed\""));
@@ -1157,18 +2159,228 @@ mod tests {
     fn advise_markdown_includes_validation_columns() {
         let markdown = to_advise_markdown(450.0, &sample_advise_candidates());
 
-        assert!(markdown.contains("| Validated | Validation Status | Validation Note |"));
+        assert!(markdown
+            .contains("| Validated | Validation Status | Validation Note | Tradeoff Note |"));
         assert!(markdown.contains("| 1 | 1:9"));
         assert!(markdown.contains("| yes | passed | NEC cross-check OK |"));
+        assert!(markdown.contains("Good match: 95.2% efficiency"));
     }
 
     #[test]
     fn advise_txt_includes_validation_lines() {
         let txt = to_advise_txt(450.0, &sample_advise_candidates());
 
+        assert!(txt.contains("note: Good match: 95.2% efficiency"));
         assert!(txt.contains("fnec validated yes"));
         assert!(txt.contains("fnec validated no"));
         assert!(txt.contains("fnec status: passed"));
         assert!(txt.contains("fnec note: NEC cross-check OK"));
+    }
+
+    #[test]
+    fn to_yaml_produces_valid_structure() {
+        use crate::app::run_calculation;
+        use crate::app::AppConfig;
+        let config = AppConfig {
+            band_indices: vec![4, 6], // 40m + 20m
+            ..Default::default()
+        };
+        let results = run_calculation(config);
+        let yaml = to_yaml(
+            &results.calculations,
+            results.recommendation.as_ref(),
+            UnitSystem::Metric,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
+        );
+        assert!(
+            yaml.starts_with("---\n"),
+            "should start with YAML document marker"
+        );
+        assert!(yaml.contains("results:"), "should have results key");
+        assert!(
+            yaml.contains("band: \"40m\"") || yaml.contains("band: \""),
+            "should have band field"
+        );
+        assert!(yaml.contains("frequency_mhz:"), "should have frequency_mhz");
+        assert!(
+            yaml.contains("half_wave_m:"),
+            "should have half_wave_m in metric"
+        );
+        assert!(
+            !yaml.contains("half_wave_ft:"),
+            "should not have ft in metric mode"
+        );
+    }
+
+    #[test]
+    fn to_yaml_imperial_units_omits_metric_fields() {
+        use crate::app::run_calculation;
+        use crate::app::AppConfig;
+        let config = AppConfig {
+            band_indices: vec![4],
+            units: UnitSystem::Imperial,
+            ..Default::default()
+        };
+        let results = run_calculation(config);
+        let yaml = to_yaml(
+            &results.calculations,
+            None,
+            UnitSystem::Imperial,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
+        );
+        assert!(yaml.contains("half_wave_ft:"), "should have ft field");
+        assert!(!yaml.contains("half_wave_m:"), "should not have m field");
+    }
+
+    #[test]
+    fn to_advise_yaml_includes_all_candidate_fields() {
+        let yaml = to_advise_yaml(450.0, &sample_advise_candidates());
+        assert!(
+            yaml.starts_with("---\n"),
+            "should start with document marker"
+        );
+        assert!(
+            yaml.contains("assumed_feedpoint_ohm: 450"),
+            "should include feedpoint"
+        );
+        assert!(yaml.contains("candidates:"), "should have candidates key");
+        assert!(yaml.contains("rank: 1"), "should have rank");
+        assert!(yaml.contains("ratio: \"1:9\""), "should have ratio");
+        assert!(yaml.contains("tradeoff_note:"), "should have tradeoff note");
+        assert!(
+            yaml.contains("Good match: 95.2% efficiency"),
+            "should include note text"
+        );
+        assert!(
+            yaml.contains("validated: true"),
+            "should have validated flag"
+        );
+        assert!(
+            yaml.contains("validation_status: \"passed\""),
+            "should have status"
+        );
+        assert!(
+            yaml.contains("validation_note: \"NEC cross-check OK\""),
+            "should have note"
+        );
+    }
+
+    #[test]
+    fn default_output_name_yaml() {
+        assert_eq!(
+            default_output_name(ExportFormat::Yaml),
+            "rusty-wire-results.yaml"
+        );
+        assert_eq!(
+            default_advise_output_name(ExportFormat::Yaml),
+            "rusty-wire-advise.yaml"
+        );
+    }
+
+    #[test]
+    fn to_html_contains_doctype_and_table() {
+        use crate::app::run_calculation;
+        use crate::app::AppConfig;
+        let results = run_calculation(AppConfig {
+            band_indices: vec![4, 6],
+            ..Default::default()
+        });
+        let html = to_html(
+            &results.calculations,
+            results.recommendation.as_ref(),
+            UnitSystem::Both,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
+        );
+        assert!(html.starts_with("<!DOCTYPE html>"), "should have DOCTYPE");
+        assert!(html.contains("<table>"), "should have table");
+        assert!(html.contains("Half-wave (m)"), "should have metric header");
+        assert!(
+            html.contains("Half-wave (ft)"),
+            "should have imperial header"
+        );
+        assert!(html.contains("Band Calculations"), "should have heading");
+    }
+
+    #[test]
+    fn to_html_metric_only_no_ft_headers() {
+        use crate::app::run_calculation;
+        use crate::app::AppConfig;
+        let results = run_calculation(AppConfig {
+            band_indices: vec![4],
+            ..Default::default()
+        });
+        let html = to_html(
+            &results.calculations,
+            results.recommendation.as_ref(),
+            UnitSystem::Metric,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
+        );
+        assert!(html.contains("Half-wave (m)"), "should have metric header");
+        assert!(
+            !html.contains("Half-wave (ft)"),
+            "should not have imperial header"
+        );
+    }
+
+    #[test]
+    fn to_html_imperial_only_no_m_headers() {
+        use crate::app::run_calculation;
+        use crate::app::AppConfig;
+        let config = AppConfig {
+            band_indices: vec![4],
+            units: UnitSystem::Imperial,
+            ..Default::default()
+        };
+        let results = run_calculation(config);
+        let html = to_html(
+            &results.calculations,
+            results.recommendation.as_ref(),
+            UnitSystem::Imperial,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
+        );
+        assert!(
+            !html.contains("Half-wave (m)"),
+            "should not have metric header"
+        );
+        assert!(
+            html.contains("Half-wave (ft)"),
+            "should have imperial header"
+        );
+    }
+
+    #[test]
+    fn to_advise_html_contains_candidates() {
+        let html = to_advise_html(450.0, &sample_advise_candidates());
+        assert!(html.starts_with("<!DOCTYPE html>"), "should have DOCTYPE");
+        assert!(html.contains("<table>"), "should have table");
+        assert!(html.contains("450"), "should contain feedpoint ohm");
+        assert!(html.contains("1:9"), "should contain ratio");
+        assert!(html.contains("Good match"), "should contain tradeoff note");
+        assert!(html.contains("yes"), "should mark validated candidate");
+    }
+
+    #[test]
+    fn html_escape_converts_special_chars() {
+        assert_eq!(html_escape("a&b"), "a&amp;b");
+        assert_eq!(html_escape("<tag>"), "&lt;tag&gt;");
+        assert_eq!(html_escape("\"quoted\""), "&quot;quoted&quot;");
+        assert_eq!(html_escape("plain"), "plain");
+    }
+
+    #[test]
+    fn default_output_name_html() {
+        assert_eq!(
+            default_output_name(ExportFormat::Html),
+            "rusty-wire-results.html"
+        );
+        assert_eq!(
+            default_advise_output_name(ExportFormat::Html),
+            "rusty-wire-advise.html"
+        );
     }
 }

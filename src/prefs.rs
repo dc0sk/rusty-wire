@@ -209,3 +209,91 @@ impl UserPrefs {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Persistence roundtrip tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod persistence_tests {
+    use super::*;
+    use crate::test_env::with_temp_home;
+
+    #[test]
+    fn save_and_load_round_trips_all_fields() {
+        with_temp_home(|| {
+            let prefs = UserPrefs {
+                region: Some(2),
+                mode: Some("non-resonant".to_string()),
+                velocity_factor: Some(0.95),
+                antenna_height_m: Some(12.0),
+                ground_class: Some("good".to_string()),
+                conductor_diameter_mm: Some(2.5),
+                units: Some("both".to_string()),
+            };
+            prefs.save().expect("save prefs");
+            let loaded = UserPrefs::load();
+            assert_eq!(loaded.region, Some(2));
+            assert_eq!(loaded.mode.as_deref(), Some("non-resonant"));
+            assert_eq!(loaded.velocity_factor, Some(0.95));
+            assert_eq!(loaded.antenna_height_m, Some(12.0));
+            assert_eq!(loaded.ground_class.as_deref(), Some("good"));
+            assert_eq!(loaded.conductor_diameter_mm, Some(2.5));
+            assert_eq!(loaded.units.as_deref(), Some("both"));
+        });
+    }
+
+    #[test]
+    fn load_returns_defaults_when_no_file_exists() {
+        with_temp_home(|| {
+            let prefs = UserPrefs::load();
+            assert!(prefs.region.is_none());
+            assert!(prefs.mode.is_none());
+            assert!(prefs.velocity_factor.is_none());
+        });
+    }
+
+    #[test]
+    fn save_creates_parent_directory() {
+        with_temp_home(|| {
+            let prefs = UserPrefs {
+                region: Some(1),
+                ..Default::default()
+            };
+            prefs.save().expect("save should create dir");
+            let path = UserPrefs::prefs_path().expect("path");
+            assert!(path.exists(), "config file should exist after save");
+        });
+    }
+
+    #[test]
+    fn itu_region_decoded_correctly_from_saved_prefs() {
+        with_temp_home(|| {
+            let prefs = UserPrefs {
+                region: Some(3),
+                ..Default::default()
+            };
+            prefs.save().expect("save");
+            let loaded = UserPrefs::load();
+            assert_eq!(loaded.itu_region(), Some(ITURegion::Region3));
+        });
+    }
+
+    #[test]
+    fn overwrite_updates_existing_file() {
+        with_temp_home(|| {
+            let first = UserPrefs {
+                region: Some(1),
+                ..Default::default()
+            };
+            first.save().expect("first save");
+            let second = UserPrefs {
+                region: Some(2),
+                ..Default::default()
+            };
+            second.save().expect("second save");
+            let loaded = UserPrefs::load();
+            assert_eq!(loaded.region, Some(2));
+        });
+    }
+}

@@ -61,13 +61,17 @@ use ratatui::Terminal;
 
 use crate::app::{
     apply_action, band_listing_view, build_advise_candidates, execute_request_checked,
-    parse_band_selection, results_display_document, AdviseView, AntennaModel, AppAction,
+    parse_band_selection, results_display_document, AdviseView, AntennaModel, AppAction, AppConfig,
     AppRequest, AppState, CalcMode, ExportFormat, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
 };
 use crate::band_presets::load_named_presets;
 use crate::bands::ITURegion;
 use crate::calculations::{GroundClass, TransformerRatio};
-use crate::export::{default_output_name, export_results};
+use crate::export::{
+    default_advise_output_name, default_output_name, export_advise, export_results, to_advise_csv,
+    to_advise_html, to_advise_json, to_advise_markdown, to_advise_txt, to_advise_yaml, to_csv,
+    to_html, to_json, to_markdown, to_txt, to_yaml,
+};
 
 // ---------------------------------------------------------------------------
 // Preset tables — values the user cycles through with ←/→
@@ -267,6 +271,26 @@ struct TuiState {
     custom_band_indices: Vec<usize>,
     /// Status message shown in the hints bar.
     export_status: Option<String>,
+    /// When set, an auto-recalculation is pending after this instant + debounce.
+    pending_recalc: Option<std::time::Instant>,
+    /// Active export preview: (format, is_advise, content).
+    export_preview: Option<(ExportFormat, bool, String)>,
+    /// Vertical scroll offset for the export preview overlay.
+    preview_scroll: u16,
+    /// Set of band titles whose detail lines are collapsed in the results panel.
+    collapsed_bands: std::collections::HashSet<String>,
+    /// Index of the band currently selected for toggle in the results panel.
+    results_band_cursor: usize,
+    /// Whether the session-name input overlay is open (save flow).
+    show_session_save: bool,
+    /// Text being typed in the session-name input overlay.
+    session_name_input: String,
+    /// Whether the session picker/load overlay is open.
+    show_session_picker: bool,
+    /// Names of sessions loaded for the picker.
+    session_picker_items: Vec<String>,
+    /// Cursor row in the session picker.
+    session_picker_cursor: usize,
 }
 
 impl TuiState {
@@ -343,6 +367,16 @@ impl TuiState {
             band_checklist_cursor: 0,
             custom_band_indices: Vec::new(),
             export_status: preset_status,
+            pending_recalc: None,
+            export_preview: None,
+            preview_scroll: 0,
+            collapsed_bands: std::collections::HashSet::new(),
+            results_band_cursor: 0,
+            show_session_save: false,
+            session_name_input: String::new(),
+            show_session_picker: false,
+            session_picker_items: Vec::new(),
+            session_picker_cursor: 0,
         }
     }
 
@@ -476,11 +510,7 @@ impl TuiState {
                     }
                     ConfigField::StepSize => {
                         let s = STEP_PRESETS[self.step_idx];
-                        if s < 0.1 {
-                            format!("{:.2} m", s)
-                        } else {
-                            format!("{:.2} m", s)
-                        }
+                        format!("{:.2} m", s)
                     }
                 };
                 let selected = i == self.field_idx && self.focus == Focus::Config;
@@ -675,6 +705,12 @@ impl TuiState {
     }
 
     fn dispatch(&mut self, action: AppAction) {
+        // Schedule a debounced auto-recalculation for any config-change action.
+        // RunCalculation itself must NOT set this or we'd loop.
+        let is_config_change = !matches!(
+            action,
+            AppAction::RunCalculation | AppAction::ClearResults | AppAction::ClearError
+        );
         let region_change = match &action {
             AppAction::SetItuRegion(region) => Some((
                 *region,
@@ -723,6 +759,9 @@ impl TuiState {
                 }
             }
         }
+        if is_config_change {
+            self.pending_recalc = Some(std::time::Instant::now());
+        }
     }
 
     fn toggle_advise_panel(&mut self) {
@@ -749,33 +788,187 @@ impl TuiState {
 
     fn run_calculation(&mut self) {
         self.results_scroll = 0;
+        self.pending_recalc = None;
+        self.collapsed_bands.clear();
+        self.results_band_cursor = 0;
         self.dispatch(AppAction::RunCalculation);
     }
 
-    /// Export the current results to a file.  Sets `export_status` with either
-    /// a success message ("Exported to <file>") or an error message.
-    fn try_export(&mut self, format: ExportFormat) {
+    /// Automatic recalculation triggered by the debounce timer.
+    /// Does NOT reset the scroll position so the user can read results
+    /// while tweaking config fields.
+    fn auto_recalculate(&mut self) {
+        self.pending_recalc = None;
+        self.dispatch(AppAction::RunCalculation);
+    }
+
+    /// Number of band sections in the current results (0 if none).
+    fn band_count(&self) -> usize {
+        self.app
+            .results
+            .as_ref()
+            .map(|r| {
+                let doc = results_display_document(r);
+                doc.band_views.len()
+            })
+            .unwrap_or(0)
+    }
+
+    /// Toggle collapse of the band at `results_band_cursor`.
+    fn toggle_band_at_cursor(&mut self) {
+        if self.show_advise_panel {
+            return;
+        }
         let Some(ref results) = self.app.results else {
-            self.export_status = Some("No results to export — run a calculation first (r).".into());
             return;
         };
-        let filename = default_output_name(format);
-        match export_results(
-            format,
-            filename,
-            &results.calculations,
-            results.recommendation.as_ref(),
-            results.config.units,
-            results.config.wire_min_m,
-            results.config.wire_max_m,
-        ) {
-            Ok(()) => {
-                self.export_status = Some(format!("Exported → {filename}"));
-            }
-            Err(err) => {
-                self.export_status = Some(format!("Export failed: {err}"));
-            }
+        let doc = results_display_document(results);
+        if doc.band_views.is_empty() {
+            return;
         }
+        let idx = self.results_band_cursor.min(doc.band_views.len() - 1);
+        let title = doc.band_views[idx].title.clone();
+        if self.collapsed_bands.contains(&title) {
+            self.collapsed_bands.remove(&title);
+        } else {
+            self.collapsed_bands.insert(title);
+        }
+    }
+
+    /// Move the band cursor forward (next=true) or backward.
+    fn move_band_cursor(&mut self, next: bool) {
+        if self.show_advise_panel {
+            return;
+        }
+        let count = self.band_count();
+        if count == 0 {
+            return;
+        }
+        if next {
+            self.results_band_cursor = (self.results_band_cursor + 1).min(count - 1);
+        } else {
+            self.results_band_cursor = self.results_band_cursor.saturating_sub(1);
+        }
+    }
+
+    /// Build a preview string for the given format and open the preview overlay.
+    /// When `show_advise_panel` is active and an advise view exists, previews the
+    /// advise export; otherwise previews results.
+    fn try_export(&mut self, format: ExportFormat) {
+        if self.show_advise_panel {
+            let Some(ref view) = self.advise_view else {
+                self.export_status = Some("No advise results — run advise first (a).".into());
+                return;
+            };
+            let content = match format {
+                ExportFormat::Csv => to_advise_csv(view.assumed_feedpoint_ohm, &view.candidates),
+                ExportFormat::Html => to_advise_html(view.assumed_feedpoint_ohm, &view.candidates),
+                ExportFormat::Json => to_advise_json(view.assumed_feedpoint_ohm, &view.candidates),
+                ExportFormat::Markdown => {
+                    to_advise_markdown(view.assumed_feedpoint_ohm, &view.candidates)
+                }
+                ExportFormat::Txt => to_advise_txt(view.assumed_feedpoint_ohm, &view.candidates),
+                ExportFormat::Yaml => to_advise_yaml(view.assumed_feedpoint_ohm, &view.candidates),
+            };
+            self.export_preview = Some((format, true, content));
+            self.preview_scroll = 0;
+        } else {
+            let Some(ref results) = self.app.results else {
+                self.export_status =
+                    Some("No results to export — run a calculation first (r).".into());
+                return;
+            };
+            let content = match format {
+                ExportFormat::Csv => to_csv(
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                ),
+                ExportFormat::Html => to_html(
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                ),
+                ExportFormat::Json => to_json(
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                ),
+                ExportFormat::Markdown => to_markdown(
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                ),
+                ExportFormat::Txt => to_txt(
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                ),
+                ExportFormat::Yaml => to_yaml(
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                ),
+            };
+            self.export_preview = Some((format, false, content));
+            self.preview_scroll = 0;
+        }
+    }
+
+    /// Commit the active export preview to disk.
+    fn confirm_export(&mut self) {
+        let Some((format, is_advise, ref content)) = self.export_preview.take() else {
+            return;
+        };
+        let filename = if is_advise {
+            default_advise_output_name(format)
+        } else {
+            default_output_name(format)
+        };
+        let result = if is_advise {
+            let Some(ref view) = self.advise_view else {
+                self.export_status = Some("Advise data lost — cannot write.".into());
+                return;
+            };
+            export_advise(
+                format,
+                filename,
+                view.assumed_feedpoint_ohm,
+                &view.candidates,
+            )
+        } else {
+            let Some(ref results) = self.app.results else {
+                self.export_status = Some("Results lost — cannot write.".into());
+                return;
+            };
+            export_results(
+                format,
+                filename,
+                &results.calculations,
+                results.recommendation.as_ref(),
+                results.config.units,
+                results.config.wire_min_m,
+                results.config.wire_max_m,
+            )
+        };
+        match result {
+            Ok(()) => self.export_status = Some(format!("Exported → {filename}")),
+            Err(err) => self.export_status = Some(format!("Export failed: {err}")),
+        }
+        // content was already taken, preview is closed
+        let _ = content; // silence unused warning
     }
 
     /// Open the band-checklist overlay, initialising items from the current
@@ -799,12 +992,194 @@ impl TuiState {
         self.show_band_checklist = true;
     }
 
+    /// Resync all TUI preset-index fields to match a newly loaded `AppConfig`.
+    /// Called after loading a session so the config panel reflects the session values.
+    fn sync_indices_from_config(&mut self, config: &AppConfig) {
+        if let Some(idx) = VF_PRESETS
+            .iter()
+            .position(|&v| (v - config.velocity_factor).abs() < 1e-9)
+        {
+            self.vf_idx = idx;
+        }
+        if let Some(idx) = TRANSFORMER_RATIOS
+            .iter()
+            .position(|&r| r == config.transformer_ratio)
+        {
+            self.ratio_idx = idx;
+        }
+        if let Some(idx) = WIRE_MIN_PRESETS
+            .iter()
+            .position(|&v| (v - config.wire_min_m).abs() < 1e-9)
+        {
+            self.wire_min_idx = idx;
+        }
+        if let Some(idx) = WIRE_MAX_PRESETS
+            .iter()
+            .position(|&v| (v - config.wire_max_m).abs() < 1e-9)
+        {
+            self.wire_max_idx = idx;
+        }
+        if let Some(idx) = STANDARD_ANTENNA_HEIGHTS_M
+            .iter()
+            .position(|&v| (v - config.antenna_height_m).abs() < 1e-9)
+        {
+            self.height_idx = idx;
+        }
+        if let Some(idx) = GROUND_CLASS_PRESETS
+            .iter()
+            .position(|&g| g == config.ground_class)
+        {
+            self.ground_idx = idx;
+        }
+        if let Some(idx) = CONDUCTOR_DIAMETER_PRESETS
+            .iter()
+            .position(|&v| (v - config.conductor_diameter_mm).abs() < 1e-9)
+        {
+            self.conductor_idx = idx;
+        }
+        self.custom_band_indices = config.band_indices.clone();
+        if let Some(idx) = STEP_PRESETS
+            .iter()
+            .position(|&v| (v - config.step_m).abs() < 1e-9)
+        {
+            self.step_idx = idx;
+        }
+    }
+
     fn handle_key(&mut self, key: KeyEvent) {
         if key.kind != KeyEventKind::Press {
             return;
         }
         // Clear any previous export status on the next keypress.
         self.export_status = None;
+
+        // Export preview overlay intercepts all keys.
+        if self.export_preview.is_some() {
+            match key.code {
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quit = true;
+                }
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    self.export_preview = None;
+                }
+                KeyCode::Enter => {
+                    self.confirm_export();
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.preview_scroll = self.preview_scroll.saturating_sub(1);
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.preview_scroll = self.preview_scroll.saturating_add(1);
+                }
+                KeyCode::PageUp => {
+                    self.preview_scroll = self.preview_scroll.saturating_sub(20);
+                }
+                KeyCode::PageDown => {
+                    self.preview_scroll = self.preview_scroll.saturating_add(20);
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        // Session-name input overlay (save flow).
+        if self.show_session_save {
+            match key.code {
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quit = true;
+                }
+                KeyCode::Esc => {
+                    self.show_session_save = false;
+                    self.session_name_input.clear();
+                }
+                KeyCode::Enter => {
+                    let name = self.session_name_input.trim().to_string();
+                    if !name.is_empty() {
+                        match crate::sessions::SessionStore::save(&name, &self.app.config) {
+                            Ok(()) => {
+                                self.export_status = Some(format!("Session \"{name}\" saved."));
+                            }
+                            Err(err) => {
+                                self.export_status = Some(format!("Session save failed: {err}"));
+                            }
+                        }
+                    }
+                    self.show_session_save = false;
+                    self.session_name_input.clear();
+                }
+                KeyCode::Backspace => {
+                    self.session_name_input.pop();
+                }
+                KeyCode::Char(c)
+                    // Reject control characters; allow printable.
+                    if !c.is_control() => {
+                        self.session_name_input.push(c);
+                    }
+                _ => {}
+            }
+            return;
+        }
+
+        // Session picker overlay (load/delete flow).
+        if self.show_session_picker {
+            match key.code {
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quit = true;
+                }
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    self.show_session_picker = false;
+                }
+                KeyCode::Up | KeyCode::Char('k') if self.session_picker_cursor > 0 => {
+                    self.session_picker_cursor -= 1;
+                }
+                KeyCode::Down | KeyCode::Char('j')
+                    if self.session_picker_cursor + 1 < self.session_picker_items.len() =>
+                {
+                    self.session_picker_cursor += 1;
+                }
+                KeyCode::Enter => {
+                    if let Some(name) = self
+                        .session_picker_items
+                        .get(self.session_picker_cursor)
+                        .cloned()
+                    {
+                        if let Some(config) = crate::sessions::SessionStore::load_config(&name) {
+                            self.app.config = config.clone();
+                            // Sync TUI preset indices to the loaded config.
+                            self.sync_indices_from_config(&config);
+                            self.export_status = Some(format!("Session \"{name}\" loaded."));
+                        }
+                    }
+                    self.show_session_picker = false;
+                }
+                KeyCode::Char('d') => {
+                    if let Some(name) = self
+                        .session_picker_items
+                        .get(self.session_picker_cursor)
+                        .cloned()
+                    {
+                        match crate::sessions::SessionStore::delete(&name) {
+                            Ok(_) => {
+                                self.export_status = Some(format!("Session \"{name}\" deleted."));
+                                // Refresh list.
+                                self.session_picker_items = crate::sessions::SessionStore::list();
+                                self.session_picker_cursor = self
+                                    .session_picker_cursor
+                                    .min(self.session_picker_items.len().saturating_sub(1));
+                                if self.session_picker_items.is_empty() {
+                                    self.show_session_picker = false;
+                                }
+                            }
+                            Err(err) => {
+                                self.export_status = Some(format!("Delete failed: {err}"));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            return;
+        }
 
         // Band-checklist overlay intercepts all keys.
         if self.show_band_checklist {
@@ -815,15 +1190,13 @@ impl TuiState {
                 KeyCode::Esc | KeyCode::Char('q') => {
                     self.show_band_checklist = false;
                 }
-                KeyCode::Up | KeyCode::Char('k') => {
-                    if self.band_checklist_cursor > 0 {
-                        self.band_checklist_cursor -= 1;
-                    }
+                KeyCode::Up | KeyCode::Char('k') if self.band_checklist_cursor > 0 => {
+                    self.band_checklist_cursor -= 1;
                 }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    if self.band_checklist_cursor + 1 < self.band_checklist_items.len() {
-                        self.band_checklist_cursor += 1;
-                    }
+                KeyCode::Down | KeyCode::Char('j')
+                    if self.band_checklist_cursor + 1 < self.band_checklist_items.len() =>
+                {
+                    self.band_checklist_cursor += 1;
                 }
                 KeyCode::Char(' ') => {
                     if let Some(item) = self
@@ -893,6 +1266,14 @@ impl TuiState {
                 self.try_export(ExportFormat::Txt);
                 return;
             }
+            KeyCode::Char('y') => {
+                self.try_export(ExportFormat::Yaml);
+                return;
+            }
+            KeyCode::Char('H') => {
+                self.try_export(ExportFormat::Html);
+                return;
+            }
             KeyCode::Char('s') => {
                 let prefs = crate::prefs::UserPrefs::from_config(&self.app.config);
                 match prefs.save() {
@@ -905,6 +1286,21 @@ impl TuiState {
                     Err(err) => {
                         self.export_status = Some(format!("Preferences save failed: {err}"));
                     }
+                }
+                return;
+            }
+            KeyCode::Char('S') => {
+                self.show_session_save = true;
+                self.session_name_input.clear();
+                return;
+            }
+            KeyCode::Char('O') => {
+                self.session_picker_items = crate::sessions::SessionStore::list();
+                if self.session_picker_items.is_empty() {
+                    self.export_status = Some("No saved sessions yet. Press S to save one.".into());
+                } else {
+                    self.session_picker_cursor = 0;
+                    self.show_session_picker = true;
                 }
                 return;
             }
@@ -974,6 +1370,15 @@ impl TuiState {
                 KeyCode::PageUp => {
                     self.results_scroll = self.results_scroll.saturating_sub(10);
                 }
+                KeyCode::Char(' ') | KeyCode::Enter => {
+                    self.toggle_band_at_cursor();
+                }
+                KeyCode::Char(']') | KeyCode::Char('n') => {
+                    self.move_band_cursor(true);
+                }
+                KeyCode::Char('[') | KeyCode::Char('p') => {
+                    self.move_band_cursor(false);
+                }
                 _ => {}
             },
         }
@@ -1024,6 +1429,18 @@ fn render(f: &mut ratatui::Frame, state: &TuiState) {
     if state.show_band_checklist {
         render_band_checklist(f, area, state);
     }
+
+    if state.export_preview.is_some() {
+        render_export_preview(f, area, state);
+    }
+
+    if state.show_session_save {
+        render_session_name_input(f, area, state);
+    }
+
+    if state.show_session_picker {
+        render_session_picker(f, area, state);
+    }
 }
 
 fn render_title(f: &mut ratatui::Frame, area: Rect) {
@@ -1055,10 +1472,36 @@ fn render_config_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
+    // Determine the best-recommended transformer ratio (from advise view, if cached).
+    let recommended_ratio = state
+        .advise_view
+        .as_ref()
+        .and_then(|v| v.candidates.first())
+        .map(|c| c.ratio);
+
+    // Count skipped bands from the last completed results.
+    let skipped_count = state
+        .app
+        .results
+        .as_ref()
+        .map(|r| r.skipped_band_indices.len())
+        .unwrap_or(0);
+
     let items: Vec<ListItem> = state
         .all_field_values()
         .into_iter()
-        .map(|(label, value, selected)| {
+        .enumerate()
+        .map(|(i, (label, value, selected))| {
+            let is_transformer_field = ConfigField::ALL[i] == ConfigField::TransformerRatio;
+            let is_bands_field = ConfigField::ALL[i] == ConfigField::Bands;
+
+            // Annotate the Bands value when some bands were skipped.
+            let display_value = if is_bands_field && skipped_count > 0 {
+                format!("{value}  ⚠ {skipped_count} skipped")
+            } else {
+                value
+            };
+
             let (prefix, style) = if selected {
                 (
                     "► ",
@@ -1066,13 +1509,25 @@ fn render_config_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
                 )
+            } else if is_transformer_field
+                && recommended_ratio.is_some_and(|r| r == state.app.config.transformer_ratio)
+            {
+                // Current transformer ratio is the recommended one → green highlight.
+                (
+                    "✓ ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else if is_bands_field && skipped_count > 0 {
+                ("  ", Style::default().fg(Color::Yellow))
             } else {
                 ("  ", Style::default().fg(Color::White))
             };
             let line = Line::from(vec![
                 Span::styled(prefix.to_string(), style),
                 Span::styled(format!("{:<12}", label), style),
-                Span::styled(value, style),
+                Span::styled(display_value, style),
             ]);
             ListItem::new(line)
         })
@@ -1134,6 +1589,7 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         ]
     } else if let Some(ref results) = state.app.results {
         let doc = results_display_document(results);
+        let band_count = doc.band_views.len();
         let mut out: Vec<Line<'static>> = Vec::new();
 
         out.push(Line::from(Span::styled(
@@ -1147,17 +1603,28 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         }
         out.push(Line::from(""));
 
-        for band_view in &doc.band_views {
-            out.push(Line::from(Span::styled(
-                band_view.title.clone(),
+        for (i, band_view) in doc.band_views.iter().enumerate() {
+            let is_cursor = state.focus == Focus::Results
+                && i == state.results_band_cursor.min(band_count.saturating_sub(1));
+            let is_collapsed = state.collapsed_bands.contains(&band_view.title);
+            let indicator = if is_collapsed { "▶ " } else { "▼ " };
+            let title_text = format!("{}{}", indicator, band_view.title);
+            let header_style = if is_cursor {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
                 Style::default()
                     .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            )));
-            for l in &band_view.lines {
-                out.push(Line::from(l.clone()));
+                    .add_modifier(Modifier::BOLD)
+            };
+            out.push(Line::from(Span::styled(title_text, header_style)));
+            if !is_collapsed {
+                for l in &band_view.lines {
+                    out.push(Line::from(l.clone()));
+                }
+                out.push(Line::from(""));
             }
-            out.push(Line::from(""));
         }
 
         for l in &doc.summary_lines {
@@ -1221,20 +1688,78 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
         "Assumed feedpoint impedance: {:.0} ohm",
         view.assumed_feedpoint_ohm
     )));
+
+    if let Some(ref cmp) = view.efhw_comparison {
+        out.push(Line::from(""));
+        out.push(Line::from(Span::styled(
+            format!(
+                "EFHW transformer comparison (feedpoint R: {:.0} \u{03a9}):",
+                cmp.feedpoint_r_ohm
+            ),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )));
+        out.push(Line::from(format!(
+            "  {:<5}  {:<8}  {:<6}  {:<11}  {}",
+            "Ratio", "Target Z", "SWR", "Efficiency", "Loss"
+        )));
+        for entry in &cmp.entries {
+            let marker = if entry.is_best {
+                "  \u{2190} recommended"
+            } else {
+                ""
+            };
+            let style = if entry.is_best {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default()
+            };
+            out.push(Line::from(Span::styled(
+                format!(
+                    "  {:<5}  {:>5.0} \u{03a9}  {:>4.2}:1  {:>9.2}%  {:.3} dB{}",
+                    entry.ratio.as_label(),
+                    entry.target_z_ohm,
+                    entry.swr,
+                    entry.efficiency_pct,
+                    entry.mismatch_loss_db,
+                    marker
+                ),
+                style,
+            )));
+        }
+    }
+
     out.push(Line::from(""));
 
     for (idx, candidate) in view.candidates.iter().enumerate() {
+        let title_style = match candidate.validation_status {
+            Some(crate::fnec_validation::ValidationStatus::Rejected) => {
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+            }
+            Some(crate::fnec_validation::ValidationStatus::Warning) => Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+            _ => Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        };
+        let badge = match candidate.validation_status {
+            Some(crate::fnec_validation::ValidationStatus::Passed) => "  [PASSED]",
+            Some(crate::fnec_validation::ValidationStatus::Warning) => "  [WARNING]",
+            Some(crate::fnec_validation::ValidationStatus::Rejected) => "  [REJECTED]",
+            _ => "",
+        };
         out.push(Line::from(Span::styled(
             format!(
-                "{:2}. ratio {}  wire {:.2} m ({:.2} ft)",
+                "{:2}. ratio {}  wire {:.2} m ({:.2} ft){}",
                 idx + 1,
                 candidate.ratio.as_label(),
                 candidate.recommended_length_m,
-                candidate.recommended_length_ft
+                candidate.recommended_length_ft,
+                badge
             ),
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
+            title_style,
         )));
         out.push(Line::from(format!(
             "    efficiency {:.2}%  mismatch loss {:.3} dB  clearance {:.2}%",
@@ -1246,6 +1771,10 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
             "    score {:.2}  correction shift {:.2}%",
             candidate.score, candidate.average_length_shift_pct
         )));
+        out.push(Line::from(Span::styled(
+            format!("    note: {}", candidate.tradeoff_note),
+            Style::default().fg(Color::Yellow),
+        )));
         if let Some(note) = &candidate.validation_note {
             let status = candidate
                 .validation_status
@@ -1255,7 +1784,22 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
                 } else {
                     "not-validated"
                 });
-            out.push(Line::from(format!("    fnec: {status} ({note})")));
+            let fnec_style = match candidate.validation_status {
+                Some(crate::fnec_validation::ValidationStatus::Passed) => {
+                    Style::default().fg(Color::Green)
+                }
+                Some(crate::fnec_validation::ValidationStatus::Warning) => {
+                    Style::default().fg(Color::Yellow)
+                }
+                Some(crate::fnec_validation::ValidationStatus::Rejected) => {
+                    Style::default().fg(Color::Red)
+                }
+                _ => Style::default().fg(Color::DarkGray),
+            };
+            out.push(Line::from(Span::styled(
+                format!("    fnec: {status} — {note}"),
+                fnec_style,
+            )));
         }
         out.push(Line::from(""));
     }
@@ -1279,22 +1823,43 @@ fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         return;
     }
 
-    let text = hint_text(state.focus, state.show_band_checklist);
+    let text = hint_text(
+        state.focus,
+        state.show_band_checklist,
+        state.export_preview.is_some(),
+        state.show_session_save,
+        state.show_session_picker,
+    );
     let para = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
     f.render_widget(para, area);
 }
 
-fn hint_text(focus: Focus, show_band_checklist: bool) -> &'static str {
+fn hint_text(
+    focus: Focus,
+    show_band_checklist: bool,
+    show_preview: bool,
+    show_session_save: bool,
+    show_session_picker: bool,
+) -> &'static str {
+    if show_session_save {
+        return " Type a name  Enter:save  Esc:cancel";
+    }
+    if show_session_picker {
+        return " ↑↓/jk:move  Enter:load  d:delete  Esc/q:cancel";
+    }
+    if show_preview {
+        return " ↑↓/jk:scroll  PgUp/Dn:page  Enter:write  Esc/q:cancel";
+    }
     if show_band_checklist {
         return " ↑↓/jk:move  Space:toggle  Enter:confirm  Esc/q:cancel";
     }
 
     match focus {
         Focus::Config => {
-            " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  s:prefs  i:info  Tab:→results  q:quit"
+            " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  s:prefs  S:save-session  O:sessions  i:info  Tab:→results  q:quit"
         }
         Focus::Results => {
-            " ↑↓/jk:scroll  PgUp/Dn:page  r:run  a:advise  e:csv  E:json  m:md  t:txt  s:prefs  i:info  Tab:→config   q:quit"
+            " ↑↓/jk:scroll  PgUp/Dn:page  [/]:band  Space:collapse  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  S:save-session  O:sessions  Tab:→config  q:quit"
         }
     }
 }
@@ -1359,6 +1924,128 @@ fn info_popup_lines() -> Vec<Line<'static>> {
 // ---------------------------------------------------------------------------
 // Band-checklist overlay
 // ---------------------------------------------------------------------------
+
+fn render_export_preview(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
+    let Some((format, is_advise, ref content)) = state.export_preview else {
+        return;
+    };
+    let filename = if is_advise {
+        default_advise_output_name(format)
+    } else {
+        default_output_name(format)
+    };
+
+    let popup_area = centered_rect(90, 85, area);
+    f.render_widget(Clear, popup_area);
+
+    let title = format!(" Export preview → {filename}  (Enter:write  Esc:cancel) ");
+    let block = Block::default()
+        .title(title.as_str())
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let lines: Vec<Line<'static>> = content.lines().map(|l| Line::from(l.to_string())).collect();
+
+    let para = Paragraph::new(lines)
+        .scroll((state.preview_scroll, 0))
+        .style(Style::default().fg(Color::White));
+    f.render_widget(para, inner);
+}
+
+// ── Session-name input overlay ─────────────────────────────────────────────
+
+fn render_session_name_input(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
+    let popup_area = centered_rect(60, 20, area);
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title(" Save Session ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    // Split inner: label row / input row / hint row.
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(1), // label
+            Constraint::Length(1), // input field
+            Constraint::Length(1), // hint
+        ])
+        .split(inner);
+
+    let label = Paragraph::new("Session name:");
+    f.render_widget(label, rows[0]);
+
+    // Show typed text + a blinking-cursor indicator.
+    let input_text = format!("{}▏", state.session_name_input);
+    let input = Paragraph::new(input_text).style(Style::default().fg(Color::White));
+    f.render_widget(input, rows[1]);
+
+    let hint =
+        Paragraph::new("Enter: save   Esc: cancel").style(Style::default().fg(Color::DarkGray));
+    f.render_widget(hint, rows[2]);
+}
+
+// ── Session picker overlay ──────────────────────────────────────────────────
+
+fn render_session_picker(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
+    let popup_area = centered_rect(72, 80, area);
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title(" Load Session ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Min(0),    // list
+            Constraint::Length(1), // hint
+        ])
+        .split(inner);
+
+    let list_items: Vec<ratatui::widgets::ListItem> = state
+        .session_picker_items
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            let prefix = if i == state.session_picker_cursor {
+                "► "
+            } else {
+                "  "
+            };
+            let style = if i == state.session_picker_cursor {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+            ratatui::widgets::ListItem::new(format!("{prefix}{name}")).style(style)
+        })
+        .collect();
+
+    let list = ratatui::widgets::List::new(list_items);
+    f.render_widget(list, rows[0]);
+
+    let hint = Paragraph::new("↑↓/jk: move   Enter: load   d: delete   Esc/q: cancel")
+        .style(Style::default().fg(Color::DarkGray));
+    f.render_widget(hint, rows[1]);
+}
+
+// ── Band checklist overlay ──────────────────────────────────────────────────
 
 fn render_band_checklist(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let popup_area = centered_rect(72, 80, area);
@@ -1452,7 +2139,16 @@ pub fn run(band_preset_config: Option<&str>) -> Result<(), Box<dyn std::error::E
     // Run an initial calculation so the results panel is populated immediately.
     state.run_calculation();
 
+    const RECALC_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
+
     loop {
+        // Fire auto-recalculation once the debounce window has elapsed.
+        if let Some(pending) = state.pending_recalc {
+            if pending.elapsed() >= RECALC_DEBOUNCE {
+                state.auto_recalculate();
+            }
+        }
+
         terminal.draw(|f| render(f, &state))?;
 
         if event::poll(std::time::Duration::from_millis(200))? {
@@ -1777,9 +2473,7 @@ mod tests {
 
     #[test]
     fn hint_text_for_config_focus_matches_documented_keybindings() {
-        let text = hint_text(Focus::Config, false);
-
-        assert!(text.contains("a:advise"));
+        let text = hint_text(Focus::Config, false, false, false, false);
         assert!(text.contains("e:csv"));
         assert!(text.contains("E:json"));
         assert!(text.contains("m:md"));
@@ -1790,7 +2484,7 @@ mod tests {
 
     #[test]
     fn hint_text_for_results_focus_mentions_scroll_and_tab_back() {
-        let text = hint_text(Focus::Results, false);
+        let text = hint_text(Focus::Results, false, false, false, false);
 
         assert!(text.contains("a:advise"));
         assert!(text.contains("↑↓/jk:scroll"));
@@ -1800,7 +2494,7 @@ mod tests {
 
     #[test]
     fn hint_text_for_band_checklist_matches_overlay_controls() {
-        let text = hint_text(Focus::Config, true);
+        let text = hint_text(Focus::Config, true, false, false, false);
 
         assert!(text.contains("Space:toggle"));
         assert!(text.contains("Enter:confirm"));
@@ -1960,6 +2654,42 @@ mod tests {
         state.handle_key(press(KeyCode::Char('r')));
 
         assert_eq!(state.results_scroll, 0);
+        assert!(state.app.results.is_some());
+        assert!(
+            state.pending_recalc.is_none(),
+            "explicit r should not leave a pending recalc"
+        );
+    }
+
+    #[test]
+    fn config_change_schedules_pending_recalc() {
+        let mut state = TuiState::new(None);
+        assert!(state.pending_recalc.is_none());
+
+        state.handle_key(press(KeyCode::Right)); // change a config field
+
+        assert!(
+            state.pending_recalc.is_some(),
+            "config change should schedule auto-recalc"
+        );
+    }
+
+    #[test]
+    fn auto_recalculate_does_not_reset_scroll() {
+        let mut state = TuiState::new(None);
+        state.run_calculation();
+        state.results_scroll = 5;
+
+        state.auto_recalculate();
+
+        assert_eq!(
+            state.results_scroll, 5,
+            "auto-recalc should preserve scroll position"
+        );
+        assert!(
+            state.pending_recalc.is_none(),
+            "auto_recalculate should clear the pending flag"
+        );
         assert!(state.app.results.is_some());
     }
 
@@ -2316,5 +3046,283 @@ mod tests {
 
         assert!(state.quit);
         assert!(!state.show_info_popup);
+    }
+
+    #[test]
+    fn toggle_band_at_cursor_collapses_and_expands() {
+        use crate::app::{run_calculation, AppConfig};
+        let mut state = TuiState::new(None);
+        let results = run_calculation(AppConfig {
+            band_indices: vec![4, 6], // 40m + 20m
+            ..Default::default()
+        });
+        state.app.results = Some(results);
+        state.focus = Focus::Results;
+        state.results_band_cursor = 0;
+
+        // First toggle collapses band 0.
+        state.toggle_band_at_cursor();
+        let doc = results_display_document(state.app.results.as_ref().unwrap());
+        let title = &doc.band_views[0].title;
+        assert!(
+            state.collapsed_bands.contains(title),
+            "band 0 should be collapsed"
+        );
+
+        // Second toggle expands it again.
+        state.toggle_band_at_cursor();
+        assert!(
+            !state.collapsed_bands.contains(title),
+            "band 0 should be expanded again"
+        );
+    }
+
+    #[test]
+    fn move_band_cursor_clamps_at_boundaries() {
+        use crate::app::{run_calculation, AppConfig};
+        let mut state = TuiState::new(None);
+        let results = run_calculation(AppConfig {
+            band_indices: vec![4, 6],
+            ..Default::default()
+        });
+        state.app.results = Some(results);
+        state.focus = Focus::Results;
+        state.results_band_cursor = 0;
+
+        // Move backward from 0 stays at 0.
+        state.move_band_cursor(false);
+        assert_eq!(state.results_band_cursor, 0);
+
+        // Move forward twice reaches the last band (idx 1 for 2 bands).
+        state.move_band_cursor(true);
+        assert_eq!(state.results_band_cursor, 1);
+        state.move_band_cursor(true);
+        assert_eq!(state.results_band_cursor, 1, "should clamp at last band");
+    }
+
+    #[test]
+    fn run_calculation_resets_collapsed_bands_and_cursor() {
+        let mut state = TuiState::new(None);
+        state.collapsed_bands.insert("40m".to_string());
+        state.results_band_cursor = 3;
+
+        state.run_calculation();
+
+        assert!(state.collapsed_bands.is_empty());
+        assert_eq!(state.results_band_cursor, 0);
+    }
+
+    #[test]
+    fn results_focus_space_key_toggles_band() {
+        use crate::app::{run_calculation, AppConfig};
+        let mut state = TuiState::new(None);
+        let results = run_calculation(AppConfig {
+            band_indices: vec![4, 6],
+            ..Default::default()
+        });
+        state.app.results = Some(results);
+        state.focus = Focus::Results;
+        state.results_band_cursor = 0;
+
+        state.handle_key(press(KeyCode::Char(' ')));
+
+        let doc = results_display_document(state.app.results.as_ref().unwrap());
+        assert!(state.collapsed_bands.contains(&doc.band_views[0].title));
+    }
+
+    #[test]
+    fn results_focus_bracket_keys_move_band_cursor() {
+        use crate::app::{run_calculation, AppConfig};
+        let mut state = TuiState::new(None);
+        let results = run_calculation(AppConfig {
+            band_indices: vec![4, 6],
+            ..Default::default()
+        });
+        state.app.results = Some(results);
+        state.focus = Focus::Results;
+        state.results_band_cursor = 0;
+
+        state.handle_key(press(KeyCode::Char(']')));
+        assert_eq!(state.results_band_cursor, 1);
+
+        state.handle_key(press(KeyCode::Char('[')));
+        assert_eq!(state.results_band_cursor, 0);
+    }
+
+    // ── Session-save overlay ────────────────────────────────────────────────
+
+    #[test]
+    fn shift_s_opens_session_save_overlay() {
+        let mut state = TuiState::new(None);
+        state.handle_key(press_with_modifiers(
+            KeyCode::Char('S'),
+            KeyModifiers::SHIFT,
+        ));
+        assert!(state.show_session_save);
+        assert!(state.session_name_input.is_empty());
+    }
+
+    #[test]
+    fn session_save_typing_fills_input_buffer() {
+        let mut state = TuiState::new(None);
+        state.show_session_save = true;
+        state.handle_key(press(KeyCode::Char('m')));
+        state.handle_key(press(KeyCode::Char('y')));
+        assert_eq!(state.session_name_input, "my");
+    }
+
+    #[test]
+    fn session_save_backspace_removes_last_char() {
+        let mut state = TuiState::new(None);
+        state.show_session_save = true;
+        state.session_name_input = "abc".to_string();
+        state.handle_key(press(KeyCode::Backspace));
+        assert_eq!(state.session_name_input, "ab");
+    }
+
+    #[test]
+    fn session_save_esc_closes_overlay_and_clears_input() {
+        let mut state = TuiState::new(None);
+        state.show_session_save = true;
+        state.session_name_input = "draft".to_string();
+        state.handle_key(press(KeyCode::Esc));
+        assert!(!state.show_session_save);
+        assert!(state.session_name_input.is_empty());
+    }
+
+    #[test]
+    fn session_save_enter_with_empty_name_closes_without_saving() {
+        let mut state = TuiState::new(None);
+        state.show_session_save = true;
+        state.session_name_input = String::new();
+        state.handle_key(press(KeyCode::Enter));
+        assert!(!state.show_session_save);
+        assert!(state.export_status.is_none());
+    }
+
+    #[test]
+    fn session_save_enter_with_name_writes_and_shows_confirmation() {
+        crate::test_env::with_temp_home(|| {
+            let mut state = TuiState::new(None);
+            state.show_session_save = true;
+            state.session_name_input = "overlay-test".to_string();
+            state.handle_key(press(KeyCode::Enter));
+            assert!(!state.show_session_save);
+            assert!(state.session_name_input.is_empty());
+            assert_eq!(
+                state.export_status.as_deref(),
+                Some("Session \"overlay-test\" saved.")
+            );
+            let names = crate::sessions::SessionStore::list();
+            assert!(names.contains(&"overlay-test".to_string()));
+        });
+    }
+
+    // ── Session-picker overlay ──────────────────────────────────────────────
+
+    #[test]
+    fn session_picker_esc_closes_overlay() {
+        let mut state = TuiState::new(None);
+        state.show_session_picker = true;
+        state.session_picker_items = vec!["alpha".to_string(), "beta".to_string()];
+        state.handle_key(press(KeyCode::Esc));
+        assert!(!state.show_session_picker);
+    }
+
+    #[test]
+    fn session_picker_q_closes_overlay() {
+        let mut state = TuiState::new(None);
+        state.show_session_picker = true;
+        state.session_picker_items = vec!["alpha".to_string()];
+        state.handle_key(press(KeyCode::Char('q')));
+        assert!(!state.show_session_picker);
+    }
+
+    #[test]
+    fn session_picker_down_moves_cursor() {
+        let mut state = TuiState::new(None);
+        state.show_session_picker = true;
+        state.session_picker_items = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        state.session_picker_cursor = 0;
+        state.handle_key(press(KeyCode::Down));
+        assert_eq!(state.session_picker_cursor, 1);
+        state.handle_key(press(KeyCode::Down));
+        assert_eq!(state.session_picker_cursor, 2);
+        state.handle_key(press(KeyCode::Down));
+        assert_eq!(
+            state.session_picker_cursor, 2,
+            "should not exceed last item"
+        );
+    }
+
+    #[test]
+    fn session_picker_up_moves_cursor() {
+        let mut state = TuiState::new(None);
+        state.show_session_picker = true;
+        state.session_picker_items = vec!["a".to_string(), "b".to_string()];
+        state.session_picker_cursor = 1;
+        state.handle_key(press(KeyCode::Up));
+        assert_eq!(state.session_picker_cursor, 0);
+        state.handle_key(press(KeyCode::Up));
+        assert_eq!(state.session_picker_cursor, 0, "should not go below 0");
+    }
+
+    // ── Export-preview overlay ──────────────────────────────────────────────
+
+    #[test]
+    fn export_preview_esc_dismisses_overlay() {
+        let mut state = TuiState::new(None);
+        state.export_preview = Some((ExportFormat::Csv, false, "content".to_string()));
+        state.handle_key(press(KeyCode::Esc));
+        assert!(state.export_preview.is_none());
+    }
+
+    #[test]
+    fn export_preview_q_dismisses_overlay() {
+        let mut state = TuiState::new(None);
+        state.export_preview = Some((ExportFormat::Json, false, "{}".to_string()));
+        state.handle_key(press(KeyCode::Char('q')));
+        assert!(state.export_preview.is_none());
+    }
+
+    #[test]
+    fn export_preview_j_increments_scroll() {
+        let mut state = TuiState::new(None);
+        state.export_preview = Some((ExportFormat::Txt, false, "data".to_string()));
+        state.preview_scroll = 0;
+        state.handle_key(press(KeyCode::Down));
+        assert_eq!(state.preview_scroll, 1);
+        state.handle_key(press(KeyCode::Char('j')));
+        assert_eq!(state.preview_scroll, 2);
+    }
+
+    #[test]
+    fn export_preview_k_decrements_scroll_with_floor() {
+        let mut state = TuiState::new(None);
+        state.export_preview = Some((ExportFormat::Txt, false, "data".to_string()));
+        state.preview_scroll = 3;
+        state.handle_key(press(KeyCode::Up));
+        assert_eq!(state.preview_scroll, 2);
+        state.handle_key(press(KeyCode::Char('k')));
+        assert_eq!(state.preview_scroll, 1);
+        state.preview_scroll = 0;
+        state.handle_key(press(KeyCode::Char('k')));
+        assert_eq!(state.preview_scroll, 0, "should not underflow");
+    }
+
+    #[test]
+    fn export_preview_intercepts_all_keys_before_other_handlers() {
+        let mut state = TuiState::new(None);
+        state.export_preview = Some((ExportFormat::Csv, false, "data".to_string()));
+        // 'i' would normally open the info popup — with preview open it should not.
+        state.handle_key(press(KeyCode::Char('i')));
+        assert!(
+            state.export_preview.is_some(),
+            "preview should still be open"
+        );
+        assert!(
+            !state.show_info_popup,
+            "info popup must NOT open while preview is active"
+        );
     }
 }

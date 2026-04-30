@@ -8,10 +8,11 @@ set -euo pipefail
 # Runs in order:
 #   1. cargo fmt --check  (format gate)
 #   2. cargo check        (compile gate)
-#   3. cargo test         (unit + integration)
-#   4. scripts/test-itu-region-bands.sh
-#   5. scripts/test-multi-optima.sh
-#   6. scripts/test-nec-calibration.sh
+#   3. cargo clippy       (lint gate, -D warnings)
+#   4. cargo test         (unit + integration)
+#   5. scripts/test-itu-region-bands.sh
+#   6. scripts/test-multi-optima.sh
+#   7. scripts/test-nec-calibration.sh
 #
 # Exit codes:
 #   0 -> all checks passed
@@ -46,6 +47,7 @@ run_step() {
 
 run_step "cargo fmt --check"       cargo fmt --all -- --check
 run_step "cargo check"             cargo check
+run_step "cargo clippy"            cargo clippy --all-targets -- -D warnings
 run_step "cargo test"              cargo test
 run_step "ITU region band checks"  "$ROOT_DIR/scripts/test-itu-region-bands.sh"
 run_step "Non-resonant multi-optima" "$ROOT_DIR/scripts/test-multi-optima.sh"

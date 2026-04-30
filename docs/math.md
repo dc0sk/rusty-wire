@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/math.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Rusty Wire Math Reference
 
 This document defines the formulas and optimization objectives used in Rusty Wire.

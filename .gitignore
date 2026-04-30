@@ -1,1 +1,4 @@
 /target
+# Default TUI/CLI export output files
+rusty-wire-results.*
+rusty-wire-advise.*

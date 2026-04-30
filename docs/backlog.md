@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/backlog.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Backlog
 
 Ideas that have not yet been agreed on for the roadmap.
@@ -7,20 +14,11 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## CLI / Analysis
 
-- `--transformer-sweep <r1,r2,...>` — like `--velocity-sweep` but over transformer ratios
-- `advise` mode: user provides a target band set and gets ranked wire-length + balun/unun candidates with compact scoring metadata (including estimated efficiency and tradeoff hints)
-- `advise` validation pass with `fnec-rust`: for top-ranked candidates, run a cross-check sweep to flag configurations that are unlikely to be thermally/efficiency sustainable in practical operation
-- YAML and HTML export targets
 - Persistent user preferences file (default units, region, mode)
 
 ## TUI (2.x, `ratatui`)
 
 - **Band selection refinement**: expand region-specific preset coverage and add a "Custom" preset that opens a band-checklist panel where the user can tick individual bands — similar to a multi-select dialog — replacing the fixed preset table for advanced users.
-- Live recalculation as inputs change (with debounce for non-resonant search)
-- Collapsible result panels per antenna model
-- Visual highlighting of recommended transformer ratio and skipped bands
-- Export preview before writing files
-- Saved sessions / named configurations
 
 ## GUI (3.x, `iced`)
 
@@ -34,15 +32,8 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## Antenna Models
 
-- **Trap dipole guidance**: For trap dipole mode, provide detailed information on:
-  - Which trap frequencies / components to use (Q-factor, impedance guidance)
-  - Physical installation positions along the wire
-  - Leg length calculations for optimal multi-band resonance
-  - Common trap configurations (40m/20m, 80m/40m, etc.)
 - Hybrid / multi-section models
-- Ranked transformer recommendation for EFHW (compare 1:49, 1:56, 1:64)
 - Balun/unun optimizer engine: score candidate transformer ratios against selected bands and feed assumptions; this should be implemented before `advise` mode
-- Sustainability gating for advise output: integrate an optional `fnec-rust` verification step that marks candidates as validated, warning, or rejected based on configurable thresholds
 
 ## Practical Limits Follow-up
 
@@ -55,3 +46,23 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 - `bands.toml` / `bands.json` for user-defined band presets
 - Multi-window or detachable analysis panes (GUI only)
+
+## Maintenance / Project Review (post-v2.14.0)
+
+Items identified during the v2.14.0 project review.
+
+### Quick wins
+- ~~**A. Doc version sync**~~ ✅ done
+- ~~**B. CONTRIBUTING.md**~~ ✅ done
+- ~~**C. Clippy cleanup**~~ ✅ done
+- ~~**D. `cargo audit` in CI**~~ ✅ done
+
+### Medium refactors
+- ~~**E. Split `src/app.rs`**~~ ✅ done — `src/app/{mod,state,advise}.rs`
+- ~~**F. Export formatter trait**~~ ✅ done — `trait ExportFormatter` in `src/export.rs`
+- ~~**G. Sessions / prefs persistence tests**~~ ✅ done — roundtrip tests in `src/sessions.rs` + `src/prefs.rs`
+- ~~**H. TUI overlay tests**~~ ✅ done — session-save, session-picker, export-preview integration tests
+
+### Pre-3.x foundation
+- ~~**I. `RequestContext` on `AppRequest`**~~ ✅ done — `AppRequest`/`AppResponse` carry optional `RequestContext { request_id, timestamp_secs }`
+- ~~**J. Canonical TUI screenshots**~~ ✅ done — `scripts/render-tui-snapshots.py` renders `docs/images/tui/*.png` from the `tui-doc-snapshots` HTML output

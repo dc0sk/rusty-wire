@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Pre-commit hook: fast local feedback
+# Runs format check, lint, and unit tests before commit
+# Faster than pre-push (no full cargo test, no SBOM regeneration)
+
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$repo_root"
+
+echo "🔍 Pre-commit: format check..."
+cargo fmt --check
+
+echo "🔍 Pre-commit: clippy lint..."
+cargo clippy --all-targets -- -D warnings
+
+echo "🔍 Pre-commit: unit tests..."
+cargo test --lib
+
+echo "✅ Pre-commit checks passed"

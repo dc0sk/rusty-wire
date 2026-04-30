@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/release-checklist.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Release Checklist
 
 Use this checklist for each version bump and release tag.
@@ -51,4 +58,8 @@ cargo test
 
 - Merge release PR to `main`.
 - Create/push annotated tag (for example `v2.6.1`) from the release commit.
+- Verify workflow-generated assets are attached to the GitHub release:
+  - Linux tarballs: `rusty-wire-<version>-x86_64-linux.tar.gz`, `rusty-wire-<version>-aarch64-linux.tar.gz`
+  - macOS bundles: `rusty-wire-<version>-x86_64-macos.tar.gz`, `rusty-wire-<version>-aarch64-macos.tar.gz`
+  - Debian packages: `target/debian/*.deb` uploads for both release architectures
 - Publish GitHub release notes from `docs/CHANGELOG.md` highlights.

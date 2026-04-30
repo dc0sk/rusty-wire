@@ -9,13 +9,13 @@ use crate::app::{
     build_advise_candidates_with_thresholds, execute_request_checked, format_quiet_summary,
     parse_band_selection, parse_single_band_token, recommended_transformer_ratio,
     recommended_transformer_ratio_fallback_message, resolve_wire_window_inputs,
-    results_display_document, validate_config, validate_velocity_sweep,
-    velocity_sweep_display_lines, velocity_sweep_view, AntennaModel, AppConfig, AppRequest,
-    AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_ANTENNA_HEIGHT_M,
-    DEFAULT_BAND_SELECTION, DEFAULT_CONDUCTOR_DIAMETER_MM, DEFAULT_GROUND_CLASS,
-    DEFAULT_ITU_REGION, FEET_TO_METERS,
+    results_display_document, transformer_sweep_display_lines, transformer_sweep_view,
+    validate_config, validate_velocity_sweep, velocity_sweep_display_lines, velocity_sweep_view,
+    AntennaModel, AppConfig, AppRequest, AppResults, CalcMode, ExportFormat, UnitSystem,
+    DEFAULT_ANTENNA_HEIGHT_M, DEFAULT_BAND_SELECTION, DEFAULT_CONDUCTOR_DIAMETER_MM,
+    DEFAULT_GROUND_CLASS, DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
-use crate::band_presets::load_preset_selection;
+use crate::band_presets::{load_custom_bands, load_preset_selection};
 use crate::bands::{ITURegion, ALL_REGIONS};
 use crate::calculations::{
     GroundClass, TransformerRatio, DEFAULT_NON_RESONANT_CONFIG, MAX_CONDUCTOR_DIAMETER_MM,
@@ -177,6 +177,10 @@ struct Cli {
     #[arg(long, value_delimiter = ',')]
     velocity_sweep: Option<Vec<f64>>,
 
+    /// Run a sweep over multiple transformer ratios (comma-separated, e.g. 1:1,1:4,1:9,1:49)
+    #[arg(long, value_delimiter = ',')]
+    transformer_sweep: Option<Vec<TransformerRatio>>,
+
     /// Print ranked wire + balun/unun advise candidates for the selected setup
     #[arg(long)]
     advise: bool,
@@ -184,6 +188,10 @@ struct Cli {
     /// Validate advise candidates with fnec-rust when available in PATH
     #[arg(long)]
     validate_with_fnec: bool,
+
+    /// Remove rejected candidates from advise output (requires --validate-with-fnec)
+    #[arg(long)]
+    fnec_gate: bool,
 
     /// Maximum mismatch factor considered a pass for fnec validation (0.0..=1.0)
     #[arg(long, default_value_t = DEFAULT_FNEC_PASS_MAX_MISMATCH)]
@@ -301,18 +309,22 @@ impl From<CliUnitSystem> for UnitSystem {
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
 enum CliExportFormat {
     Csv,
+    Html,
     Json,
     Markdown,
     Txt,
+    Yaml,
 }
 
 impl From<CliExportFormat> for ExportFormat {
     fn from(format: CliExportFormat) -> Self {
         match format {
             CliExportFormat::Csv => ExportFormat::Csv,
+            CliExportFormat::Html => ExportFormat::Html,
             CliExportFormat::Json => ExportFormat::Json,
             CliExportFormat::Markdown => ExportFormat::Markdown,
             CliExportFormat::Txt => ExportFormat::Txt,
+            CliExportFormat::Yaml => ExportFormat::Yaml,
         }
     }
 }
@@ -434,7 +446,14 @@ pub fn run_from_args(args: &[String]) -> bool {
     // compiled-in defaults (ValueSource::DefaultValue) vs. the command line.
     // This lets us apply persistent user preferences as fallbacks for any
     // flag the user did not explicitly pass.
-    let matches = Cli::command().get_matches_from(args.iter().map(|s| s.as_str()));
+    //
+    // get_matches_from expects argv[0] (the binary name) as the first element,
+    // matching the layout of std::env::args(). Callers (lib.rs run_cli) pass
+    // args with the binary name already stripped, so we prepend a placeholder.
+    let argv: Vec<&str> = std::iter::once("rusty-wire")
+        .chain(args.iter().map(|s| s.as_str()))
+        .collect();
+    let matches = Cli::command().get_matches_from(argv);
     let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
 
     // Load persistent preferences; all fields are Option<T> so absent prefs
@@ -514,7 +533,7 @@ pub fn run_from_args(args: &[String]) -> bool {
             }
         },
         (None, Some(preset_name)) => {
-            let config_path = cli.bands_config.as_deref().unwrap_or_else(|| {
+            let config_path = cli.bands_config.as_deref().unwrap_or({
                 // When --bands-config is not specified, probe the standard
                 // locations in priority order so the user doesn't need to
                 // pass the path explicitly when the file is in the default
@@ -657,6 +676,20 @@ pub fn run_from_args(args: &[String]) -> bool {
         custom_freq_mhz: cli.freq,
         freq_list_mhz: cli.freq_list.unwrap_or_default(),
         validate_with_fnec: cli.validate_with_fnec,
+        extra_bands: {
+            let bands_path = cli
+                .bands_config
+                .as_deref()
+                .map(|s| s.to_string())
+                .unwrap_or_else(resolve_bands_config_path);
+            match load_custom_bands(&bands_path) {
+                Ok(bands) => bands,
+                Err(err) => {
+                    eprintln!("Warning: could not load custom bands from '{bands_path}': {err}");
+                    vec![]
+                }
+            }
+        },
     };
 
     // Persist preferences when requested.  The calculation continues after
@@ -707,6 +740,11 @@ pub fn run_from_args(args: &[String]) -> bool {
         return run_velocity_sweep(&velocity_values, config, units);
     }
 
+    // Transformer sweep overrides single-run output
+    if let Some(ratios) = cli.transformer_sweep {
+        return run_transformer_sweep(&ratios, config, units);
+    }
+
     if cli.advise {
         return print_advise_candidates(
             &config,
@@ -714,6 +752,7 @@ pub fn run_from_args(args: &[String]) -> bool {
             cli.output.as_deref(),
             cli.fnec_pass_max_mismatch,
             cli.fnec_reject_min_mismatch,
+            cli.fnec_gate,
         );
     }
 
@@ -775,13 +814,16 @@ fn print_advise_candidates(
     single_output: Option<&str>,
     fnec_pass_max_mismatch: f64,
     fnec_reject_min_mismatch: f64,
+    fnec_gate: bool,
 ) -> bool {
+    use crate::fnec_validation::ValidationStatus;
+
     if let Err(err) = execute_request_checked(AppRequest::new(config.clone())) {
         eprintln!("Error: {err}");
         return false;
     }
 
-    let view = if config.validate_with_fnec {
+    let mut view = if config.validate_with_fnec {
         build_advise_candidates_with_thresholds(
             config,
             5,
@@ -791,6 +833,13 @@ fn print_advise_candidates(
     } else {
         build_advise_candidates(config, 5)
     };
+
+    // Apply sustainability gate: remove rejected candidates when --fnec-gate is set.
+    if fnec_gate && config.validate_with_fnec {
+        view.candidates
+            .retain(|c| !matches!(c.validation_status, Some(ValidationStatus::Rejected)));
+    }
+
     if view.candidates.is_empty() {
         eprintln!("Error: no advise candidates available for the current selection.");
         return false;
@@ -802,16 +851,54 @@ fn print_advise_candidates(
         "Assumed feedpoint impedance: {:.0} ohm",
         view.assumed_feedpoint_ohm
     );
+
+    if let Some(ref cmp) = view.efhw_comparison {
+        println!(
+            "EFHW transformer comparison (feedpoint R: {:.0} \u{03a9}):",
+            cmp.feedpoint_r_ohm
+        );
+        println!(
+            "  {:<5}  {:<8}  {:<6}  {:<11}  Loss",
+            "Ratio", "Target Z", "SWR", "Efficiency"
+        );
+        for entry in &cmp.entries {
+            let marker = if entry.is_best {
+                "  <- recommended"
+            } else {
+                ""
+            };
+            println!(
+                "  {:<5}  {:>5.0} \u{03a9}  {:>4.2}:1  {:>9.2}%  {:.3} dB{}",
+                entry.ratio.as_label(),
+                entry.target_z_ohm,
+                entry.swr,
+                entry.efficiency_pct,
+                entry.mismatch_loss_db,
+                marker
+            );
+        }
+        println!("------------------------------------------------------------");
+    }
+
     println!("Ranked combinations (wire length + balun/unun ratio):");
     println!();
 
     for (idx, candidate) in view.candidates.iter().enumerate() {
+        // Validation badge for the header line.
+        let badge = match candidate.validation_status {
+            Some(ValidationStatus::Passed) => "  [PASSED]",
+            Some(ValidationStatus::Warning) => "  [WARNING]",
+            Some(ValidationStatus::Rejected) => "  [REJECTED]",
+            Some(ValidationStatus::Error) => "  [ERROR]",
+            _ => "",
+        };
         println!(
-            "{:2}. ratio {}  wire {:.2} m ({:.2} ft)",
+            "{:2}. ratio {}  wire {:.2} m ({:.2} ft){}",
             idx + 1,
             candidate.ratio.as_label(),
             candidate.recommended_length_m,
-            candidate.recommended_length_ft
+            candidate.recommended_length_ft,
+            badge
         );
         println!(
             "    efficiency {:.2}%  mismatch loss {:.3} dB  clearance {:.2}%",
@@ -823,6 +910,7 @@ fn print_advise_candidates(
             "    score {:.2}  correction shift {:.2}%",
             candidate.score, candidate.average_length_shift_pct
         );
+        println!("    note: {}", candidate.tradeoff_note);
         if let Some(note) = &candidate.validation_note {
             let status = candidate
                 .validation_status
@@ -832,7 +920,39 @@ fn print_advise_candidates(
                 } else {
                     "not-validated"
                 });
-            println!("    fnec: {status} ({note})");
+            println!("    fnec: {status} — {note}");
+        }
+    }
+
+    // Validation summary when fnec was active.
+    if config.validate_with_fnec {
+        let total = view.candidates.len();
+        let passed = view
+            .candidates
+            .iter()
+            .filter(|c| c.validation_status == Some(ValidationStatus::Passed))
+            .count();
+        let warned = view
+            .candidates
+            .iter()
+            .filter(|c| c.validation_status == Some(ValidationStatus::Warning))
+            .count();
+        let rejected = view
+            .candidates
+            .iter()
+            .filter(|c| c.validation_status == Some(ValidationStatus::Rejected))
+            .count();
+        let skipped = view
+            .candidates
+            .iter()
+            .filter(|c| matches!(c.validation_status, Some(ValidationStatus::Skipped) | None))
+            .count();
+        println!();
+        println!(
+            "Validation summary: {total} candidates — {passed} passed, {warned} warning, {rejected} rejected, {skipped} skipped"
+        );
+        if fnec_gate {
+            println!("  (--fnec-gate active: rejected candidates removed from ranking)");
         }
     }
 
@@ -891,6 +1011,45 @@ fn run_velocity_sweep(velocities: &[f64], base_config: AppConfig, units: UnitSys
 
     if let Some(view) = velocity_sweep_view(&results_by_vf) {
         for line in velocity_sweep_display_lines(&view, units) {
+            println!("{line}");
+        }
+    }
+    true
+}
+
+// ---------------------------------------------------------------------------
+// Transformer sweep
+// ---------------------------------------------------------------------------
+
+fn run_transformer_sweep(
+    ratios: &[crate::calculations::TransformerRatio],
+    base_config: AppConfig,
+    units: UnitSystem,
+) -> bool {
+    if ratios.is_empty() {
+        eprintln!("Error: --transformer-sweep requires at least one ratio.");
+        return false;
+    }
+
+    // Derive the feedpoint impedance from the optimizer (uses NEC calibration).
+    let feedpoint_r =
+        crate::app::optimize_transformer_candidates(&base_config).assumed_feedpoint_ohm;
+
+    let mut results_by_ratio: Vec<(crate::calculations::TransformerRatio, AppResults)> = Vec::new();
+    for &ratio in ratios {
+        let mut sweep_config = base_config.clone();
+        sweep_config.transformer_ratio = ratio;
+        match execute_request_checked(AppRequest::new(sweep_config)) {
+            Ok(response) => results_by_ratio.push((ratio, response.results)),
+            Err(err) => {
+                eprintln!("Error at ratio {}: {err}", ratio.as_label());
+                return false;
+            }
+        }
+    }
+
+    if let Some(view) = transformer_sweep_view(&results_by_ratio, feedpoint_r) {
+        for line in transformer_sweep_display_lines(&view, units) {
             println!("{line}");
         }
     }
@@ -1620,6 +1779,7 @@ fn calculate_selected_bands_with_defaults(
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
         validate_with_fnec: false,
+        extra_bands: vec![],
     };
 
     let results = match execute_request_checked(AppRequest::new(config)) {
@@ -1728,6 +1888,7 @@ fn quick_calculation_with_defaults(
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
         validate_with_fnec: false,
+        extra_bands: vec![],
     };
 
     let results = match execute_request_checked(AppRequest::new(config)) {
@@ -1793,7 +1954,7 @@ fn interactive_export_prompt(
 ) -> Vec<(ExportFormat, String)> {
     prompt(
         output,
-        "Export results? (none, or comma-separated formats e.g. csv,json,markdown,txt): ",
+        "Export results? (none, or comma-separated formats e.g. csv,html,json,markdown,txt,yaml): ",
     );
 
     let fmt_raw = read_line(input, "failed to read export format")
@@ -1818,6 +1979,11 @@ fn interactive_export_prompt(
                         out.push(ExportFormat::Csv);
                     }
                 }
+                "html" | "htm" => {
+                    if !out.contains(&ExportFormat::Html) {
+                        out.push(ExportFormat::Html);
+                    }
+                }
                 "json" => {
                     if !out.contains(&ExportFormat::Json) {
                         out.push(ExportFormat::Json);
@@ -1831,6 +1997,11 @@ fn interactive_export_prompt(
                 "txt" | "text" => {
                     if !out.contains(&ExportFormat::Txt) {
                         out.push(ExportFormat::Txt);
+                    }
+                }
+                "yaml" | "yml" => {
+                    if !out.contains(&ExportFormat::Yaml) {
+                        out.push(ExportFormat::Yaml);
                     }
                 }
                 other => {
@@ -2047,6 +2218,11 @@ mod tests {
     use super::*;
     use std::fs;
     use std::io::Cursor;
+    use std::sync::Mutex;
+
+    // Serialize all tests that read or write the default export file names to
+    // prevent false failures caused by parallel test execution.
+    static DEFAULT_EXPORT_PATH_LOCK: Mutex<()> = Mutex::new(());
 
     fn sample_results_for_export_tests() -> AppResults {
         AppResults {
@@ -2278,6 +2454,7 @@ mod tests {
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
             validate_with_fnec: false,
+            extra_bands: vec![],
         };
 
         // Assert the formatter input mapping separately since this function prints to stdout.
@@ -2291,8 +2468,24 @@ mod tests {
     }
 
     #[test]
-    fn interactive_export_prompt_rejects_unknown_format() {
+    fn interactive_export_prompt_accepts_yaml_format() {
         let mut input = Cursor::new(b"yaml\n".to_vec());
+        let mut output = Vec::new();
+        let results = sample_results_for_export_tests();
+
+        let exports = interactive_export_prompt(&mut input, &mut output, &results);
+
+        assert_eq!(
+            exports.iter().map(|(f, _)| f).collect::<Vec<_>>(),
+            vec![&ExportFormat::Yaml]
+        );
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(!rendered.contains("unknown format"));
+    }
+
+    #[test]
+    fn interactive_export_prompt_rejects_unknown_format() {
+        let mut input = Cursor::new(b"xyz\n".to_vec());
         let mut output = Vec::new();
         let results = sample_results_for_export_tests();
 
@@ -2300,7 +2493,7 @@ mod tests {
 
         assert!(exports.is_empty());
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
-        assert!(rendered.contains("unknown format 'yaml'; skipping export."));
+        assert!(rendered.contains("unknown format 'xyz'; skipping export."));
     }
 
     #[test]
@@ -2457,6 +2650,7 @@ mod tests {
 
     #[test]
     fn interactive_export_prompt_multiple_formats_use_default_output_paths() {
+        let _guard = DEFAULT_EXPORT_PATH_LOCK.lock().unwrap();
         let mut input = Cursor::new(b"csv,json\n".to_vec());
         let mut output = Vec::new();
         let results = sample_results_for_export_tests();
@@ -2477,6 +2671,7 @@ mod tests {
 
     #[test]
     fn interactive_export_prompt_deduplicates_alias_formats_in_input_order() {
+        let _guard = DEFAULT_EXPORT_PATH_LOCK.lock().unwrap();
         let mut input = Cursor::new(b"md,text,markdown,txt,text\n".to_vec());
         let mut output = Vec::new();
         let results = sample_results_for_export_tests();
@@ -2497,7 +2692,11 @@ mod tests {
 
     #[test]
     fn interactive_export_prompt_mixed_valid_and_invalid_formats_aborts_export() {
-        let mut input = Cursor::new(b"csv,yaml\n".to_vec());
+        let _guard = DEFAULT_EXPORT_PATH_LOCK.lock().unwrap();
+        let csv_path = default_output_name(ExportFormat::Csv);
+        let _ = fs::remove_file(csv_path);
+
+        let mut input = Cursor::new(b"csv,xyz\n".to_vec());
         let mut output = Vec::new();
         let results = sample_results_for_export_tests();
 
@@ -2505,8 +2704,8 @@ mod tests {
 
         assert!(exports.is_empty());
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
-        assert!(rendered.contains("unknown format 'yaml'; skipping export."));
-        assert!(!std::path::Path::new(default_output_name(ExportFormat::Csv)).exists());
+        assert!(rendered.contains("unknown format 'xyz'; skipping export."));
+        assert!(!std::path::Path::new(csv_path).exists());
     }
 
     // --- prompt_calc_mode_with_default ---

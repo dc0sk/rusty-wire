@@ -172,6 +172,11 @@ pub struct WireCalculation {
     pub skip_distance_min_km: f64,
     pub skip_distance_max_km: f64,
     pub skip_distance_avg_km: f64,
+
+    // NEC-calibrated feedpoint resistance for dipole at deployment height and ground.
+    // Derived from fnec-rust Hallén solver corpus data (corpus/reference-results.json).
+    // Used for transformer-ratio length correction and surfaced in CLI output.
+    pub dipole_feedpoint_r_ohm: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -329,14 +334,31 @@ pub fn calculate_for_band_with_environment(
     let full_wave_ft = full_wave_m * METERS_TO_FEET;
     let quarter_wave_ft = quarter_wave_m * METERS_TO_FEET;
 
-    // Use a shared nominal feedpoint reference so transformer selection has a
-    // consistent impact across resonant families and optimization behavior.
-    let corrected_half_wave_m =
-        impedance_corrected_length_m(half_wave_m, 73.0, transformer, conductor_diameter_mm);
-    let corrected_full_wave_m =
-        impedance_corrected_length_m(full_wave_m, 73.0, transformer, conductor_diameter_mm);
-    let corrected_quarter_wave_m =
-        impedance_corrected_length_m(quarter_wave_m, 73.0, transformer, conductor_diameter_mm);
+    // NEC-calibrated feedpoint resistance: use corpus reference data instead of the
+    // classic textbook 73 Ω free-space value. Height and ground affect the radiation
+    // resistance through image-method coupling; the NEC values are validated against
+    // fnec-rust Hallén solver output (see corpus/reference-results.json).
+    let nominal_feedpoint_r = nec_calibrated_dipole_r(antenna_height_m, ground_class);
+
+    // Use the NEC-calibrated nominal for all transformer-ratio length corrections.
+    let corrected_half_wave_m = impedance_corrected_length_m(
+        half_wave_m,
+        nominal_feedpoint_r,
+        transformer,
+        conductor_diameter_mm,
+    );
+    let corrected_full_wave_m = impedance_corrected_length_m(
+        full_wave_m,
+        nominal_feedpoint_r,
+        transformer,
+        conductor_diameter_mm,
+    );
+    let corrected_quarter_wave_m = impedance_corrected_length_m(
+        quarter_wave_m,
+        nominal_feedpoint_r,
+        transformer,
+        conductor_diameter_mm,
+    );
     let corrected_half_wave_ft = corrected_half_wave_m * METERS_TO_FEET;
     let corrected_full_wave_ft = corrected_full_wave_m * METERS_TO_FEET;
     let corrected_quarter_wave_ft = corrected_quarter_wave_m * METERS_TO_FEET;
@@ -438,7 +460,52 @@ pub fn calculate_for_band_with_environment(
         skip_distance_min_km,
         skip_distance_max_km,
         skip_distance_avg_km,
+        dipole_feedpoint_r_ohm: nominal_feedpoint_r,
     }
+}
+
+/// Return the NEC-calibrated radiation resistance (real part of feedpoint impedance)
+/// for a half-wave dipole at the given height and ground, derived from fnec-rust
+/// Hallén solver corpus sweeps (corpus/reference-results.json, v2.9.0).
+///
+/// Reference data (7.1 MHz, 2 mm wire, 51 segments, 0.95 VF cut):
+///   free space:          R ≈  62.94 Ω
+///   7 m AGL, good:       R ≈  73.03 Ω
+///   10 m AGL, poor:      R ≈  56.38 Ω
+///   10 m AGL, average:   R ≈  54.35 Ω
+///   10 m AGL, good:      R ≈  52.84 Ω
+///   12 m AGL, good:      R ≈  45.56 Ω
+///
+/// For heights other than 7/10/12 m the value is linearly interpolated.
+/// Ground-class offset at 10 m is applied as a calibrated delta.
+pub fn nec_calibrated_dipole_r(antenna_height_m: f64, ground_class: GroundClass) -> f64 {
+    // Anchor table: resistance at each height with "good" ground (from NEC corpus).
+    const H7_GOOD: f64 = 73.03; // 7 m AGL, good soil
+    const H10_GOOD: f64 = 52.84; // 10 m AGL, good soil
+    const H12_GOOD: f64 = 45.56; // 12 m AGL, good soil
+
+    // Ground-class correction deltas at 10 m AGL (NEC corpus deltas relative to "good"):
+    //   average - good ≈ +1.51 Ω;  poor - good ≈ +3.54 Ω
+    let ground_delta: f64 = match ground_class {
+        GroundClass::Good => 0.0,
+        GroundClass::Average => 1.51,
+        GroundClass::Poor => 3.54,
+    };
+
+    // Interpolate the height-dependent "good" baseline.
+    let h_good = if antenna_height_m <= 7.0 {
+        H7_GOOD
+    } else if antenna_height_m >= 12.0 {
+        H12_GOOD
+    } else if antenna_height_m <= 10.0 {
+        let t = (antenna_height_m - 7.0) / (10.0 - 7.0);
+        H7_GOOD + t * (H10_GOOD - H7_GOOD)
+    } else {
+        let t = (antenna_height_m - 10.0) / (12.0 - 10.0);
+        H10_GOOD + t * (H12_GOOD - H10_GOOD)
+    };
+
+    (h_good + ground_delta).clamp(30.0, 90.0)
 }
 
 fn height_skip_factor(antenna_height_m: f64) -> f64 {
@@ -1201,8 +1268,8 @@ mod tests {
             GroundClass::Average,
         );
 
-        let avg_min = calculate_average_min_distance(&[calc.clone()]);
-        let avg_max = calculate_average_max_distance(&[calc.clone()]);
+        let avg_min = calculate_average_min_distance(std::slice::from_ref(&calc));
+        let avg_max = calculate_average_max_distance(std::slice::from_ref(&calc));
 
         assert_eq!(avg_min, calc.skip_distance_min_km);
         assert_eq!(avg_max, calc.skip_distance_max_km);
@@ -1335,7 +1402,7 @@ mod tests {
             step_m: 0.1,
             preferred_center_m: 20.0,
         };
-        let optima = calculate_non_resonant_optima(&[calc.clone()], 0.95, config);
+        let optima = calculate_non_resonant_optima(std::slice::from_ref(&calc), 0.95, config);
         let best = calculate_best_non_resonant_length(&[calc], 0.95, config).unwrap();
 
         // Best recommendation should be one of the optima
@@ -1382,5 +1449,361 @@ mod tests {
             assert!(comp.length_m <= config.max_len_m);
             assert!(comp.worst_band_distance_m >= 0.0);
         }
+    }
+
+    // --- GroundClass ---
+
+    #[test]
+    fn ground_class_as_label() {
+        assert_eq!(GroundClass::Poor.as_label(), "poor");
+        assert_eq!(GroundClass::Average.as_label(), "average");
+        assert_eq!(GroundClass::Good.as_label(), "good");
+    }
+
+    // --- TransformerRatio: missing variants ---
+
+    #[test]
+    fn transformer_ratio_all_impedance_values() {
+        assert_eq!(TransformerRatio::R1To5.impedance_ratio(), 5.0);
+        assert_eq!(TransformerRatio::R1To6.impedance_ratio(), 6.0);
+        assert_eq!(TransformerRatio::R1To16.impedance_ratio(), 16.0);
+        assert_eq!(TransformerRatio::R1To49.impedance_ratio(), 49.0);
+        assert_eq!(TransformerRatio::R1To56.impedance_ratio(), 56.0);
+    }
+
+    #[test]
+    fn transformer_ratio_all_labels() {
+        assert_eq!(TransformerRatio::R1To4.as_label(), "1:4");
+        assert_eq!(TransformerRatio::R1To5.as_label(), "1:5");
+        assert_eq!(TransformerRatio::R1To6.as_label(), "1:6");
+        assert_eq!(TransformerRatio::R1To9.as_label(), "1:9");
+        assert_eq!(TransformerRatio::R1To49.as_label(), "1:49");
+        assert_eq!(TransformerRatio::R1To56.as_label(), "1:56");
+        assert_eq!(TransformerRatio::R1To64.as_label(), "1:64");
+    }
+
+    #[test]
+    fn transformer_ratio_parse_all_colon_formats() {
+        assert_eq!(
+            TransformerRatio::parse("1:5"),
+            Some(TransformerRatio::R1To5)
+        );
+        assert_eq!(
+            TransformerRatio::parse("1:6"),
+            Some(TransformerRatio::R1To6)
+        );
+        assert_eq!(
+            TransformerRatio::parse("1:9"),
+            Some(TransformerRatio::R1To9)
+        );
+        assert_eq!(
+            TransformerRatio::parse("1:16"),
+            Some(TransformerRatio::R1To16)
+        );
+        assert_eq!(
+            TransformerRatio::parse("1:49"),
+            Some(TransformerRatio::R1To49)
+        );
+        assert_eq!(
+            TransformerRatio::parse("1:56"),
+            Some(TransformerRatio::R1To56)
+        );
+    }
+
+    #[test]
+    fn transformer_ratio_parse_all_numeric_formats() {
+        assert_eq!(TransformerRatio::parse("5"), Some(TransformerRatio::R1To5));
+        assert_eq!(TransformerRatio::parse("6"), Some(TransformerRatio::R1To6));
+        assert_eq!(TransformerRatio::parse("9"), Some(TransformerRatio::R1To9));
+        assert_eq!(
+            TransformerRatio::parse("16"),
+            Some(TransformerRatio::R1To16)
+        );
+        assert_eq!(
+            TransformerRatio::parse("49"),
+            Some(TransformerRatio::R1To49)
+        );
+        assert_eq!(
+            TransformerRatio::parse("56"),
+            Some(TransformerRatio::R1To56)
+        );
+    }
+
+    #[test]
+    fn transformer_ratio_from_str_error() {
+        let err = "bad".parse::<TransformerRatio>();
+        assert!(err.is_err());
+        assert!(err.unwrap_err().contains("Invalid transformer ratio"));
+    }
+
+    // --- height_skip_factor and ground_skip_factor ---
+
+    #[test]
+    fn skip_scaling_at_height_7m_reduces_distance() {
+        let band = sample_band();
+        let h7 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            7.0,
+            GroundClass::Average,
+        );
+        let h10 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        assert!(h7.skip_distance_min_km < h10.skip_distance_min_km);
+        assert!(h7.skip_distance_max_km < h10.skip_distance_max_km);
+    }
+
+    #[test]
+    fn skip_scaling_at_height_12m_increases_distance() {
+        let band = sample_band();
+        let h10 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let h12 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            12.0,
+            GroundClass::Average,
+        );
+        assert!(h12.skip_distance_min_km > h10.skip_distance_min_km);
+        assert!(h12.skip_distance_max_km > h10.skip_distance_max_km);
+    }
+
+    #[test]
+    fn skip_scaling_fallback_height_is_interpolated() {
+        let band = sample_band();
+        // 15m is outside presets — exercises the fallback branch
+        let h15 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            15.0,
+            GroundClass::Average,
+        );
+        let h10 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        // Factor at 15m = (1 + (15-10)*0.035).clamp(0.70, 1.20) = 1.175
+        assert!(h15.skip_distance_max_km > h10.skip_distance_max_km);
+        assert!(h15.skip_distance_max_km <= h10.skip_distance_max_km * 1.21);
+    }
+
+    #[test]
+    fn skip_scaling_fallback_height_clamps_at_minimum() {
+        let band = sample_band();
+        // Very low height should clamp to 0.70 factor
+        let h1 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            1.0,
+            GroundClass::Average,
+        );
+        let h10 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        // Factor = (1 + (1-10)*0.035).clamp(0.70, 1.20) = max(0.685, 0.70) = 0.70
+        let ratio = h1.skip_distance_max_km / h10.skip_distance_max_km;
+        assert!(
+            (ratio - 0.70).abs() < 1e-9,
+            "expected clamp to 0.70, got ratio {ratio}"
+        );
+    }
+
+    #[test]
+    fn ground_class_poor_reduces_skip() {
+        let band = sample_band();
+        let avg = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let poor = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Poor,
+        );
+        assert!(poor.skip_distance_min_km < avg.skip_distance_min_km);
+        assert!(poor.skip_distance_max_km < avg.skip_distance_max_km);
+    }
+
+    #[test]
+    fn ground_class_good_increases_skip() {
+        let band = sample_band();
+        let avg = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let good = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Good,
+        );
+        assert!(good.skip_distance_min_km > avg.skip_distance_min_km);
+        assert!(good.skip_distance_max_km > avg.skip_distance_max_km);
+    }
+
+    // --- WireCalculation Display ---
+
+    #[test]
+    fn wire_calculation_display_contains_key_fields() {
+        let band = sample_band();
+        let calc = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let display = format!("{calc}");
+        assert!(display.contains("20m"), "band name missing from display");
+        assert!(display.contains("14.175"), "frequency missing from display");
+        assert!(
+            display.contains("1:1"),
+            "transformer ratio missing from display"
+        );
+        assert!(display.contains("Half-wave"), "half-wave label missing");
+        assert!(display.contains("Skip distance"), "skip distance missing");
+    }
+
+    // --- optimize_ocfd_split_for_length edge cases ---
+
+    #[test]
+    fn optimize_ocfd_split_zero_length_returns_none() {
+        let band = sample_band();
+        let calc = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        assert!(optimize_ocfd_split_for_length(&[calc], 0.0).is_none());
+    }
+
+    #[test]
+    fn optimize_ocfd_split_empty_calcs_returns_none() {
+        assert!(optimize_ocfd_split_for_length(&[], 20.0).is_none());
+    }
+
+    // --- calculate_resonant_compromises invalid config ---
+
+    #[test]
+    fn calculate_resonant_compromises_zero_step_returns_empty() {
+        let band = sample_band();
+        let calc = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let config = NonResonantSearchConfig {
+            min_len_m: 8.0,
+            max_len_m: 35.0,
+            step_m: 0.0,
+            preferred_center_m: 20.0,
+        };
+        let result = calculate_resonant_compromises(&[calc], config);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn calculate_non_resonant_optima_zero_step_returns_empty() {
+        let band = sample_band();
+        let calc = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let config = NonResonantSearchConfig {
+            min_len_m: 8.0,
+            max_len_m: 35.0,
+            step_m: 0.0,
+            preferred_center_m: 20.0,
+        };
+        let result = calculate_non_resonant_optima(&[calc], 0.95, config);
+        assert_eq!(result.len(), 0);
+    }
+
+    // --- nearest_resonance_clearance_pct edge cases ---
+
+    #[test]
+    fn nearest_resonance_clearance_zero_inputs_return_zero() {
+        assert_eq!(nearest_resonance_clearance_pct(0.0, 5.0), 0.0);
+        assert_eq!(nearest_resonance_clearance_pct(10.0, 0.0), 0.0);
+        assert_eq!(nearest_resonance_clearance_pct(0.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn nearest_resonance_clearance_at_resonance_is_zero() {
+        // Exactly at a harmonic → clearance should be 0 (or very near 0)
+        let quarter_wave = 10.0_f64;
+        let at_resonance = quarter_wave * 4.0; // 4th harmonic
+        assert!(nearest_resonance_clearance_pct(at_resonance, quarter_wave) < 1e-9);
+    }
+
+    // --- impedance_corrected_length_m via non-1:1 transformers ---
+
+    #[test]
+    fn non_unity_transformer_changes_corrected_length() {
+        let band = sample_band();
+        let r1to1 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let r1to49 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To49,
+            10.0,
+            GroundClass::Average,
+        );
+        let r1to64 = calculate_for_band_with_velocity(
+            &band,
+            0.95,
+            TransformerRatio::R1To64,
+            10.0,
+            GroundClass::Average,
+        );
+        // All transformers produce positive lengths
+        assert!(r1to49.corrected_half_wave_m > 0.0);
+        assert!(r1to64.corrected_half_wave_m > 0.0);
+        // Higher ratio → larger target impedance → different correction
+        assert!((r1to49.corrected_half_wave_m - r1to1.corrected_half_wave_m).abs() > 1e-9);
+        assert!((r1to64.corrected_half_wave_m - r1to1.corrected_half_wave_m).abs() > 1e-9);
     }
 }

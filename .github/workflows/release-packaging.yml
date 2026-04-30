@@ -100,6 +100,59 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: "rusty-wire-${{ needs.create-release.outputs.version }}-${{ matrix.archive_suffix }}.tar.gz"
 
+  # ── 1a. Build and upload macOS bundles for tagged releases ─────────────────
+  release-macos-bundle:
+    name: Build macOS bundle (${{ matrix.arch }})
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: macos-13
+            archive_suffix: x86_64-macos
+          - arch: aarch64
+            runner: macos-14
+            archive_suffix: aarch64-macos
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.arch }}-cargo-
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Package macOS tarball
+        run: |
+          VERSION=${{ needs.create-release.outputs.version }}
+          BUNDLE_DIR="rusty-wire-${VERSION}-${{ matrix.archive_suffix }}"
+          ARCHIVE="${BUNDLE_DIR}.tar.gz"
+          mkdir -p "$BUNDLE_DIR"
+          cp target/release/rusty-wire "$BUNDLE_DIR/"
+          cp README.md LICENSE "$BUNDLE_DIR/"
+          tar czf "$ARCHIVE" "$BUNDLE_DIR"
+
+      - name: Upload macOS bundle to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: "rusty-wire-${{ needs.create-release.outputs.version }}-${{ matrix.archive_suffix }}.tar.gz"
+
   # ── 2. Build and upload a Debian package for each target arch ───────────────
   release-deb:
     name: Build .deb (${{ matrix.arch }})

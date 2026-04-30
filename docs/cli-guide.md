@@ -1,6 +1,13 @@
+---
+project: rusty-wire
+doc: docs/cli-guide.md
+status: living
+last_updated: 2026-04-30
+---
+
 # CLI Guide
 
-**Version 2.7.0**
+**Version 2.14.0**
 
 Use this page as the command reference for Rusty Wire.
 
@@ -43,7 +50,7 @@ It supports:
   - `--units ft`: imperial output only
   - `--units both`: both systems (default when mixing unit inputs)
 - Multiple export formats: CSV, JSON, Markdown, plain text
-- Comma-separated export format selection: `--export csv,json,markdown,txt`
+- Comma-separated export format selection: `--export csv,json,markdown,txt,yaml,html`
 
 ## Interactive Mode
 
@@ -139,6 +146,7 @@ rusty-wire --interactive
 - `--validate-with-fnec` With `--advise`, attempt optional fnec-rust cross-validation (if `fnec` is available in `PATH`) and print per-candidate status notes
 - `--fnec-pass-max-mismatch <value>` With `--advise --validate-with-fnec`, mismatch factor at or below this value is marked `passed` (range `0.0..=1.0`, default `0.25`)
 - `--fnec-reject-min-mismatch <value>` With `--advise --validate-with-fnec`, mismatch factor at or above this value is marked `rejected` (range `0.0..=1.0`, default `0.60`)
+- `--fnec-gate` With `--advise --validate-with-fnec`, drop `Rejected` candidates from the advise output entirely; CLI prints a validation summary at the end of the advise block
 - `--mode <resonant|non-resonant>` Calculation mode (default: `resonant`)
 - `--velocity <value>` Velocity factor, valid range `0.50..=1.00` (default: `0.95`)
 - `--height <7|10|12>` Standard antenna height in meters used for height-aware skip estimates (default: `10`)
@@ -194,7 +202,7 @@ You can always override with an explicit ratio.
 
 ## Export Options
 
-- `--export <csv,json,markdown,txt>` One or more formats
+- `--export <csv,json,markdown,txt,yaml,html>` One or more formats
 - `--output <file>` Output path (single format uses this name; multiple formats use per-format filenames)
 - Advise exports include validation metadata fields: `validated`, `validation_status`, and `validation_note`
 

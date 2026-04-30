@@ -1,6 +1,6 @@
 # Rusty Wire
 
-![Version](https://img.shields.io/badge/version-2.7.0-blue)
+![Version](https://img.shields.io/badge/version-2.14.0-blue)
 ![License](https://img.shields.io/badge/license-GPL--2.0--or--later-green)
 ![Rust edition](https://img.shields.io/badge/rust-2021-orange)
 
@@ -19,7 +19,7 @@ amateur and shortwave bands. It covers six antenna models, recommends transforme
 automatically, and fits comfortably into shell scripts as well as interactive
 planning sessions.
 
-**2.7.0: packaging pipeline, persistent preferences, and smarter TUI band presets · 3.x roadmap: desktop GUI (`iced`)**
+**2.14.0: HTML export, TUI export preview, collapsible result panels, and saved sessions · 3.x roadmap: desktop GUI (`iced`)**
 
 ---
 
@@ -76,7 +76,7 @@ equal-tie support.
 - `--transformer recommended|1:1|1:4|1:9|1:49|1:56|...` — auto-resolved per
   mode and antenna model by default.
 - `--units m|ft|both` — metric, imperial, or both systems in one run.
-- `--export csv,json,markdown,txt` — export any combination of formats.
+- `--export csv,json,markdown,txt,yaml,html` — export any combination of formats.
 
 ### Bands and regions
 
@@ -99,9 +99,63 @@ cargo build --release
 # Interactive planning session
 ./target/release/rusty-wire --interactive
 
+# Launch the TUI (full-screen mode)
+./target/release/rusty-wire --tui
+
 # During development
 cargo run -- [OPTIONS]
 ```
+
+---
+
+## TUI Mode (Full-Screen Terminal Interface)
+
+Rusty Wire includes a keyboard-driven Text User Interface (`--tui` or `-t` flag) with ratatui:
+
+```bash
+rusty-wire --tui
+```
+
+### TUI Features
+
+- **Real-time configuration**: Adjust band presets, antenna models, mode, velocity factor, height, and ground class
+- **Live recalculation**: Results update as you modify settings (with debounce for non-resonant search)
+- **Band selection**: Cycle through named presets or open a checklist to pick custom bands
+- **Export formats**: Press `e`/`E`/`m`/`t`/`y`/`H` to export results as CSV/JSON/Markdown/plain text/YAML/HTML; an export-preview overlay shows the output before writing.
+- **Collapsible result panels**: `[`/`]` to move the band cursor, `Space` to collapse/expand the highlighted band.
+- **Saved sessions**: press `S` to save the current `AppConfig` under a name; `O` opens a picker to load (`Enter`) or delete (`d`) a session. Stored in `~/.config/rusty-wire/sessions.toml`.
+- **Visual highlighting**: recommended transformer ratio is shown in green/bold; bands skipped by the user are shown in yellow.
+- **Advise panel**: Press `a` to toggle ranked balun/unun candidates with efficiency estimates
+- **Keyboard navigation**: Arrow keys or vim keys (`hjkl`) to navigate; Tab to switch focus between config and results
+- **Persistent preferences**: Press `s` to save current settings as defaults (`~/.config/rusty-wire/config.toml`)
+- **Project info**: Press `i` or `?` to view metadata and keybindings
+
+### Keybindings Reference
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Select previous config field |
+| `↓` / `j` | Select next config field |
+| `←` / `h` | Decrease field value |
+| `→` / `l` | Increase field value |
+| `r` / `Enter` | Run calculation |
+| `e` | Export CSV (preview first) |
+| `E` | Export JSON (preview first) |
+| `m` | Export Markdown (preview first) |
+| `t` | Export plain text (preview first) |
+| `y` | Export YAML (preview first) |
+| `H` | Export HTML (preview first) |
+| `[` / `]` | Move band cursor in the results panel |
+| `Space` | Collapse / expand the highlighted band |
+| `s` | Save preferences |
+| `S` | Save current configuration as a named session |
+| `O` | Open the saved-session picker (Enter: load, `d`: delete) |
+| `a` | Toggle advise panel |
+| `i` / `?` | Toggle project info |
+| `Tab` | Toggle focus (config ↔ results) |
+| `PgUp` / `PgDn` | Scroll results |
+| `q` / `Esc` | Quit (closes overlays first) |
+| `Ctrl-C` | Quit |
 
 ---
 
@@ -228,6 +282,30 @@ cargo test
 ```
 
 See [docs/testing.md](docs/testing.md) for the complete test strategy.
+
+---
+
+## Development & Contributing
+
+After cloning the repository, install the git hooks to enforce quality checks before pushing:
+
+```bash
+make install-hooks
+```
+
+This installs pre-push hooks that run format checks, compilation, tests, and SBOM validation.
+You can also use `make` to run individual checks:
+
+```bash
+make fmt           # Format code
+make lint          # Run clippy linter
+make test          # Run all tests
+make build         # Build in debug mode
+make release       # Build optimized binary
+make help          # Show all available targets
+```
+
+For full requirements engineering context, see [docs/requirements.md](docs/requirements.md).
 
 ---
 

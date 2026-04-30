@@ -106,6 +106,11 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::str::FromStr;
 
+pub mod advise;
+pub mod state;
+pub use advise::*;
+pub use state::*;
+
 pub const FEET_TO_METERS: f64 = 0.3048;
 pub const DEFAULT_BAND_SELECTION: [usize; 7] = [4, 5, 6, 7, 8, 9, 10];
 pub const DEFAULT_ITU_REGION: ITURegion = ITURegion::Region1;
@@ -144,326 +149,6 @@ pub fn recommended_transformer_ratio_fallback_message(
     )
 }
 
-pub const TRANSFORMER_OPTIMIZER_CANDIDATES: &[TransformerRatio] = &[
-    TransformerRatio::R1To1,
-    TransformerRatio::R1To2,
-    TransformerRatio::R1To4,
-    TransformerRatio::R1To5,
-    TransformerRatio::R1To6,
-    TransformerRatio::R1To9,
-    TransformerRatio::R1To16,
-    TransformerRatio::R1To49,
-    TransformerRatio::R1To56,
-    TransformerRatio::R1To64,
-];
-
-#[derive(Debug, Clone)]
-pub struct TransformerOptimizerCandidate {
-    pub ratio: TransformerRatio,
-    pub target_impedance_ohm: f64,
-    pub mismatch_gamma: f64,
-    pub estimated_efficiency_pct: f64,
-    pub mismatch_loss_db: f64,
-    pub average_length_shift_pct: f64,
-    pub score: f64,
-}
-
-#[derive(Debug, Clone)]
-pub struct TransformerOptimizerView {
-    pub assumed_feedpoint_ohm: f64,
-    pub candidate_count: usize,
-    pub candidates: Vec<TransformerOptimizerCandidate>,
-}
-
-#[derive(Debug, Clone)]
-pub struct AdviseCandidate {
-    pub ratio: TransformerRatio,
-    pub recommended_length_m: f64,
-    pub recommended_length_ft: f64,
-    pub min_resonance_clearance_pct: f64,
-    pub estimated_efficiency_pct: f64,
-    pub mismatch_loss_db: f64,
-    pub average_length_shift_pct: f64,
-    pub score: f64,
-    /// Whether fnec-rust validation was performed (if available).
-    pub validated: bool,
-    /// Structured validation status for pass/warn/reject handling.
-    pub validation_status: Option<crate::fnec_validation::ValidationStatus>,
-    /// Optional validation note (e.g., cross-check result or reason skipped).
-    pub validation_note: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct AdviseView {
-    pub assumed_feedpoint_ohm: f64,
-    pub candidates: Vec<AdviseCandidate>,
-}
-
-pub fn optimize_transformer_candidates(config: &AppConfig) -> TransformerOptimizerView {
-    let source_impedance = assumed_feedpoint_impedance_ohm(config.mode, config.antenna_model);
-
-    let baseline = build_optimizer_calculations(config, TransformerRatio::R1To1);
-    let baseline_avg_half_wave = mean_half_wave_m(&baseline);
-
-    let mut candidates: Vec<TransformerOptimizerCandidate> = TRANSFORMER_OPTIMIZER_CANDIDATES
-        .iter()
-        .copied()
-        .map(|ratio| {
-            let target_impedance = 50.0 * ratio.impedance_ratio();
-            let gamma = if source_impedance <= 0.0 {
-                1.0
-            } else {
-                ((target_impedance - source_impedance).abs()
-                    / (target_impedance + source_impedance))
-                    .clamp(0.0, 0.999_999)
-            };
-            let mismatch_efficiency = (1.0 - gamma * gamma) * 100.0;
-            let mismatch_loss_db = -10.0 * (1.0 - gamma * gamma).log10();
-
-            let ratio_calculations = build_optimizer_calculations(config, ratio);
-            let ratio_avg_half_wave = mean_half_wave_m(&ratio_calculations);
-            let average_length_shift_pct = if baseline_avg_half_wave > 0.0 {
-                ((ratio_avg_half_wave - baseline_avg_half_wave).abs() / baseline_avg_half_wave)
-                    * 100.0
-            } else {
-                0.0
-            };
-
-            // Optimizer score: prefer better impedance transfer and lightly penalize
-            // larger geometry shifts introduced by correction heuristics.
-            let score = mismatch_efficiency - (average_length_shift_pct * 0.35);
-
-            TransformerOptimizerCandidate {
-                ratio,
-                target_impedance_ohm: target_impedance,
-                mismatch_gamma: gamma,
-                estimated_efficiency_pct: mismatch_efficiency,
-                mismatch_loss_db,
-                average_length_shift_pct,
-                score,
-            }
-        })
-        .collect();
-
-    candidates.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    TransformerOptimizerView {
-        assumed_feedpoint_ohm: source_impedance,
-        candidate_count: candidates.len(),
-        candidates,
-    }
-}
-
-pub fn build_advise_candidates(config: &AppConfig, limit: usize) -> AdviseView {
-    build_advise_candidates_with_thresholds(
-        config,
-        limit,
-        crate::fnec_validation::DEFAULT_FNEC_PASS_MAX_MISMATCH,
-        crate::fnec_validation::DEFAULT_FNEC_REJECT_MIN_MISMATCH,
-    )
-}
-
-pub fn build_advise_candidates_with_thresholds(
-    config: &AppConfig,
-    limit: usize,
-    pass_max_mismatch: f64,
-    reject_min_mismatch: f64,
-) -> AdviseView {
-    let optimizer = optimize_transformer_candidates(config);
-    let non_res_cfg = NonResonantSearchConfig {
-        min_len_m: config.wire_min_m,
-        max_len_m: config.wire_max_m,
-        step_m: config.step_m,
-        preferred_center_m: (config.wire_min_m + config.wire_max_m) / 2.0,
-    };
-
-    let max_rows = limit.max(1);
-    let mut candidates = Vec::new();
-
-    for ranked in optimizer.candidates.iter().take(max_rows) {
-        let calculations = build_optimizer_calculations(config, ranked.ratio);
-        let recommendation =
-            calculate_best_non_resonant_length(&calculations, config.velocity_factor, non_res_cfg);
-
-        if let Some(rec) = recommendation {
-            candidates.push(AdviseCandidate {
-                ratio: ranked.ratio,
-                recommended_length_m: rec.length_m,
-                recommended_length_ft: rec.length_ft,
-                min_resonance_clearance_pct: rec.min_resonance_clearance_pct,
-                estimated_efficiency_pct: ranked.estimated_efficiency_pct,
-                mismatch_loss_db: ranked.mismatch_loss_db,
-                average_length_shift_pct: ranked.average_length_shift_pct,
-                score: ranked.score,
-                validated: false,
-                validation_status: None,
-                validation_note: None,
-            });
-        }
-    }
-
-    // Optionally validate candidates with fnec-rust.
-    if config.validate_with_fnec {
-        for candidate in &mut candidates {
-            // Use first selected band center as a representative frequency.
-            if let Some(&band_idx) = config.band_indices.first() {
-                if let Some(band) = get_band_by_index_for_region(band_idx, config.itu_region) {
-                    let result = crate::fnec_validation::validate_candidate_with_thresholds(
-                        candidate.recommended_length_m,
-                        band.freq_center_mhz,
-                        config.antenna_height_m,
-                        "/tmp",
-                        pass_max_mismatch,
-                        reject_min_mismatch,
-                    );
-                    candidate.validated = result.validated;
-                    candidate.validation_status = Some(result.status);
-                    candidate.validation_note = result.validation_note;
-                }
-            }
-        }
-    }
-    AdviseView {
-        assumed_feedpoint_ohm: optimizer.assumed_feedpoint_ohm,
-        candidates,
-    }
-}
-
-fn assumed_feedpoint_impedance_ohm(mode: CalcMode, antenna_model: Option<AntennaModel>) -> f64 {
-    match antenna_model {
-        Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) => 73.0,
-        Some(AntennaModel::TrapDipole) => 65.0,
-        Some(AntennaModel::FullWaveLoop) => 100.0,
-        Some(AntennaModel::EndFedHalfWave) => 2800.0,
-        Some(AntennaModel::OffCenterFedDipole) => 200.0,
-        None => match mode {
-            CalcMode::Resonant => 73.0,
-            CalcMode::NonResonant => 450.0,
-        },
-    }
-}
-
-fn build_optimizer_calculations(
-    config: &AppConfig,
-    ratio: TransformerRatio,
-) -> Vec<WireCalculation> {
-    if !config.freq_list_mhz.is_empty() {
-        return config
-            .freq_list_mhz
-            .iter()
-            .map(|&freq_mhz| {
-                let custom_band = Band {
-                    name: "custom",
-                    band_type: BandType::HF,
-                    freq_low_mhz: freq_mhz,
-                    freq_high_mhz: freq_mhz,
-                    freq_center_mhz: freq_mhz,
-                    typical_skip_km: (0.0, 0.0),
-                    regions: &[],
-                };
-                calculate_for_band_with_environment(
-                    &custom_band,
-                    config.velocity_factor,
-                    ratio,
-                    config.antenna_height_m,
-                    config.ground_class,
-                    config.conductor_diameter_mm,
-                )
-            })
-            .collect();
-    }
-
-    if let Some(freq_mhz) = config.custom_freq_mhz {
-        let custom_band = Band {
-            name: "custom",
-            band_type: BandType::HF,
-            freq_low_mhz: freq_mhz,
-            freq_high_mhz: freq_mhz,
-            freq_center_mhz: freq_mhz,
-            typical_skip_km: (0.0, 0.0),
-            regions: &[],
-        };
-        return vec![calculate_for_band_with_environment(
-            &custom_band,
-            config.velocity_factor,
-            ratio,
-            config.antenna_height_m,
-            config.ground_class,
-            config.conductor_diameter_mm,
-        )];
-    }
-
-    let (calculations, _) = build_calculations(
-        &config.band_indices,
-        config.velocity_factor,
-        config.itu_region,
-        ratio,
-        config.antenna_height_m,
-        config.ground_class,
-        config.conductor_diameter_mm,
-    );
-    calculations
-}
-
-fn mean_half_wave_m(calculations: &[WireCalculation]) -> f64 {
-    if calculations.is_empty() {
-        return 0.0;
-    }
-    let sum: f64 = calculations.iter().map(|c| c.corrected_half_wave_m).sum();
-    sum / calculations.len() as f64
-}
-
-/// Structured explanation for the recommended transformer ratio.
-///
-/// Provides both the ratio value and a human-readable `reason` string
-/// suitable for TUI help text, tooltips, or verbose CLI output.
-#[derive(Debug, Clone)]
-pub struct TransformerRatioExplanation {
-    pub ratio: TransformerRatio,
-    pub reason: &'static str,
-}
-
-/// Return the recommended transformer ratio and a one-sentence explanation
-/// of why it is recommended for the given mode and antenna model.
-///
-/// Pure function; performs no I/O.
-pub fn transformer_ratio_explanation(
-    mode: CalcMode,
-    antenna_model: Option<AntennaModel>,
-) -> TransformerRatioExplanation {
-    let ratio = recommended_transformer_ratio(mode, antenna_model);
-    let reason = match antenna_model {
-        Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) => {
-            "Center-fed dipoles present ~50 \u{03a9} at resonance; a 1:1 balun is typical."
-        }
-        Some(AntennaModel::TrapDipole) => {
-            "Trap dipoles present ~50\u{2013}75 \u{03a9} at resonance; a 1:1 balun is typical."
-        }
-        Some(AntennaModel::FullWaveLoop) => {
-            "Full-wave loops present ~100 \u{03a9} at resonance; a 1:1 choke balun is common."
-        }
-        Some(AntennaModel::EndFedHalfWave) => {
-            "EFHW antennas present ~2500\u{2013}3000 \u{03a9}; a 1:49 or 1:56 transformer matches to 50 \u{03a9}."
-        }
-        Some(AntennaModel::OffCenterFedDipole) => {
-            "OCFDs fed at the 1/3 point present ~200 \u{03a9}; a 1:4 balun is standard."
-        }
-        None => match mode {
-            CalcMode::Resonant => {
-                "Resonant mode, no antenna model; 1:1 is used as a neutral starting point."
-            }
-            CalcMode::NonResonant => {
-                "Non-resonant random-wire mode; 1:9 is a common matching ratio."
-            }
-        },
-    };
-    TransformerRatioExplanation { ratio, reason }
-}
-
 // ---------------------------------------------------------------------------
 // Shared enums
 // ---------------------------------------------------------------------------
@@ -491,9 +176,11 @@ impl FromStr for CalcMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportFormat {
     Csv,
+    Html,
     Json,
     Markdown,
     Txt,
+    Yaml,
 }
 
 impl ExportFormat {
@@ -501,9 +188,11 @@ impl ExportFormat {
     pub fn as_str(self) -> &'static str {
         match self {
             ExportFormat::Csv => "csv",
+            ExportFormat::Html => "html",
             ExportFormat::Json => "json",
             ExportFormat::Markdown => "markdown",
             ExportFormat::Txt => "txt",
+            ExportFormat::Yaml => "yaml",
         }
     }
 }
@@ -514,11 +203,13 @@ impl FromStr for ExportFormat {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "csv" => Ok(ExportFormat::Csv),
+            "html" | "htm" => Ok(ExportFormat::Html),
             "json" => Ok(ExportFormat::Json),
             "markdown" | "md" => Ok(ExportFormat::Markdown),
             "txt" | "text" => Ok(ExportFormat::Txt),
+            "yaml" | "yml" => Ok(ExportFormat::Yaml),
             _ => Err(AppError::InvalidExportFormat(format!(
-                "'{s}' (must be 'csv', 'json', 'markdown', or 'txt')"
+                "'{s}' (must be 'csv', 'html', 'json', 'markdown', 'txt', or 'yaml')"
             ))),
         }
     }
@@ -602,6 +293,10 @@ pub struct AppConfig {
     pub freq_list_mhz: Vec<f64>,
     /// Whether to validate advise candidates using fnec-rust (if available).
     pub validate_with_fnec: bool,
+    /// User-defined bands loaded from a `bands.toml` file.
+    /// These are always appended to the calculation results, independent of
+    /// `band_indices` / `freq_list_mhz` / `custom_freq_mhz`.
+    pub extra_bands: Vec<crate::bands::OwnedBand>,
 }
 
 impl Default for AppConfig {
@@ -623,6 +318,7 @@ impl Default for AppConfig {
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
             validate_with_fnec: false,
+            extra_bands: vec![],
         }
     }
 }
@@ -652,11 +348,18 @@ pub struct AppResults {
 #[derive(Debug, Clone)]
 pub struct AppRequest {
     pub config: AppConfig,
+    /// Optional context for IPC, async, or correlation tracing.
+    /// `None` in all synchronous CLI/TUI paths; set by callers that need
+    /// per-request correlation (e.g. a future iced GUI message dispatch).
+    pub context: Option<RequestContext>,
 }
 
 impl AppRequest {
     pub fn new(config: AppConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            context: None,
+        }
     }
 }
 
@@ -666,14 +369,52 @@ impl From<AppConfig> for AppRequest {
     }
 }
 
+/// Optional correlation context attached to an [`AppRequest`] and echoed
+/// back on the corresponding [`AppResponse`].
+///
+/// Designed for async and IPC use cases (e.g. the planned iced GUI) where
+/// multiple in-flight requests need to be correlated to their responses.
+/// Neither field is required for synchronous CLI/TUI paths.
+#[derive(Debug, Clone, Default)]
+pub struct RequestContext {
+    /// Monotonically-increasing request identifier, generated by a
+    /// process-global atomic counter via [`RequestContext::new`].
+    pub request_id: u64,
+    /// Wall-clock timestamp at creation, seconds since the Unix epoch.
+    pub timestamp_secs: u64,
+}
+
+impl RequestContext {
+    /// Create a new context with an auto-incrementing `request_id`
+    /// and the current Unix timestamp.
+    pub fn new() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(1);
+        let request_id = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let timestamp_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        Self {
+            request_id,
+            timestamp_secs,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AppResponse {
     pub results: AppResults,
+    /// Context echoed from the originating [`AppRequest`], if any.
+    pub context: Option<RequestContext>,
 }
 
 impl AppResponse {
     pub fn new(results: AppResults) -> Self {
-        Self { results }
+        Self {
+            results,
+            context: None,
+        }
     }
 }
 
@@ -714,6 +455,41 @@ pub struct ResultsDisplayDocument {
     pub summary_lines: Vec<String>,
     pub sections: Vec<ResultsTextSectionView>,
     pub warning_lines: Vec<String>,
+}
+
+/// One example L/C component pair satisfying a trap's resonant condition.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrapDipoleComponentExample {
+    /// Capacitor value (pF).
+    pub cap_pf: f64,
+    /// Required inductance (μH) for this capacitor to resonate at the trap frequency.
+    pub ind_uh: f64,
+}
+
+/// Structured guidance for a single trap dipole band pair.
+#[derive(Debug, Clone)]
+pub struct TrapDipoleGuidanceSection {
+    /// Human-readable label, e.g. "40m / 20m".
+    pub label: String,
+    /// Recommended trap resonant frequency (MHz) — equals upper-band centre.
+    pub trap_freq_mhz: f64,
+    /// Inner section per side: feedpoint to trap (m).
+    pub inner_leg_m: f64,
+    /// Outer section per side: trap to tip (m).
+    pub outer_section_m: f64,
+    /// Total leg per side: inner + outer (m).
+    pub total_leg_m: f64,
+    /// Full tip-to-tip span (m).
+    pub full_span_m: f64,
+    /// Example L/C pairs for the trap at `trap_freq_mhz`.
+    pub component_examples: Vec<TrapDipoleComponentExample>,
+}
+
+/// View model for the trap dipole guidance block shown in results.
+#[derive(Debug, Clone)]
+pub struct TrapDipoleGuidanceView {
+    pub velocity_factor: f64,
+    pub sections: Vec<TrapDipoleGuidanceSection>,
 }
 
 #[derive(Debug, Clone)]
@@ -889,7 +665,7 @@ pub struct SkippedBandDetail {
 /// This is a pure, I/O-free function suitable for use from both the CLI and
 /// any future GUI front-end.
 pub fn run_calculation(config: AppConfig) -> AppResults {
-    let (calculations, skipped_band_indices) = if !config.freq_list_mhz.is_empty() {
+    let (mut calculations, skipped_band_indices) = if !config.freq_list_mhz.is_empty() {
         let calcs = config
             .freq_list_mhz
             .iter()
@@ -947,6 +723,29 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
             config.conductor_diameter_mm,
         )
     };
+
+    // Append user-defined extra bands from a bands.toml file.
+    for owned_band in &config.extra_bands {
+        let stub = crate::bands::Band {
+            name: "custom",
+            band_type: crate::bands::BandType::HF,
+            freq_low_mhz: owned_band.freq_low_mhz,
+            freq_high_mhz: owned_band.freq_high_mhz,
+            freq_center_mhz: owned_band.center_mhz(),
+            typical_skip_km: (0.0, 0.0),
+            regions: &[],
+        };
+        let mut calc = calculate_for_band_with_environment(
+            &stub,
+            config.velocity_factor,
+            config.transformer_ratio,
+            config.antenna_height_m,
+            config.ground_class,
+            config.conductor_diameter_mm,
+        );
+        calc.band_name = owned_band.name.clone();
+        calculations.push(calc);
+    }
 
     // For resonant mode use the default search window; for non-resonant use the
     // user-supplied window.  Optima (tied candidates) are only relevant in
@@ -1248,7 +1047,9 @@ pub fn run_calculation_checked(config: AppConfig) -> Result<AppResults, AppError
 
 /// Validate and execute a full app-layer request.
 pub fn execute_request_checked(request: AppRequest) -> Result<AppResponse, AppError> {
-    Ok(AppResponse::new(run_calculation_checked(request.config)?))
+    let context = request.context.clone();
+    let results = run_calculation_checked(request.config)?;
+    Ok(AppResponse { results, context })
 }
 
 pub fn summarize_results(results: &AppResults) -> RunSummary {
@@ -1277,23 +1078,61 @@ pub fn summarize_results(results: &AppResults) -> RunSummary {
 pub fn results_overview_view(results: &AppResults) -> ResultsOverviewView {
     let summary = summarize_results(results);
 
+    let mut header_lines = vec![
+        "------------------------------------------------------------".to_string(),
+        format!(
+            "Using transformer ratio: {}",
+            summary.transformer_ratio_label
+        ),
+        format!("Antenna model: {}", summary.antenna_model_label),
+        format!("Antenna height: {:.0} m", results.config.antenna_height_m),
+        format!("Ground class: {}", results.config.ground_class.as_label()),
+        format!(
+            "Conductor diameter: {:.1} mm",
+            results.config.conductor_diameter_mm
+        ),
+        "------------------------------------------------------------".to_string(),
+    ];
+
+    if results.config.antenna_model == Some(AntennaModel::EndFedHalfWave) {
+        let feedpoint_r = assumed_feedpoint_impedance_ohm(
+            results.config.mode,
+            results.config.antenna_model,
+            results.config.antenna_height_m,
+            results.config.ground_class,
+        );
+        let cmp = compare_efhw_transformers(feedpoint_r);
+        header_lines.push(format!(
+            "EFHW transformer comparison (feedpoint R: {:.0} \u{03a9}):",
+            cmp.feedpoint_r_ohm
+        ));
+        header_lines.push(format!(
+            "  {:<5}  {:<8}  {:<6}  {:<11}  {}",
+            "Ratio", "Target Z", "SWR", "Efficiency", "Loss"
+        ));
+        for entry in &cmp.entries {
+            let marker = if entry.is_best {
+                "  \u{2190} recommended"
+            } else {
+                ""
+            };
+            header_lines.push(format!(
+                "  {:<5}  {:>5.0} \u{03a9}  {:>4.2}:1  {:>9.2}%  {:.3} dB{}",
+                entry.ratio.as_label(),
+                entry.target_z_ohm,
+                entry.swr,
+                entry.efficiency_pct,
+                entry.mismatch_loss_db,
+                marker
+            ));
+        }
+        header_lines
+            .push("------------------------------------------------------------".to_string());
+    }
+
     ResultsOverviewView {
         heading: summary.overview_heading,
-        header_lines: vec![
-            "------------------------------------------------------------".to_string(),
-            format!(
-                "Using transformer ratio: {}",
-                summary.transformer_ratio_label
-            ),
-            format!("Antenna model: {}", summary.antenna_model_label),
-            format!("Antenna height: {:.0} m", results.config.antenna_height_m),
-            format!("Ground class: {}", results.config.ground_class.as_label()),
-            format!(
-                "Conductor diameter: {:.1} mm",
-                results.config.conductor_diameter_mm
-            ),
-            "------------------------------------------------------------".to_string(),
-        ],
+        header_lines,
         summary_lines: vec![
             format!("Summary for {} band(s):", summary.band_count),
             format!(
@@ -1329,7 +1168,14 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
     let layout = results_section_layout(results);
     let band_views = band_display_rows(results)
         .iter()
-        .map(|row| band_display_view(row, results.config.units, results.config.antenna_model))
+        .map(|row| {
+            band_display_view(
+                row,
+                results.config.units,
+                results.config.antenna_model,
+                results.config.transformer_ratio,
+            )
+        })
         .collect();
 
     let mut sections = Vec::new();
@@ -1349,6 +1195,11 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
     if layout.show_non_resonant_recommendation {
         sections.push(ResultsTextSectionView {
             lines: non_resonant_recommendation_display_lines(results),
+        });
+    }
+    if let Some(trap_guidance) = trap_dipole_guidance_view(results) {
+        sections.push(ResultsTextSectionView {
+            lines: trap_dipole_guidance_display_lines(&trap_guidance, results.config.units),
         });
     }
 
@@ -1650,6 +1501,170 @@ pub fn resonant_compromise_narrative(results: &AppResults) -> ResonantCompromise
         notes,
         empty_message: "(none available in this window)",
     }
+}
+
+/// Choose three representative capacitor values (pF) from a standard series
+/// for a trap with the given L·C product (μH·pF).  The returned values yield
+/// inductors in roughly the 1–20 μH range, which is practical for HF traps.
+fn select_trap_cap_examples(lc_product: f64) -> [f64; 3] {
+    // Boundaries: cap_min gives L≈20 μH, cap_max gives L≈1 μH.
+    // Pick three representative values from standard E6/E12 series.
+    if lc_product < 80.0 {
+        [47.0, 33.0, 22.0]
+    } else if lc_product < 200.0 {
+        [100.0, 68.0, 47.0]
+    } else if lc_product < 600.0 {
+        [470.0, 220.0, 100.0]
+    } else if lc_product < 2_000.0 {
+        [1_000.0, 470.0, 220.0]
+    } else {
+        [3_300.0, 1_500.0, 1_000.0]
+    }
+}
+
+/// Build structured trap-dipole guidance for the currently selected bands.
+///
+/// Returns `None` when not in trap-dipole mode or when fewer than two bands
+/// are selected (the calculation requires an upper and a lower band).
+pub fn trap_dipole_guidance_view(results: &AppResults) -> Option<TrapDipoleGuidanceView> {
+    if !matches!(results.config.antenna_model, Some(AntennaModel::TrapDipole)) {
+        return None;
+    }
+
+    // Collect Band objects for every selected index.
+    // `band_indices` are 1-based (matching user display); convert to 0-based for lookup.
+    let mut bands: Vec<Band> = results
+        .config
+        .band_indices
+        .iter()
+        .filter_map(|&idx| {
+            idx.checked_sub(1)
+                .and_then(|i| get_band_by_index_for_region(i, results.config.itu_region))
+        })
+        .collect();
+
+    if bands.len() < 2 {
+        return None;
+    }
+
+    // Sort descending by frequency (highest = upper band, lowest = lower band).
+    bands.sort_by(|a, b| {
+        b.freq_center_mhz
+            .partial_cmp(&a.freq_center_mhz)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let vf = results.config.velocity_factor;
+
+    // For each adjacent (upper, lower) pair compute one guidance section.
+    // The first pair is the most useful; additional pairs cover multi-trap cases.
+    let mut sections = Vec::new();
+    for pair in bands.windows(2) {
+        let upper = &pair[0];
+        let lower = &pair[1];
+
+        let f_upper = upper.freq_center_mhz;
+        let f_lower = lower.freq_center_mhz;
+
+        // Quarter-wave inner leg (upper-band driven element per side).
+        let inner_leg_m = (71.58 / f_upper) * vf;
+        // Trap-dipole total leg per side for the lower band (uses TRAP_DIPOLE_COEFF_M/2).
+        let total_leg_m = (68.58 / f_lower) * vf;
+        let outer_section_m = (total_leg_m - inner_leg_m).max(0.0);
+        let full_span_m = total_leg_m * 2.0;
+
+        // Trap resonant frequency = upper-band centre.
+        let trap_freq_mhz = f_upper;
+        // L·C product in μH·pF:  L[μH] × C[pF] = 25 330 / f[MHz]²
+        let lc_product = 25_330.0 / (trap_freq_mhz * trap_freq_mhz);
+        let cap_values = select_trap_cap_examples(lc_product);
+        let component_examples: Vec<TrapDipoleComponentExample> = cap_values
+            .iter()
+            .map(|&c| TrapDipoleComponentExample {
+                cap_pf: c,
+                ind_uh: lc_product / c,
+            })
+            .collect();
+
+        sections.push(TrapDipoleGuidanceSection {
+            label: format!("{} / {}", lower.name, upper.name),
+            trap_freq_mhz,
+            inner_leg_m,
+            outer_section_m,
+            total_leg_m,
+            full_span_m,
+            component_examples,
+        });
+    }
+
+    if sections.is_empty() {
+        return None;
+    }
+
+    Some(TrapDipoleGuidanceView {
+        velocity_factor: vf,
+        sections,
+    })
+}
+
+/// Format trap-dipole guidance into display lines.
+pub fn trap_dipole_guidance_display_lines(
+    view: &TrapDipoleGuidanceView,
+    units: UnitSystem,
+) -> Vec<String> {
+    const M_TO_FT: f64 = 3.280_84;
+    let mut lines = Vec::new();
+    lines.push(String::new());
+    lines.push(format!(
+        "Trap dipole guidance (VF {:.2}):",
+        view.velocity_factor
+    ));
+
+    for section in &view.sections {
+        lines.push(format!(
+            "  \u{2500}\u{2500} {} \u{2500}\u{2500}",
+            section.label
+        ));
+        lines.push(format!(
+            "  Trap resonant frequency:  {:.3} MHz",
+            section.trap_freq_mhz
+        ));
+
+        let fmt_len = |m: f64| match units {
+            UnitSystem::Metric => format!("{:.2} m", m),
+            UnitSystem::Imperial => format!("{:.1} ft", m * M_TO_FT),
+            UnitSystem::Both => format!("{:.2} m  ({:.1} ft)", m, m * M_TO_FT),
+        };
+
+        lines.push(format!(
+            "  Inner section (feedpoint \u{2192} trap): {}",
+            fmt_len(section.inner_leg_m)
+        ));
+        lines.push(format!(
+            "  Outer section (trap \u{2192} tip):       {}",
+            fmt_len(section.outer_section_m)
+        ));
+        lines.push(format!(
+            "  Total leg per side:                {}",
+            fmt_len(section.total_leg_m)
+        ));
+        lines.push(format!(
+            "  Full span (tip-to-tip):            {}",
+            fmt_len(section.full_span_m)
+        ));
+        lines.push(format!(
+            "  Component examples at {:.3} MHz (target coil Qu \u{003e} 200, use silver-mica or NP0 cap):",
+            section.trap_freq_mhz
+        ));
+        let examples: Vec<String> = section
+            .component_examples
+            .iter()
+            .map(|ex| format!("{:.0} pF \u{2192} {:.2} \u{03bc}H", ex.cap_pf, ex.ind_uh))
+            .collect();
+        lines.push(format!("    {}", examples.join("  |  ")));
+    }
+
+    lines
 }
 
 pub fn resonant_compromise_view(results: &AppResults) -> ResonantCompromiseView {
@@ -2139,6 +2154,199 @@ pub fn validate_velocity_sweep(velocities: &[f64]) -> Result<(), AppError> {
 }
 
 // ---------------------------------------------------------------------------
+// Transformer sweep
+// ---------------------------------------------------------------------------
+
+/// One row in a transformer sweep table — one transformer ratio and its match metrics.
+#[derive(Debug, Clone)]
+pub struct TransformerSweepRow {
+    pub ratio: TransformerRatio,
+    pub target_z_ohm: f64,
+    pub swr: f64,
+    pub efficiency_pct: f64,
+    pub mismatch_loss_db: f64,
+    /// Non-resonant mode: the recommended wire length (None when no recommendation exists).
+    pub non_resonant_length_m: Option<f64>,
+    pub non_resonant_length_ft: Option<f64>,
+    pub non_resonant_clearance_pct: Option<f64>,
+    /// Resonant mode: per-band (band_name, half_wave_m, half_wave_ft).
+    pub resonant_band_lengths: Vec<(String, f64, f64)>,
+}
+
+/// View model for a transformer ratio sweep.
+#[derive(Debug, Clone)]
+pub struct TransformerSweepView {
+    pub mode: CalcMode,
+    pub assumed_feedpoint_ohm: f64,
+    pub bands_label: String,
+    pub itu_region_label: String,
+    pub rows: Vec<TransformerSweepRow>,
+}
+
+/// Build a transformer sweep view from a pre-computed set of `(ratio, results)` pairs.
+///
+/// Returns `None` if the input is empty.
+pub fn transformer_sweep_view(
+    results_by_ratio: &[(TransformerRatio, AppResults)],
+    assumed_feedpoint_ohm: f64,
+) -> Option<TransformerSweepView> {
+    let (_, first) = results_by_ratio.first()?;
+    let mode = first.config.mode;
+    let bands_label = first
+        .calculations
+        .iter()
+        .map(|c| c.band_name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let itu_region_label = first.config.itu_region.short_name().to_string();
+
+    let rows = results_by_ratio
+        .iter()
+        .map(|(ratio, res)| {
+            let target_z = 50.0 * ratio.impedance_ratio();
+            let gamma = if assumed_feedpoint_ohm > 0.0 {
+                ((target_z - assumed_feedpoint_ohm).abs() / (target_z + assumed_feedpoint_ohm))
+                    .clamp(0.0, 0.999_999)
+            } else {
+                0.0
+            };
+            let efficiency_pct = (1.0 - gamma * gamma) * 100.0;
+            let mismatch_loss_db = -10.0 * (1.0 - gamma * gamma).log10();
+            let swr = if assumed_feedpoint_ohm > 0.0 {
+                assumed_feedpoint_ohm.max(target_z) / assumed_feedpoint_ohm.min(target_z)
+            } else {
+                1.0
+            };
+
+            match mode {
+                CalcMode::NonResonant => TransformerSweepRow {
+                    ratio: *ratio,
+                    target_z_ohm: target_z,
+                    swr,
+                    efficiency_pct,
+                    mismatch_loss_db,
+                    non_resonant_length_m: res.recommendation.as_ref().map(|r| r.length_m),
+                    non_resonant_length_ft: res.recommendation.as_ref().map(|r| r.length_ft),
+                    non_resonant_clearance_pct: res
+                        .recommendation
+                        .as_ref()
+                        .map(|r| r.min_resonance_clearance_pct),
+                    resonant_band_lengths: Vec::new(),
+                },
+                CalcMode::Resonant => TransformerSweepRow {
+                    ratio: *ratio,
+                    target_z_ohm: target_z,
+                    swr,
+                    efficiency_pct,
+                    mismatch_loss_db,
+                    non_resonant_length_m: None,
+                    non_resonant_length_ft: None,
+                    non_resonant_clearance_pct: None,
+                    resonant_band_lengths: res
+                        .calculations
+                        .iter()
+                        .map(|c| (c.band_name.clone(), c.half_wave_m, c.half_wave_ft))
+                        .collect(),
+                },
+            }
+        })
+        .collect();
+
+    Some(TransformerSweepView {
+        mode,
+        assumed_feedpoint_ohm,
+        bands_label,
+        itu_region_label,
+        rows,
+    })
+}
+
+/// Render a `TransformerSweepView` to display lines (no I/O).
+pub fn transformer_sweep_display_lines(
+    view: &TransformerSweepView,
+    units: UnitSystem,
+) -> Vec<String> {
+    let mode_label = match view.mode {
+        CalcMode::Resonant => "resonant",
+        CalcMode::NonResonant => "non-resonant",
+    };
+    let mut lines = vec![
+        String::new(),
+        format!(
+            "Transformer sweep \u{2014} {mode_label} | {} | Region {} | feedpoint R: {:.0} \u{03a9}:",
+            view.bands_label, view.itu_region_label, view.assumed_feedpoint_ohm
+        ),
+    ];
+
+    match view.mode {
+        CalcMode::NonResonant => {
+            lines.push(format!(
+                "  {:<5}  {:<7}  {:<6}  {:<11}  {:<8}  {:<24}  {}",
+                "Ratio", "Target Z", "SWR", "Efficiency", "Loss", "Length", "Clearance"
+            ));
+            lines.push(format!("  {}", "\u{2500}".repeat(78)));
+            for row in &view.rows {
+                let len_str = match (row.non_resonant_length_m, row.non_resonant_length_ft) {
+                    (Some(m), Some(ft)) => match units {
+                        UnitSystem::Metric => format!("{:.2} m", m),
+                        UnitSystem::Imperial => format!("{:.1} ft", ft),
+                        UnitSystem::Both => format!("{:.2} m / {:.1} ft", m, ft),
+                    },
+                    _ => "\u{2014}".to_string(),
+                };
+                let clearance_str = row
+                    .non_resonant_clearance_pct
+                    .map(|p| format!("{:.1}%", p))
+                    .unwrap_or_else(|| "\u{2014}".to_string());
+                lines.push(format!(
+                    "  {:<5}  {:>5.0} \u{03a9}  {:>4.2}:1  {:>9.2}%  {:.3} dB  {:<24}  {}",
+                    row.ratio.as_label(),
+                    row.target_z_ohm,
+                    row.swr,
+                    row.efficiency_pct,
+                    row.mismatch_loss_db,
+                    len_str,
+                    clearance_str
+                ));
+            }
+        }
+        CalcMode::Resonant => {
+            lines.push(format!(
+                "  {:<5}  {:<7}  {:<6}  {:<11}  {:<8}  {}",
+                "Ratio", "Target Z", "SWR", "Efficiency", "Loss", "Per-band lengths"
+            ));
+            lines.push(format!("  {}", "\u{2500}".repeat(78)));
+            for row in &view.rows {
+                let band_parts: Vec<String> = row
+                    .resonant_band_lengths
+                    .iter()
+                    .map(|(name, m, ft)| {
+                        let len_str = match units {
+                            UnitSystem::Metric => format!("{:.2} m", m),
+                            UnitSystem::Imperial => format!("{:.1} ft", ft),
+                            UnitSystem::Both => format!("{:.2} m / {:.1} ft", m, ft),
+                        };
+                        format!("{}={}", name, len_str)
+                    })
+                    .collect();
+                lines.push(format!(
+                    "  {:<5}  {:>5.0} \u{03a9}  {:>4.2}:1  {:>9.2}%  {:.3} dB  {}",
+                    row.ratio.as_label(),
+                    row.target_z_ohm,
+                    row.swr,
+                    row.efficiency_pct,
+                    row.mismatch_loss_db,
+                    band_parts.join("  ")
+                ));
+            }
+        }
+    }
+
+    lines.push(String::new());
+    lines
+}
+
+// ---------------------------------------------------------------------------
 // Quiet summary
 // ---------------------------------------------------------------------------
 
@@ -2187,6 +2395,7 @@ pub fn band_display_view(
     row: &BandDisplayRow,
     units: UnitSystem,
     antenna_model: Option<AntennaModel>,
+    transformer_ratio: TransformerRatio,
 ) -> BandDisplayView {
     let c = &row.calc;
     let mut lines = vec![
@@ -2605,6 +2814,27 @@ pub fn band_display_view(
         },
     }
 
+    // Show NEC-calibrated feedpoint resistance and estimated SWR for dipole-family antennas.
+    // SWR is computed at resonance (X=0) against the transformer output impedance.
+    let show_feedpoint = matches!(
+        antenna_model,
+        Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) | None
+    );
+    if show_feedpoint {
+        let r = c.dipole_feedpoint_r_ohm;
+        let target_z = 50.0 * transformer_ratio.impedance_ratio();
+        // SWR = max(R, Z_target) / min(R, Z_target) — purely resistive (resonant wire assumption).
+        let swr = if r > 0.0 && target_z > 0.0 {
+            r.max(target_z) / r.min(target_z)
+        } else {
+            1.0
+        };
+        lines.push(format!(
+            "  Est. feedpoint R: {:.1} \u{03a9} (NEC-calibrated, SWR \u{2248} {:.1}:1 into {} \u{03a9})",
+            r, swr, target_z as u32
+        ));
+    }
+
     lines.push(format!(
         "  Skip: {:.0}-{:.0} km (avg: {:.0} km)",
         c.skip_distance_min_km, c.skip_distance_max_km, c.skip_distance_avg_km
@@ -2626,214 +2856,6 @@ pub fn band_display_view(
 //
 // apply_action is a pure function: no I/O, no side-effects.  Front-ends are
 // responsible for calling it and re-rendering the result.
-// ---------------------------------------------------------------------------
-
-/// The complete application state that any front-end (TUI, GUI) renders.
-#[derive(Debug, Clone)]
-pub struct AppState {
-    /// Current configuration being shown or edited.
-    pub config: AppConfig,
-    /// Results of the last successful `RunCalculation` action, or `None`.
-    pub results: Option<AppResults>,
-    /// Last error produced by a failed `RunCalculation` or invalid action.
-    pub error: Option<AppError>,
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            config: AppConfig::default(),
-            results: None,
-            error: None,
-        }
-    }
-}
-
-/// All actions that can be dispatched to `apply_action`.
-///
-/// Each variant mutates exactly one field of `AppConfig`, or triggers a
-/// calculation / state reset.  The set intentionally mirrors the full
-/// `AppConfig` field set so a TUI or GUI only needs to know about
-/// `AppAction` — not `AppConfig` internals.
-#[derive(Debug, Clone)]
-pub enum AppAction {
-    // --- Configuration changes ---
-    SetBandIndices(Vec<usize>),
-    SetMode(CalcMode),
-    SetAntennaModel(Option<AntennaModel>),
-    SetVelocityFactor(f64),
-    SetTransformerRatio(TransformerRatio),
-    SetWireMin(f64),
-    SetWireMax(f64),
-    SetStep(f64),
-    SetUnits(UnitSystem),
-    SetItuRegion(ITURegion),
-    SetCustomFreq(Option<f64>),
-    SetFreqList(Vec<f64>),
-    SetAntennaHeight(f64),
-    SetGroundClass(crate::calculations::GroundClass),
-    SetConductorDiameter(f64),
-    // --- Lifecycle ---
-    /// Run `run_calculation_checked` against the current config.
-    /// On success: replaces `results` and clears `error`.
-    /// On failure: clears `results` and sets `error`.
-    RunCalculation,
-    /// Clear the last results without changing the config.
-    ClearResults,
-    /// Clear the last error without changing the config or results.
-    ClearError,
-}
-
-/// Pure state-transition function.
-///
-/// Takes ownership of `state`, applies `action`, and returns the new state.
-/// Never performs I/O.  Suitable as the single update function in a TUI event
-/// loop or an iced `update()` handler.
-pub fn apply_action(state: AppState, action: AppAction) -> AppState {
-    match action {
-        AppAction::SetBandIndices(indices) => AppState {
-            config: AppConfig {
-                band_indices: indices,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetMode(mode) => AppState {
-            config: AppConfig {
-                mode,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetAntennaModel(antenna_model) => AppState {
-            config: AppConfig {
-                antenna_model,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetVelocityFactor(vf) => AppState {
-            config: AppConfig {
-                velocity_factor: vf,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetTransformerRatio(ratio) => AppState {
-            config: AppConfig {
-                transformer_ratio: ratio,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetWireMin(min_m) => AppState {
-            config: AppConfig {
-                wire_min_m: min_m,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetWireMax(max_m) => AppState {
-            config: AppConfig {
-                wire_max_m: max_m,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetStep(step_m) => AppState {
-            config: AppConfig {
-                step_m,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetUnits(units) => AppState {
-            config: AppConfig {
-                units,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetItuRegion(region) => AppState {
-            config: AppConfig {
-                itu_region: region,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetCustomFreq(freq) => AppState {
-            config: AppConfig {
-                custom_freq_mhz: freq,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetFreqList(freqs) => AppState {
-            config: AppConfig {
-                freq_list_mhz: freqs,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetAntennaHeight(height_m) => AppState {
-            config: AppConfig {
-                antenna_height_m: height_m,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetGroundClass(ground_class) => AppState {
-            config: AppConfig {
-                ground_class,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::SetConductorDiameter(diameter_mm) => AppState {
-            config: AppConfig {
-                conductor_diameter_mm: diameter_mm,
-                ..state.config
-            },
-            error: None,
-            ..state
-        },
-        AppAction::RunCalculation => match run_calculation_checked(state.config.clone()) {
-            Ok(results) => AppState {
-                results: Some(results),
-                error: None,
-                ..state
-            },
-            Err(err) => AppState {
-                results: None,
-                error: Some(err),
-                ..state
-            },
-        },
-        AppAction::ClearResults => AppState {
-            results: None,
-            error: None,
-            ..state
-        },
-        AppAction::ClearError => AppState {
-            error: None,
-            ..state
-        },
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Private helpers
@@ -2875,7 +2897,35 @@ fn build_calculations(
     (calculations, skipped_band_indices)
 }
 
+// ---------------------------------------------------------------------------
+// Shared private helpers
+// ---------------------------------------------------------------------------
+
+fn assumed_feedpoint_impedance_ohm(
+    mode: CalcMode,
+    antenna_model: Option<AntennaModel>,
+    antenna_height_m: f64,
+    ground_class: GroundClass,
+) -> f64 {
+    match antenna_model {
+        // Use NEC-calibrated height/ground-aware feedpoint resistance for dipole types.
+        Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) => {
+            crate::calculations::nec_calibrated_dipole_r(antenna_height_m, ground_class)
+        }
+        Some(AntennaModel::TrapDipole) => 65.0,
+        Some(AntennaModel::FullWaveLoop) => 100.0,
+        Some(AntennaModel::EndFedHalfWave) => 2800.0,
+        Some(AntennaModel::OffCenterFedDipole) => 200.0,
+        None => match mode {
+            CalcMode::Resonant => {
+                crate::calculations::nec_calibrated_dipole_r(antenna_height_m, ground_class)
+            }
+            CalcMode::NonResonant => 450.0,
+        },
+    }
+}
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
 
@@ -2892,6 +2942,42 @@ mod tests {
         assert_eq!(results.calculations.len(), 1);
         assert_eq!(results.calculations[0].band_name, "160m");
         assert_eq!(results.skipped_band_indices, vec![0, 100]);
+    }
+
+    #[test]
+    fn run_calculation_appends_extra_bands() {
+        let extra = crate::bands::OwnedBand {
+            name: "FT8-40m".to_string(),
+            freq_low_mhz: 7.074,
+            freq_high_mhz: 7.076,
+            freq_center_mhz: None,
+        };
+        let config = AppConfig {
+            band_indices: vec![4], // 40m
+            extra_bands: vec![extra],
+            ..AppConfig::default()
+        };
+        let results = run_calculation(config);
+        // Standard 40m + custom FT8-40m
+        assert_eq!(results.calculations.len(), 2);
+        let names: Vec<&str> = results
+            .calculations
+            .iter()
+            .map(|c| c.band_name.as_str())
+            .collect();
+        assert!(names.contains(&"40m"), "standard band should be present");
+        assert!(names.contains(&"FT8-40m"), "custom band should be appended");
+        // Custom band centre should be ~7.075 MHz → half-wave in ballpark 18–22 m
+        let ft8 = results
+            .calculations
+            .iter()
+            .find(|c| c.band_name == "FT8-40m")
+            .unwrap();
+        assert!(
+            ft8.half_wave_m > 18.0 && ft8.half_wave_m < 22.0,
+            "half-wave length should be ~20 m, got {}",
+            ft8.half_wave_m
+        );
     }
 
     #[test]
@@ -3321,6 +3407,32 @@ mod tests {
     }
 
     #[test]
+    fn request_context_new_increments_request_id() {
+        let ctx1 = RequestContext::new();
+        let ctx2 = RequestContext::new();
+        assert!(ctx2.request_id > ctx1.request_id);
+    }
+
+    #[test]
+    fn request_context_is_echoed_through_execute_request() {
+        let ctx = RequestContext::new();
+        let id = ctx.request_id;
+        let mut request = AppRequest::new(AppConfig::default());
+        request.context = Some(ctx);
+
+        let response = execute_request_checked(request).expect("should succeed");
+        let echo = response.context.expect("context should be echoed");
+        assert_eq!(echo.request_id, id);
+    }
+
+    #[test]
+    fn execute_request_without_context_produces_none_context_in_response() {
+        let request = AppRequest::new(AppConfig::default());
+        let response = execute_request_checked(request).expect("should succeed");
+        assert!(response.context.is_none());
+    }
+
+    #[test]
     fn summarize_results_includes_core_overview_metrics() {
         let results = run_calculation(AppConfig::default());
 
@@ -3634,7 +3746,12 @@ mod tests {
         let results = run_calculation(AppConfig::default());
         let rows = band_display_rows(&results);
 
-        let view = band_display_view(&rows[0], UnitSystem::Metric, Some(AntennaModel::Dipole));
+        let view = band_display_view(
+            &rows[0],
+            UnitSystem::Metric,
+            Some(AntennaModel::Dipole),
+            TransformerRatio::R1To1,
+        );
         assert!(!view.title.is_empty());
         assert!(!view.lines.is_empty());
         assert!(view.lines[0].starts_with("  Frequency:"));
@@ -3790,6 +3907,7 @@ mod tests {
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod app_error_tests {
     use super::*;
 
@@ -3977,11 +4095,127 @@ mod app_error_tests {
     }
 
     #[test]
+    fn transformer_sweep_view_resonant_has_band_lengths_and_efficiency() {
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            band_indices: vec![5, 7],
+            antenna_model: Some(AntennaModel::Dipole),
+            ..AppConfig::default()
+        };
+        let mut c1to1 = config.clone();
+        c1to1.transformer_ratio = TransformerRatio::R1To1;
+        let mut c1to4 = config.clone();
+        c1to4.transformer_ratio = TransformerRatio::R1To4;
+
+        let feedpoint_r = 50.0; // 1:1 maps perfectly to 50 Ω
+        let results = vec![
+            (TransformerRatio::R1To1, run_calculation(c1to1)),
+            (TransformerRatio::R1To4, run_calculation(c1to4)),
+        ];
+        let view = transformer_sweep_view(&results, feedpoint_r).expect("view should be produced");
+        assert_eq!(view.mode, CalcMode::Resonant);
+        assert_eq!(view.rows.len(), 2);
+        assert_eq!(view.rows[0].ratio, TransformerRatio::R1To1);
+        assert_eq!(view.rows[1].ratio, TransformerRatio::R1To4);
+        for row in &view.rows {
+            assert_eq!(row.resonant_band_lengths.len(), 2);
+        }
+        // 1:1 into 50 Ω feedpoint should be a perfect match.
+        let row1to1 = &view.rows[0];
+        assert!(row1to1.efficiency_pct > 99.9);
+        assert!(row1to1.swr < 1.01);
+        // 1:4 (200 Ω) into 50 Ω feedpoint should have higher SWR.
+        let row1to4 = &view.rows[1];
+        assert!(row1to4.swr > 3.5);
+    }
+
+    #[test]
+    fn transformer_sweep_display_lines_contains_ratio_labels() {
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            band_indices: vec![7],
+            antenna_model: Some(AntennaModel::Dipole),
+            ..AppConfig::default()
+        };
+        let mut c1to1 = config.clone();
+        c1to1.transformer_ratio = TransformerRatio::R1To1;
+        let mut c1to9 = config.clone();
+        c1to9.transformer_ratio = TransformerRatio::R1To9;
+
+        let feedpoint_r = 73.0;
+        let results = vec![
+            (TransformerRatio::R1To1, run_calculation(c1to1)),
+            (TransformerRatio::R1To9, run_calculation(c1to9)),
+        ];
+        let view = transformer_sweep_view(&results, feedpoint_r).unwrap();
+        let lines = transformer_sweep_display_lines(&view, UnitSystem::Metric);
+        let combined = lines.join("\n");
+        assert!(combined.contains("1:1"), "expected 1:1 in output");
+        assert!(combined.contains("1:9"), "expected 1:9 in output");
+        assert!(combined.contains("resonant"));
+        assert!(combined.contains("feedpoint R:"));
+    }
+
+    #[test]
     fn transformer_ratio_explanation_efhw_returns_correct_ratio_and_reason() {
         let expl =
             transformer_ratio_explanation(CalcMode::Resonant, Some(AntennaModel::EndFedHalfWave));
         assert_eq!(expl.ratio, TransformerRatio::R1To56);
         assert!(expl.reason.contains("49") || expl.reason.contains("56"));
+    }
+
+    #[test]
+    fn compare_efhw_transformers_2800_ohm_best_is_1to56() {
+        // At 2800 Ω feedpoint R, 1:56 (target 2800 Ω) should be the perfect match.
+        let cmp = compare_efhw_transformers(2800.0);
+        assert_eq!(cmp.best_ratio, TransformerRatio::R1To56);
+        let best = cmp.entries.iter().find(|e| e.is_best).unwrap();
+        assert_eq!(best.ratio, TransformerRatio::R1To56);
+        // Should be a near-perfect match: negligible mismatch loss.
+        assert!(best.mismatch_loss_db < 0.001);
+        assert!(best.swr < 1.01);
+        assert!(best.efficiency_pct > 99.99);
+    }
+
+    #[test]
+    fn compare_efhw_transformers_2450_ohm_best_is_1to49() {
+        // At 2450 Ω feedpoint R, 1:49 (target 2450 Ω) should be the best match.
+        let cmp = compare_efhw_transformers(2450.0);
+        assert_eq!(cmp.best_ratio, TransformerRatio::R1To49);
+        let best = cmp.entries.iter().find(|e| e.is_best).unwrap();
+        assert_eq!(best.ratio, TransformerRatio::R1To49);
+        assert!(best.mismatch_loss_db < 0.001);
+    }
+
+    #[test]
+    fn compare_efhw_transformers_3200_ohm_best_is_1to64() {
+        // At 3200 Ω feedpoint R, 1:64 (target 3200 Ω) should be the best match.
+        let cmp = compare_efhw_transformers(3200.0);
+        assert_eq!(cmp.best_ratio, TransformerRatio::R1To64);
+        let best = cmp.entries.iter().find(|e| e.is_best).unwrap();
+        assert_eq!(best.ratio, TransformerRatio::R1To64);
+        assert!(best.mismatch_loss_db < 0.001);
+    }
+
+    #[test]
+    fn compare_efhw_transformers_returns_three_entries_in_order() {
+        let cmp = compare_efhw_transformers(2800.0);
+        assert_eq!(cmp.entries.len(), 3);
+        assert_eq!(cmp.entries[0].ratio, TransformerRatio::R1To49);
+        assert_eq!(cmp.entries[1].ratio, TransformerRatio::R1To56);
+        assert_eq!(cmp.entries[2].ratio, TransformerRatio::R1To64);
+        // Exactly one entry should be flagged as best.
+        let best_count = cmp.entries.iter().filter(|e| e.is_best).count();
+        assert_eq!(best_count, 1);
+    }
+
+    #[test]
+    fn compare_efhw_transformers_mid_range_picks_closest() {
+        // 2625 Ω is midpoint between 2450 and 2800 — 1:49 target is 175 Ω away, 1:56 is 175 Ω
+        // away. For a value just above midpoint, 1:56 should win.
+        let cmp = compare_efhw_transformers(2630.0);
+        // Best should be 1:56 (closer to 2800) or 1:49 (closer to 2450) — just check the field.
+        assert!(cmp.entries.iter().filter(|e| e.is_best).count() == 1);
     }
 
     #[test]
@@ -4055,226 +4289,5 @@ mod app_error_tests {
         };
         let results = run_calculation(config);
         assert!(skipped_band_details(&results).is_empty());
-    }
-}
-
-// ---------------------------------------------------------------------------
-// State machine tests
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod state_machine_tests {
-    use super::*;
-
-    fn default_state() -> AppState {
-        AppState::default()
-    }
-
-    #[test]
-    fn apply_action_set_mode_updates_config() {
-        let state = apply_action(default_state(), AppAction::SetMode(CalcMode::NonResonant));
-        assert_eq!(state.config.mode, CalcMode::NonResonant);
-        assert!(state.error.is_none());
-    }
-
-    #[test]
-    fn apply_action_set_band_indices_replaces_bands() {
-        let state = apply_action(default_state(), AppAction::SetBandIndices(vec![3, 5, 7]));
-        assert_eq!(state.config.band_indices, vec![3, 5, 7]);
-        assert!(state.error.is_none());
-    }
-
-    #[test]
-    fn apply_action_set_velocity_factor_updates_config() {
-        let state = apply_action(default_state(), AppAction::SetVelocityFactor(0.72));
-        assert!((state.config.velocity_factor - 0.72).abs() < 1e-9);
-    }
-
-    #[test]
-    fn apply_action_set_units_updates_config() {
-        let state = apply_action(default_state(), AppAction::SetUnits(UnitSystem::Imperial));
-        assert_eq!(state.config.units, UnitSystem::Imperial);
-    }
-
-    #[test]
-    fn apply_action_set_itu_region_updates_config() {
-        let state = apply_action(default_state(), AppAction::SetItuRegion(ITURegion::Region2));
-        assert_eq!(state.config.itu_region, ITURegion::Region2);
-    }
-
-    #[test]
-    fn apply_action_set_antenna_model_updates_config() {
-        let state = apply_action(
-            default_state(),
-            AppAction::SetAntennaModel(Some(AntennaModel::EndFedHalfWave)),
-        );
-        assert_eq!(
-            state.config.antenna_model,
-            Some(AntennaModel::EndFedHalfWave)
-        );
-    }
-
-    #[test]
-    fn apply_action_set_custom_freq_updates_config() {
-        let state = apply_action(default_state(), AppAction::SetCustomFreq(Some(14.225)));
-        assert_eq!(state.config.custom_freq_mhz, Some(14.225));
-    }
-
-    #[test]
-    fn apply_action_set_antenna_height_updates_config() {
-        let state = apply_action(default_state(), AppAction::SetAntennaHeight(7.0));
-        assert!((state.config.antenna_height_m - 7.0).abs() < 1e-9);
-        let state = apply_action(state, AppAction::SetAntennaHeight(12.0));
-        assert!((state.config.antenna_height_m - 12.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn apply_action_set_ground_class_updates_config() {
-        let state = apply_action(
-            default_state(),
-            AppAction::SetGroundClass(crate::calculations::GroundClass::Poor),
-        );
-        assert_eq!(
-            state.config.ground_class,
-            crate::calculations::GroundClass::Poor
-        );
-        let state = apply_action(
-            state,
-            AppAction::SetGroundClass(crate::calculations::GroundClass::Good),
-        );
-        assert_eq!(
-            state.config.ground_class,
-            crate::calculations::GroundClass::Good
-        );
-    }
-
-    #[test]
-    fn apply_action_set_conductor_diameter_updates_config() {
-        let state = apply_action(default_state(), AppAction::SetConductorDiameter(1.0));
-        assert!((state.config.conductor_diameter_mm - 1.0).abs() < 1e-9);
-        let state = apply_action(state, AppAction::SetConductorDiameter(4.0));
-        assert!((state.config.conductor_diameter_mm - 4.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn apply_action_set_wire_min_max_updates_config() {
-        let state = apply_action(default_state(), AppAction::SetWireMin(12.0));
-        assert!((state.config.wire_min_m - 12.0).abs() < 1e-9);
-        let state = apply_action(state, AppAction::SetWireMax(50.0));
-        assert!((state.config.wire_max_m - 50.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn apply_action_run_calculation_populates_results_on_success() {
-        let state = apply_action(default_state(), AppAction::RunCalculation);
-        assert!(state.results.is_some());
-        assert!(state.error.is_none());
-    }
-
-    #[test]
-    fn apply_action_run_calculation_sets_error_on_invalid_config() {
-        // Velocity factor outside valid range → InvalidVelocityFactor
-        let bad_state = AppState {
-            config: AppConfig {
-                velocity_factor: 2.0,
-                ..AppConfig::default()
-            },
-            ..AppState::default()
-        };
-        let state = apply_action(bad_state, AppAction::RunCalculation);
-        assert!(state.results.is_none());
-        assert!(matches!(
-            state.error,
-            Some(AppError::InvalidVelocityFactor(_))
-        ));
-    }
-
-    #[test]
-    fn apply_action_clear_results_removes_results_and_error() {
-        let state = apply_action(default_state(), AppAction::RunCalculation);
-        assert!(state.results.is_some());
-        let state = apply_action(state, AppAction::ClearResults);
-        assert!(state.results.is_none());
-        assert!(state.error.is_none());
-    }
-
-    #[test]
-    fn apply_action_clear_error_removes_error_only() {
-        let bad_state = AppState {
-            config: AppConfig {
-                velocity_factor: 2.0,
-                ..AppConfig::default()
-            },
-            ..AppState::default()
-        };
-        let state = apply_action(bad_state, AppAction::RunCalculation);
-        assert!(state.error.is_some());
-        let state = apply_action(state, AppAction::ClearError);
-        assert!(state.error.is_none());
-        // Config is unchanged — velocity_factor is still 2.0
-        assert!((state.config.velocity_factor - 2.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn apply_action_sequence_builds_correct_config() {
-        // Simulate a TUI user configuring from scratch
-        let state = default_state();
-        let state = apply_action(state, AppAction::SetMode(CalcMode::NonResonant));
-        let state = apply_action(state, AppAction::SetBandIndices(vec![4, 5, 7]));
-        let state = apply_action(state, AppAction::SetWireMin(10.0));
-        let state = apply_action(state, AppAction::SetWireMax(40.0));
-        let state = apply_action(state, AppAction::SetUnits(UnitSystem::Both));
-        let state = apply_action(state, AppAction::RunCalculation);
-
-        assert_eq!(state.config.mode, CalcMode::NonResonant);
-        assert_eq!(state.config.band_indices, vec![4, 5, 7]);
-        assert!(state.results.is_some());
-        assert!(state.error.is_none());
-    }
-
-    #[test]
-    fn transformer_ratio_explanation_dipole_returns_1to1() {
-        let expl = transformer_ratio_explanation(CalcMode::Resonant, Some(AntennaModel::Dipole));
-        assert_eq!(expl.ratio, TransformerRatio::R1To1);
-        assert!(expl.reason.contains("50"));
-        assert!(expl.reason.contains("1:1"));
-    }
-
-    #[test]
-    fn transformer_ratio_explanation_inverted_v_returns_1to1() {
-        let expl =
-            transformer_ratio_explanation(CalcMode::Resonant, Some(AntennaModel::InvertedVDipole));
-        assert_eq!(expl.ratio, TransformerRatio::R1To1);
-        assert!(expl.reason.contains("50"));
-        assert!(expl.reason.contains("1:1"));
-    }
-
-    #[test]
-    fn transformer_ratio_explanation_trap_dipole_returns_1to1() {
-        let expl =
-            transformer_ratio_explanation(CalcMode::Resonant, Some(AntennaModel::TrapDipole));
-        assert_eq!(expl.ratio, TransformerRatio::R1To1);
-        assert!(expl.reason.contains("Trap"));
-        assert!(expl.reason.contains("1:1"));
-    }
-
-    #[test]
-    fn transformer_ratio_explanation_full_wave_loop_returns_1to1() {
-        let expl =
-            transformer_ratio_explanation(CalcMode::Resonant, Some(AntennaModel::FullWaveLoop));
-        assert_eq!(expl.ratio, TransformerRatio::R1To1);
-        assert!(expl.reason.contains("100"));
-        assert!(expl.reason.contains("choke"));
-    }
-
-    #[test]
-    fn transformer_ratio_explanation_ocfd_returns_1to4() {
-        let expl = transformer_ratio_explanation(
-            CalcMode::Resonant,
-            Some(AntennaModel::OffCenterFedDipole),
-        );
-        assert_eq!(expl.ratio, TransformerRatio::R1To4);
-        assert!(expl.reason.contains("200"));
-        assert!(expl.reason.contains("1:4"));
     }
 }

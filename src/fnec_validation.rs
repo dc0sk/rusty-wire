@@ -139,7 +139,7 @@ fn generate_dipole_nec_deck(
     // Calculate segment count: aim for ~lambda/20 segments
     let wavelength_m = 299.792458 / frequency_mhz;
     let min_segments = ((length_m / wavelength_m) * 20.0).ceil() as i32;
-    let segment_count = min_segments.max(21).min(100); // Clamp between 21 and 100
+    let segment_count = min_segments.clamp(21, 100); // Clamp between 21 and 100
 
     let half_length = length_m / 2.0;
     let wire_radius = wire_radius_mm / 1000.0; // Convert mm to meters
