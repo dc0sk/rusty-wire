@@ -85,14 +85,27 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-${{ matrix.arch }}-cargo-
 
+      - name: Install pandoc
+        run: sudo apt-get install -y pandoc
+
       - name: Build release binary
         run: cargo build --release --locked
+
+      - name: Generate man page
+        run: |
+          mkdir -p target/man
+          pandoc -s -t man docs/man/rusty-wire.1.md -o target/man/rusty-wire.1
+          gzip -9 target/man/rusty-wire.1
 
       - name: Package binary tarball
         run: |
           VERSION=${{ needs.create-release.outputs.version }}
-          ARCHIVE="rusty-wire-${VERSION}-${{ matrix.archive_suffix }}.tar.gz"
-          tar czf "$ARCHIVE" -C target/release rusty-wire
+          BUNDLE_DIR="rusty-wire-${VERSION}-${{ matrix.archive_suffix }}"
+          ARCHIVE="${BUNDLE_DIR}.tar.gz"
+          mkdir -p "$BUNDLE_DIR"
+          cp target/release/rusty-wire "$BUNDLE_DIR/"
+          cp target/man/rusty-wire.1.gz "$BUNDLE_DIR/"
+          tar czf "$ARCHIVE" "$BUNDLE_DIR"
 
       - name: Upload tarball to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -134,8 +147,17 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-${{ matrix.arch }}-cargo-
 
+      - name: Install pandoc
+        run: brew install pandoc
+
       - name: Build release binary
         run: cargo build --release --locked
+
+      - name: Generate man page
+        run: |
+          mkdir -p target/man
+          pandoc -s -t man docs/man/rusty-wire.1.md -o target/man/rusty-wire.1
+          gzip -9 target/man/rusty-wire.1
 
       - name: Package macOS artifacts
         run: |
@@ -144,15 +166,18 @@ jobs:
           ARCHIVE="${BUNDLE_DIR}.tar.gz"
           PKG="${BUNDLE_DIR}.pkg"
 
-          # tarball (for manual extraction)
+          # tarball (for manual extraction, includes man page)
           mkdir -p "$BUNDLE_DIR"
           cp target/release/rusty-wire "$BUNDLE_DIR/"
           cp README.md LICENSE "$BUNDLE_DIR/"
+          cp target/man/rusty-wire.1.gz "$BUNDLE_DIR/"
           tar czf "$ARCHIVE" "$BUNDLE_DIR"
 
-          # .pkg installer (installs rusty-wire into /usr/local/bin)
+          # .pkg installer (installs rusty-wire into /usr/local/bin + man page)
           mkdir -p pkg-root/usr/local/bin
+          mkdir -p pkg-root/usr/local/share/man/man1
           cp target/release/rusty-wire pkg-root/usr/local/bin/
+          cp target/man/rusty-wire.1.gz pkg-root/usr/local/share/man/man1/
           pkgbuild \
             --root pkg-root \
             --identifier io.github.dc0sk.rusty-wire \
@@ -191,20 +216,31 @@ jobs:
           key: windows-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: windows-x86_64-cargo-
 
+      - name: Install pandoc
+        run: choco install pandoc --no-progress -y
+
       - name: Build release binary
         run: cargo build --release --locked
+
+      - name: Generate plain-text manual
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path target\man | Out-Null
+          pandoc -s -t plain docs/man/rusty-wire.1.md -o target\man\rusty-wire.1.txt
 
       - name: Build Windows MSI
         shell: pwsh
         run: |
-          $version = "${{ needs.create-release.outputs.version }}"
+          $version    = "${{ needs.create-release.outputs.version }}"
           $binaryPath = "target\release\rusty-wire.exe"
+          $manualPath = "target\man\rusty-wire.1.txt"
           $msiName    = "rusty-wire-${version}-x86_64-windows.msi"
           $wixBin     = "${env:WIX}bin"
 
           & "${wixBin}\candle.exe" `
             "-dVersion=${version}" `
             "-dBinaryPath=${binaryPath}" `
+            "-dManualPath=${manualPath}" `
             packaging\windows\rusty-wire.wxs `
             -o rusty-wire.wixobj
 
@@ -250,8 +286,14 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.arch }}-cargo-deb-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-${{ matrix.arch }}-cargo-
 
-      - name: Install cargo-deb
-        run: cargo install cargo-deb --locked
+      - name: Install pandoc and cargo-deb
+        run: sudo apt-get install -y pandoc && cargo install cargo-deb --locked
+
+      - name: Generate man page
+        run: |
+          mkdir -p target/man
+          pandoc -s -t man docs/man/rusty-wire.1.md -o target/man/rusty-wire.1
+          gzip -9 target/man/rusty-wire.1
 
       - name: Build .deb package
         run: cargo deb --locked

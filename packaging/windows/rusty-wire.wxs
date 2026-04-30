@@ -5,9 +5,11 @@
   Variables injected at build time (candle -d...):
     Version     – semver string, e.g. 2.16.0
     BinaryPath  – path to rusty-wire.exe, e.g. target\release\rusty-wire.exe
+    ManualPath  – path to rusty-wire.1.txt, e.g. target\man\rusty-wire.1.txt
 
   The installer:
     • Installs rusty-wire.exe into C:\Program Files\rusty-wire\
+    • Installs rusty-wire.1.txt into C:\Program Files\rusty-wire\
     • Appends that directory to the system PATH
     • Supports clean removal via "Add or Remove Programs"
     • UpgradeCode is fixed so Windows detects and removes previous versions
@@ -43,6 +45,14 @@
       <Component Id="MainExecutable" Guid="*">
         <File Id="rusty_wire_exe"
               Source="$(var.BinaryPath)"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- Plain-text manual -->
+      <Component Id="Manual" Guid="*">
+        <File Id="rusty_wire_manual"
+              Source="$(var.ManualPath)"
+              Name="rusty-wire.1.txt"
               KeyPath="yes" />
       </Component>
 
