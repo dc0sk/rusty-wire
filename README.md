@@ -1,6 +1,6 @@
 # Rusty Wire
 
-![Version](https://img.shields.io/badge/version-2.14.0-blue)
+![Version](https://img.shields.io/badge/version-2.17.1-blue)
 ![License](https://img.shields.io/badge/license-GPL--2.0--or--later-green)
 ![Rust edition](https://img.shields.io/badge/rust-2021-orange)
 
@@ -19,7 +19,7 @@ amateur and shortwave bands. It covers six antenna models, recommends transforme
 automatically, and fits comfortably into shell scripts as well as interactive
 planning sessions.
 
-**2.14.0: HTML export, TUI export preview, collapsible result panels, and saved sessions · 3.x roadmap: desktop GUI (`iced`)**
+**2.17.1: man page, macOS `.pkg` + Windows `.msi` installers, custom band entries in `bands.toml` · 3.x roadmap: desktop GUI (`iced`)**
 
 ---
 
@@ -87,7 +87,24 @@ equal-tie support.
 
 ---
 
-## Quick Start
+## Installation
+
+### Pre-built packages (recommended)
+
+Download the latest release from the [GitHub Releases page](https://github.com/dc0sk/rusty-wire/releases).
+
+| Platform | Package | Notes |
+|----------|---------|-------|
+| Linux x86\_64 | `rusty-wire-<ver>-x86_64-linux.tar.gz` | Extract and copy binary to `PATH` |
+| Linux aarch64 | `rusty-wire-<ver>-aarch64-linux.tar.gz` | Raspberry Pi 4/5 and other ARM64 |
+| Linux (Debian/Ubuntu) | `rusty-wire_<ver>_amd64.deb` / `_arm64.deb` | `sudo dpkg -i rusty-wire_*.deb` |
+| macOS x86\_64 | `rusty-wire-<ver>-x86_64-macos.pkg` | Double-click or `sudo installer -pkg ... -target /` |
+| macOS aarch64 | `rusty-wire-<ver>-aarch64-macos.pkg` | Apple Silicon |
+| Windows x86\_64 | `rusty-wire-<ver>-x86_64-windows.msi` | Double-click — installs to `Program Files` and adds to PATH |
+
+The macOS `.pkg` and Linux `.deb` installers include the man page (`man rusty-wire` works after install).
+
+### Build from source
 
 ```bash
 # Build a release binary
@@ -100,10 +117,10 @@ cargo build --release
 ./target/release/rusty-wire --interactive
 
 # Launch the TUI (full-screen mode)
-./target/release/rusty-wire --tui
+./target/release/rusty-wire --interactive
 
 # During development
-cargo run -- [OPTIONS]
+cargo run --bin rusty-wire -- [OPTIONS]
 ```
 
 ---
@@ -254,6 +271,7 @@ For formulas and optimizer objective functions see [docs/math.md](docs/math.md).
 
 | Document | Contents |
 |---|---|
+| [docs/man/rusty-wire.1.md](docs/man/rusty-wire.1.md) | Man page — full CLI reference (bundled in release packages) |
 | [docs/cli-guide.md](docs/cli-guide.md) | Full option reference and worked examples |
 | [docs/math.md](docs/math.md) | Formula definitions and optimizer objective functions (KaTeX) |
 | [docs/nec-calibration.md](docs/nec-calibration.md) | Workflow for fitting practical-model constants from NEC/reference sweeps |
@@ -272,7 +290,7 @@ For formulas and optimizer objective functions see [docs/math.md](docs/math.md).
 # Full suite — format gate, compile gate, unit tests, all regression scripts
 ./scripts/test-all.sh
 
-# Unit + integration suite only (296 tests)
+# Unit + integration suite only
 cargo test
 
 # Individual regression scripts
