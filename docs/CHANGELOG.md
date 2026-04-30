@@ -13,6 +13,18 @@ All notable changes to Rusty Wire are documented here.
 
 ---
 
+## [2.11.0] - 2026-04-30
+
+### Added
+- **Advise mode tradeoff notes**: each `--advise` candidate now includes a one-sentence tradeoff note generated from the NEC-calibrated feedpoint impedance, transformer target impedance, mismatch loss, and resonance clearance. Examples:
+  - `Best match: SWR ≈ 1.1:1 into 50 Ω, wide resonance clearance (18%).`
+  - `Good match: 97.6% efficiency, 0.11 dB loss, SWR ≈ 1.4:1 into 100 Ω.`
+  - `High mismatch: 1.80 dB loss (SWR 3.8:1 into 200 Ω); ATU strongly recommended.`
+  - Notes also shown in TUI advise panel (yellow text).
+- **Tradeoff note in all export formats**: CSV adds `tradeoff_note` column; JSON adds `"tradeoff_note"` field; Markdown adds `| Tradeoff Note |` column; TXT adds `note: …` line per candidate. **Roadmap items 3a/3b closed.**
+
+---
+
 ## [2.10.0] - 2026-04-30
 
 ### Added

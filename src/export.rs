@@ -774,17 +774,18 @@ pub fn to_txt(
 
 pub fn to_advise_csv(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
     let mut out = String::from(
-        "rank,ratio,recommended_length_m,recommended_length_ft,clearance_pct,estimated_efficiency_pct,mismatch_loss_db,average_length_shift_pct,score,validated,validation_status,validation_note,assumed_feedpoint_ohm\n",
+        "rank,ratio,recommended_length_m,recommended_length_ft,clearance_pct,estimated_efficiency_pct,mismatch_loss_db,average_length_shift_pct,score,tradeoff_note,validated,validation_status,validation_note,assumed_feedpoint_ohm\n",
     );
     for (idx, c) in candidates.iter().enumerate() {
         let note = c.validation_note.as_deref().unwrap_or("");
         let escaped_note = csv_escape(note);
+        let escaped_tradeoff = csv_escape(&c.tradeoff_note);
         let status = c
             .validation_status
             .map(|value| value.as_str())
             .unwrap_or("");
         out.push_str(&format!(
-            "{},{},{:.2},{:.2},{:.2},{:.2},{:.3},{:.2},{:.2},{},\"{}\",\"{}\",{:.0}\n",
+            "{},{},{:.2},{:.2},{:.2},{:.2},{:.3},{:.2},{:.2},\"{}\",{},\"{}\",\"{}\",{:.0}\n",
             idx + 1,
             c.ratio.as_label(),
             c.recommended_length_m,
@@ -794,6 +795,7 @@ pub fn to_advise_csv(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate])
             c.mismatch_loss_db,
             c.average_length_shift_pct,
             c.score,
+            escaped_tradeoff,
             c.validated,
             status,
             escaped_note,
@@ -821,8 +823,9 @@ pub fn to_advise_json(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]
             .validation_status
             .map(|status| format!("\"{}\"", status.as_str()))
             .unwrap_or_else(|| "null".to_string());
+        let tradeoff_json = format!("\"{}\"", json_escape(&c.tradeoff_note));
         out.push_str(&format!(
-            "    {{\"rank\": {}, \"ratio\": \"{}\", \"recommended_length_m\": {:.2}, \"recommended_length_ft\": {:.2}, \"clearance_pct\": {:.2}, \"estimated_efficiency_pct\": {:.2}, \"mismatch_loss_db\": {:.3}, \"average_length_shift_pct\": {:.2}, \"score\": {:.2}, \"validated\": {}, \"validation_status\": {}, \"validation_note\": {}}}{}\n",
+            "    {{\"rank\": {}, \"ratio\": \"{}\", \"recommended_length_m\": {:.2}, \"recommended_length_ft\": {:.2}, \"clearance_pct\": {:.2}, \"estimated_efficiency_pct\": {:.2}, \"mismatch_loss_db\": {:.3}, \"average_length_shift_pct\": {:.2}, \"score\": {:.2}, \"tradeoff_note\": {}, \"validated\": {}, \"validation_status\": {}, \"validation_note\": {}}}{}\n",
             idx + 1,
             c.ratio.as_label(),
             c.recommended_length_m,
@@ -832,6 +835,7 @@ pub fn to_advise_json(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]
             c.mismatch_loss_db,
             c.average_length_shift_pct,
             c.score,
+            tradeoff_json,
             c.validated,
             status_json,
             note_json,
@@ -848,8 +852,8 @@ pub fn to_advise_markdown(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandid
         "Assumed feedpoint impedance: {:.0} ohm\n\n",
         assumed_feedpoint_ohm
     ));
-    out.push_str("| Rank | Ratio | Wire (m) | Wire (ft) | Clearance (%) | Efficiency (%) | Mismatch Loss (dB) | Shift (%) | Score | Validated | Validation Status | Validation Note |\n");
-    out.push_str("|------|-------|----------|-----------|---------------|----------------|--------------------|-----------|-------|-----------|-------------------|-----------------|\n");
+    out.push_str("| Rank | Ratio | Wire (m) | Wire (ft) | Clearance (%) | Efficiency (%) | Mismatch Loss (dB) | Shift (%) | Score | Validated | Validation Status | Validation Note | Tradeoff Note |\n");
+    out.push_str("|------|-------|----------|-----------|---------------|----------------|--------------------|-----------|-------|-----------|-------------------|-----------------|---------------|\n");
     for (idx, c) in candidates.iter().enumerate() {
         let status = c
             .validation_status
@@ -861,8 +865,9 @@ pub fn to_advise_markdown(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandid
             .unwrap_or("")
             .replace('|', "\\|")
             .replace('\n', " ");
+        let tradeoff = c.tradeoff_note.replace('|', "\\|").replace('\n', " ");
         out.push_str(&format!(
-            "| {} | {} | {:.2} | {:.2} | {:.2} | {:.2} | {:.3} | {:.2} | {:.2} | {} | {} | {} |\n",
+            "| {} | {} | {:.2} | {:.2} | {:.2} | {:.2} | {:.3} | {:.2} | {:.2} | {} | {} | {} | {} |\n",
             idx + 1,
             c.ratio.as_label(),
             c.recommended_length_m,
@@ -875,6 +880,7 @@ pub fn to_advise_markdown(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandid
             if c.validated { "yes" } else { "no" },
             status,
             note,
+            tradeoff,
         ));
     }
     out
@@ -900,9 +906,10 @@ pub fn to_advise_txt(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate])
             c.estimated_efficiency_pct, c.mismatch_loss_db, c.min_resonance_clearance_pct
         ));
         out.push_str(&format!(
-            "    score {:.2}  correction shift {:.2}%\n\n",
+            "    score {:.2}  correction shift {:.2}%\n",
             c.score, c.average_length_shift_pct
         ));
+        out.push_str(&format!("    note: {}\n", c.tradeoff_note));
         out.push_str(&format!(
             "    fnec validated {}\n",
             if c.validated { "yes" } else { "no" }
@@ -1110,6 +1117,7 @@ mod tests {
                 mismatch_loss_db: 0.123,
                 average_length_shift_pct: 1.4,
                 score: 94.7,
+                tradeoff_note: "Good match: 95.2% efficiency, 0.12 dB loss.".to_string(),
                 validated: true,
                 validation_status: Some(ValidationStatus::Passed),
                 validation_note: Some("NEC cross-check OK".to_string()),
@@ -1123,6 +1131,7 @@ mod tests {
                 mismatch_loss_db: 0.456,
                 average_length_shift_pct: 1.9,
                 score: 89.1,
+                tradeoff_note: "Good match: 91.0% efficiency, 0.46 dB loss.".to_string(),
                 validated: false,
                 validation_status: Some(ValidationStatus::Skipped),
                 validation_note: Some("fnec-rust not found in PATH".to_string()),
@@ -1134,9 +1143,11 @@ mod tests {
     fn advise_csv_includes_validation_columns() {
         let csv = to_advise_csv(450.0, &sample_advise_candidates());
 
+        assert!(csv.contains("tradeoff_note"));
         assert!(csv.contains("validated"));
         assert!(csv.contains("validation_status"));
         assert!(csv.contains("validation_note"));
+        assert!(csv.contains("Good match: 95.2% efficiency"));
         assert!(csv.contains("true,\"passed\",\"NEC cross-check OK\""));
         assert!(csv.contains("false,\"skipped\",\"fnec-rust not found in PATH\""));
     }
@@ -1145,6 +1156,8 @@ mod tests {
     fn advise_json_includes_validation_fields() {
         let json = to_advise_json(450.0, &sample_advise_candidates());
 
+        assert!(json.contains("\"tradeoff_note\""));
+        assert!(json.contains("Good match: 95.2% efficiency"));
         assert!(json.contains("\"validated\": true"));
         assert!(json.contains("\"validated\": false"));
         assert!(json.contains("\"validation_status\": \"passed\""));
@@ -1157,15 +1170,17 @@ mod tests {
     fn advise_markdown_includes_validation_columns() {
         let markdown = to_advise_markdown(450.0, &sample_advise_candidates());
 
-        assert!(markdown.contains("| Validated | Validation Status | Validation Note |"));
+        assert!(markdown.contains("| Validated | Validation Status | Validation Note | Tradeoff Note |"));
         assert!(markdown.contains("| 1 | 1:9"));
         assert!(markdown.contains("| yes | passed | NEC cross-check OK |"));
+        assert!(markdown.contains("Good match: 95.2% efficiency"));
     }
 
     #[test]
     fn advise_txt_includes_validation_lines() {
         let txt = to_advise_txt(450.0, &sample_advise_candidates());
 
+        assert!(txt.contains("note: Good match: 95.2% efficiency"));
         assert!(txt.contains("fnec validated yes"));
         assert!(txt.contains("fnec validated no"));
         assert!(txt.contains("fnec status: passed"));

@@ -830,6 +830,7 @@ fn print_advise_candidates(
             "    score {:.2}  correction shift {:.2}%",
             candidate.score, candidate.average_length_shift_pct
         );
+        println!("    note: {}", candidate.tradeoff_note);
         if let Some(note) = &candidate.validation_note {
             let status = candidate
                 .validation_status

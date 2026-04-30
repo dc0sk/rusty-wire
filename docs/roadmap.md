@@ -55,12 +55,13 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 - Evaluate antenna-specific feed recommendations at the app layer
 
 ### 3a) Balun optimizer foundation (prerequisite for advise mode)
-- Add an app-layer optimizer that ranks balun/unun ratios for the selected band set and antenna assumptions
-- Surface optimizer output as structured view data usable by CLI/TUI/GUI
+- ✅ App-layer optimizer ranks balun/unun ratios for the selected band set and antenna assumptions
+- ✅ Optimizer output surfaced as structured `TransformerOptimizerView` / `AdviseView` usable by CLI/TUI/GUI
 
 ### 3b) `advise` candidate ranking mode
-- Add a user-facing flow where a named/explicit band set produces ranked wire-length + balun/unun candidates
-- Include compact scoring metadata (efficiency estimate and tradeoff notes) per candidate
+- ✅ User-facing `--advise` flag produces ranked wire-length + balun/unun candidates
+- ✅ Compact scoring metadata per candidate: efficiency %, mismatch loss dB, resonance clearance %, score
+- ✅ Tradeoff notes (v2.11.0): one-sentence human-readable summary per candidate — best match, SWR into target impedance, ATU advice. Available in CLI output and all export formats (CSV, JSON, Markdown, TXT). **GAP items 3a/3b closed.**
 
 ### 3c) Practical-limits mitigation (height/ground/conductor realism)
 - Implemented first pass: standardized antenna-height presets (7 m, 10 m, 12 m) with height-aware skip-distance scaling.

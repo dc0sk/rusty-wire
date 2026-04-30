@@ -185,6 +185,8 @@ pub struct AdviseCandidate {
     pub mismatch_loss_db: f64,
     pub average_length_shift_pct: f64,
     pub score: f64,
+    /// One-sentence tradeoff note explaining the key advantage / limitation of this candidate.
+    pub tradeoff_note: String,
     /// Whether fnec-rust validation was performed (if available).
     pub validated: bool,
     /// Structured validation status for pass/warn/reject handling.
@@ -263,6 +265,74 @@ pub fn optimize_transformer_candidates(config: &AppConfig) -> TransformerOptimiz
     }
 }
 
+/// Generate a one-sentence tradeoff note for an advise candidate.
+///
+/// The note describes the key practical advantage or limitation relative to
+/// the baseline 1:1 case, so the user can make a quick decision without
+/// having to interpret raw mismatch percentages.
+fn generate_tradeoff_note(
+    ratio: TransformerRatio,
+    assumed_feedpoint_ohm: f64,
+    estimated_efficiency_pct: f64,
+    mismatch_loss_db: f64,
+    min_resonance_clearance_pct: f64,
+    antenna_model: Option<AntennaModel>,
+) -> String {
+    let target_z = 50.0 * ratio.impedance_ratio();
+    let swr_at_target = if assumed_feedpoint_ohm > 0.0 {
+        assumed_feedpoint_ohm.max(target_z) / assumed_feedpoint_ohm.min(target_z)
+    } else {
+        1.0
+    };
+
+    // Check if this is near-perfect match
+    if swr_at_target < 1.15 {
+        if min_resonance_clearance_pct >= 15.0 {
+            return format!(
+                "Best match: SWR ≈ {:.1}:1 into {:.0} Ω, wide resonance clearance ({:.0}%).",
+                swr_at_target, target_z, min_resonance_clearance_pct
+            );
+        }
+        return format!(
+            "Best match: SWR ≈ {:.1}:1 into {:.0} Ω; check resonance clearance ({:.0}%).",
+            swr_at_target, target_z, min_resonance_clearance_pct
+        );
+    }
+
+    // EFHW / high-impedance case
+    if let Some(AntennaModel::EndFedHalfWave) = antenna_model {
+        if ratio.impedance_ratio() >= 49.0 {
+            return format!(
+                "Standard EFHW match ({} ratio, SWR ≈ {:.1}:1 into {:.0} Ω, loss {:.2} dB).",
+                ratio.as_label(), swr_at_target, target_z, mismatch_loss_db
+            );
+        }
+    }
+
+    // Categorise by loss level
+    if mismatch_loss_db < 0.5 {
+        format!(
+            "Good match: {:.1}% efficiency, {:.2} dB loss, SWR ≈ {:.1}:1 into {:.0} Ω.",
+            estimated_efficiency_pct, mismatch_loss_db, swr_at_target, target_z
+        )
+    } else if mismatch_loss_db < 1.5 {
+        format!(
+            "Moderate mismatch: {:.2} dB loss (SWR {:.1}:1 into {:.0} Ω); usable with ATU.",
+            mismatch_loss_db, swr_at_target, target_z
+        )
+    } else if mismatch_loss_db < 3.0 {
+        format!(
+            "High mismatch: {:.2} dB loss (SWR {:.1}:1 into {:.0} Ω); ATU strongly recommended.",
+            mismatch_loss_db, swr_at_target, target_z
+        )
+    } else {
+        format!(
+            "Very high mismatch: {:.2} dB loss (SWR {:.1}:1 into {:.0} Ω); practical use limited.",
+            mismatch_loss_db, swr_at_target, target_z
+        )
+    }
+}
+
 pub fn build_advise_candidates(config: &AppConfig, limit: usize) -> AdviseView {
     build_advise_candidates_with_thresholds(
         config,
@@ -295,6 +365,14 @@ pub fn build_advise_candidates_with_thresholds(
             calculate_best_non_resonant_length(&calculations, config.velocity_factor, non_res_cfg);
 
         if let Some(rec) = recommendation {
+            let note = generate_tradeoff_note(
+                ranked.ratio,
+                optimizer.assumed_feedpoint_ohm,
+                ranked.estimated_efficiency_pct,
+                ranked.mismatch_loss_db,
+                rec.min_resonance_clearance_pct,
+                config.antenna_model,
+            );
             candidates.push(AdviseCandidate {
                 ratio: ranked.ratio,
                 recommended_length_m: rec.length_m,
@@ -304,6 +382,7 @@ pub fn build_advise_candidates_with_thresholds(
                 mismatch_loss_db: ranked.mismatch_loss_db,
                 average_length_shift_pct: ranked.average_length_shift_pct,
                 score: ranked.score,
+                tradeoff_note: note,
                 validated: false,
                 validation_status: None,
                 validation_note: None,

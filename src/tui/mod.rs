@@ -1246,6 +1246,10 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
             "    score {:.2}  correction shift {:.2}%",
             candidate.score, candidate.average_length_shift_pct
         )));
+        out.push(Line::from(Span::styled(
+            format!("    note: {}", candidate.tradeoff_note),
+            Style::default().fg(Color::Yellow),
+        )));
         if let Some(note) = &candidate.validation_note {
             let status = candidate
                 .validation_status

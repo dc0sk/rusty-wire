@@ -1,3 +1,11 @@
+rusty-wire (2.11.0-1) unstable; urgency=medium
+
+  * Advise mode tradeoff notes: per-candidate one-sentence SWR/match/ATU summary.
+  * Tradeoff note in all export formats (CSV, JSON, Markdown, TXT).
+  * GAP-011 items 3a/3b closed.
+
+ -- Simon Keimer <dc0sk@example.com>  Wed, 30 Apr 2026 00:00:00 +0000
+
 rusty-wire (2.10.0-1) unstable; urgency=medium
 
   * NEC-calibrated feedpoint resistance and SWR estimate for dipole/inverted-V.
