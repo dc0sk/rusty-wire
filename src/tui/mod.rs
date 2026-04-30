@@ -3148,4 +3148,181 @@ mod tests {
         state.handle_key(press(KeyCode::Char('[')));
         assert_eq!(state.results_band_cursor, 0);
     }
+
+    // ── Session-save overlay ────────────────────────────────────────────────
+
+    #[test]
+    fn shift_s_opens_session_save_overlay() {
+        let mut state = TuiState::new(None);
+        state.handle_key(press_with_modifiers(
+            KeyCode::Char('S'),
+            KeyModifiers::SHIFT,
+        ));
+        assert!(state.show_session_save);
+        assert!(state.session_name_input.is_empty());
+    }
+
+    #[test]
+    fn session_save_typing_fills_input_buffer() {
+        let mut state = TuiState::new(None);
+        state.show_session_save = true;
+        state.handle_key(press(KeyCode::Char('m')));
+        state.handle_key(press(KeyCode::Char('y')));
+        assert_eq!(state.session_name_input, "my");
+    }
+
+    #[test]
+    fn session_save_backspace_removes_last_char() {
+        let mut state = TuiState::new(None);
+        state.show_session_save = true;
+        state.session_name_input = "abc".to_string();
+        state.handle_key(press(KeyCode::Backspace));
+        assert_eq!(state.session_name_input, "ab");
+    }
+
+    #[test]
+    fn session_save_esc_closes_overlay_and_clears_input() {
+        let mut state = TuiState::new(None);
+        state.show_session_save = true;
+        state.session_name_input = "draft".to_string();
+        state.handle_key(press(KeyCode::Esc));
+        assert!(!state.show_session_save);
+        assert!(state.session_name_input.is_empty());
+    }
+
+    #[test]
+    fn session_save_enter_with_empty_name_closes_without_saving() {
+        let mut state = TuiState::new(None);
+        state.show_session_save = true;
+        state.session_name_input = String::new();
+        state.handle_key(press(KeyCode::Enter));
+        assert!(!state.show_session_save);
+        assert!(state.export_status.is_none());
+    }
+
+    #[test]
+    fn session_save_enter_with_name_writes_and_shows_confirmation() {
+        crate::test_env::with_temp_home(|| {
+            let mut state = TuiState::new(None);
+            state.show_session_save = true;
+            state.session_name_input = "overlay-test".to_string();
+            state.handle_key(press(KeyCode::Enter));
+            assert!(!state.show_session_save);
+            assert!(state.session_name_input.is_empty());
+            assert_eq!(
+                state.export_status.as_deref(),
+                Some("Session \"overlay-test\" saved.")
+            );
+            let names = crate::sessions::SessionStore::list();
+            assert!(names.contains(&"overlay-test".to_string()));
+        });
+    }
+
+    // ── Session-picker overlay ──────────────────────────────────────────────
+
+    #[test]
+    fn session_picker_esc_closes_overlay() {
+        let mut state = TuiState::new(None);
+        state.show_session_picker = true;
+        state.session_picker_items = vec!["alpha".to_string(), "beta".to_string()];
+        state.handle_key(press(KeyCode::Esc));
+        assert!(!state.show_session_picker);
+    }
+
+    #[test]
+    fn session_picker_q_closes_overlay() {
+        let mut state = TuiState::new(None);
+        state.show_session_picker = true;
+        state.session_picker_items = vec!["alpha".to_string()];
+        state.handle_key(press(KeyCode::Char('q')));
+        assert!(!state.show_session_picker);
+    }
+
+    #[test]
+    fn session_picker_down_moves_cursor() {
+        let mut state = TuiState::new(None);
+        state.show_session_picker = true;
+        state.session_picker_items = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        state.session_picker_cursor = 0;
+        state.handle_key(press(KeyCode::Down));
+        assert_eq!(state.session_picker_cursor, 1);
+        state.handle_key(press(KeyCode::Down));
+        assert_eq!(state.session_picker_cursor, 2);
+        state.handle_key(press(KeyCode::Down));
+        assert_eq!(
+            state.session_picker_cursor, 2,
+            "should not exceed last item"
+        );
+    }
+
+    #[test]
+    fn session_picker_up_moves_cursor() {
+        let mut state = TuiState::new(None);
+        state.show_session_picker = true;
+        state.session_picker_items = vec!["a".to_string(), "b".to_string()];
+        state.session_picker_cursor = 1;
+        state.handle_key(press(KeyCode::Up));
+        assert_eq!(state.session_picker_cursor, 0);
+        state.handle_key(press(KeyCode::Up));
+        assert_eq!(state.session_picker_cursor, 0, "should not go below 0");
+    }
+
+    // ── Export-preview overlay ──────────────────────────────────────────────
+
+    #[test]
+    fn export_preview_esc_dismisses_overlay() {
+        let mut state = TuiState::new(None);
+        state.export_preview = Some((ExportFormat::Csv, false, "content".to_string()));
+        state.handle_key(press(KeyCode::Esc));
+        assert!(state.export_preview.is_none());
+    }
+
+    #[test]
+    fn export_preview_q_dismisses_overlay() {
+        let mut state = TuiState::new(None);
+        state.export_preview = Some((ExportFormat::Json, false, "{}".to_string()));
+        state.handle_key(press(KeyCode::Char('q')));
+        assert!(state.export_preview.is_none());
+    }
+
+    #[test]
+    fn export_preview_j_increments_scroll() {
+        let mut state = TuiState::new(None);
+        state.export_preview = Some((ExportFormat::Txt, false, "data".to_string()));
+        state.preview_scroll = 0;
+        state.handle_key(press(KeyCode::Down));
+        assert_eq!(state.preview_scroll, 1);
+        state.handle_key(press(KeyCode::Char('j')));
+        assert_eq!(state.preview_scroll, 2);
+    }
+
+    #[test]
+    fn export_preview_k_decrements_scroll_with_floor() {
+        let mut state = TuiState::new(None);
+        state.export_preview = Some((ExportFormat::Txt, false, "data".to_string()));
+        state.preview_scroll = 3;
+        state.handle_key(press(KeyCode::Up));
+        assert_eq!(state.preview_scroll, 2);
+        state.handle_key(press(KeyCode::Char('k')));
+        assert_eq!(state.preview_scroll, 1);
+        state.preview_scroll = 0;
+        state.handle_key(press(KeyCode::Char('k')));
+        assert_eq!(state.preview_scroll, 0, "should not underflow");
+    }
+
+    #[test]
+    fn export_preview_intercepts_all_keys_before_other_handlers() {
+        let mut state = TuiState::new(None);
+        state.export_preview = Some((ExportFormat::Csv, false, "data".to_string()));
+        // 'i' would normally open the info popup — with preview open it should not.
+        state.handle_key(press(KeyCode::Char('i')));
+        assert!(
+            state.export_preview.is_some(),
+            "preview should still be open"
+        );
+        assert!(
+            !state.show_info_popup,
+            "info popup must NOT open while preview is active"
+        );
+    }
 }
