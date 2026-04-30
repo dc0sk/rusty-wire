@@ -9,20 +9,24 @@ last_updated: 2026-04-30
 
 All notable changes to Rusty Wire are documented here.
 
-## [2.8.0] - 2026-04-30
+## [Unreleased]
+
+---
+
+## [2.10.0] - 2026-04-30
 
 ### Added
-- **NEC-requirements roadmap**: added comprehensive `docs/nec-requirements.md` with Phase 2/3 specifications for 14+ NEC decks (ground variants, height-aware, inverted-V, EFHW, conductor correction). Includes templates, execution procedures, tolerance gates, and integration plan for full COMP-001 resonant tolerance verification.
-- **Minimal NEC baseline (GAP-011)**: created 40m free-space resonant dipole NEC deck (`corpus/dipole-40m-freesp.nec`, fnec-rust reference: Z = 62.94 − j69.28 Ω) and enabled corpus test `corpus_resonant_dipole_40m_nec` for CI-gated baseline validation. Non-NEC corpus complete (6 skip-distance + 1 non-resonant multi-band + 1 NEC baseline = 9 active tests).
+- **NEC-calibrated feedpoint resistance and SWR estimate**: `nec_calibrated_dipole_r()` replaces the hardcoded 73 Ω free-space nominal with height/ground-aware values derived from the fnec-rust corpus sweeps. The band display now shows `Est. feedpoint R: XX.X Ω (NEC-calibrated, SWR ≈ N.N:1 into ZZ Ω)` for dipole-family antennas. The transformer optimizer also uses the calibrated value for mismatch-gamma and loss calculations. **GAP-011 item 3c closed.**
 
-### Infrastructure
-- **NEC reference integration**: fnec-rust Hallén solver validated against Python MoM for NEC-2 impedance reference generation; corpus test framework ready for 14+ additional NEC decks (Phase 3).
-- **Requirements gap closure**: GAP-011 status changed from "deferred" to "partial"; COMP-001 now has baseline dipole (free space) CI-gated with remaining antenna types and ground variants specified for Phase 3 continuation.
+  Reference anchor points (7.1 MHz, 2 mm wire, 51 segments, 0.95 VF cut):
 
-### Changed
-- **Interactive-mode test coverage** (slices 1–5): extended injected-I/O unit tests to cover all remaining interactive prompt paths — export format normalization (uppercase tokens), menu option 4 (ITU region change), menu option 5 (project info), deduplication of alias formats, mixed valid/invalid abort behavior, multi-format defaults, and single-format explicit output paths. Unit test count: 275 (up from 242 at v2.7.0).
-
-## [Unreleased]
+  | Height | Ground | R (Ω) | SWR into 50 Ω |
+  |--------|--------|--------|---------------|
+  | 7 m    | good   | 73.0   | 1.5:1         |
+  | 10 m   | poor   | 56.4   | 1.1:1         |
+  | 10 m   | average| 54.4   | 1.1:1         |
+  | 10 m   | good   | 52.8   | 1.1:1         |
+  | 12 m   | good   | 45.6   | 1.1:1         |
 
 ---
 
