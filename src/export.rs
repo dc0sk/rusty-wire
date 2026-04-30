@@ -16,6 +16,7 @@ use std::path::{Component, Path, PathBuf};
 pub fn default_output_name(format: ExportFormat) -> &'static str {
     match format {
         ExportFormat::Csv => "rusty-wire-results.csv",
+        ExportFormat::Html => "rusty-wire-results.html",
         ExportFormat::Json => "rusty-wire-results.json",
         ExportFormat::Markdown => "rusty-wire-results.md",
         ExportFormat::Txt => "rusty-wire-results.txt",
@@ -26,6 +27,7 @@ pub fn default_output_name(format: ExportFormat) -> &'static str {
 pub fn default_advise_output_name(format: ExportFormat) -> &'static str {
     match format {
         ExportFormat::Csv => "rusty-wire-advise.csv",
+        ExportFormat::Html => "rusty-wire-advise.html",
         ExportFormat::Json => "rusty-wire-advise.json",
         ExportFormat::Markdown => "rusty-wire-advise.md",
         ExportFormat::Txt => "rusty-wire-advise.txt",
@@ -101,6 +103,7 @@ pub fn export_results(
 
     let content = match format {
         ExportFormat::Csv => to_csv(calculations, recommendation, units, wire_min_m, wire_max_m),
+        ExportFormat::Html => to_html(calculations, recommendation, units, wire_min_m, wire_max_m),
         ExportFormat::Json => to_json(calculations, recommendation, units, wire_min_m, wire_max_m),
         ExportFormat::Markdown => {
             to_markdown(calculations, recommendation, units, wire_min_m, wire_max_m)
@@ -127,6 +130,7 @@ pub fn export_advise(
 
     let content = match format {
         ExportFormat::Csv => to_advise_csv(assumed_feedpoint_ohm, candidates),
+        ExportFormat::Html => to_advise_html(assumed_feedpoint_ohm, candidates),
         ExportFormat::Json => to_advise_json(assumed_feedpoint_ohm, candidates),
         ExportFormat::Markdown => to_advise_markdown(assumed_feedpoint_ohm, candidates),
         ExportFormat::Txt => to_advise_txt(assumed_feedpoint_ohm, candidates),
@@ -929,6 +933,242 @@ pub fn to_advise_txt(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate])
     out
 }
 
+pub fn to_html(
+    calculations: &[WireCalculation],
+    recommendation: Option<&NonResonantRecommendation>,
+    units: UnitSystem,
+    wire_min_m: f64,
+    wire_max_m: f64,
+) -> String {
+    let mut out = String::from(
+        "<!DOCTYPE html>\n\
+         <html lang=\"en\">\n\
+         <head>\n\
+         <meta charset=\"UTF-8\">\n\
+         <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n\
+         <title>Rusty Wire Results</title>\n\
+         <style>\n\
+         body{font-family:system-ui,sans-serif;margin:2rem;color:#222;}\n\
+         h1{color:#1a5276;}h2{color:#2874a6;margin-top:2rem;}\n\
+         table{border-collapse:collapse;font-size:0.85rem;width:100%;overflow-x:auto;display:block;}\n\
+         th{background:#2874a6;color:#fff;padding:6px 10px;text-align:left;white-space:nowrap;}\n\
+         td{border:1px solid #ccc;padding:5px 9px;white-space:nowrap;}\n\
+         tr:nth-child(even) td{background:#f4f6f9;}\n\
+         .note{color:#555;font-style:italic;margin-top:0.5rem;}\n\
+         </style>\n\
+         </head>\n\
+         <body>\n\
+         <h1>Rusty Wire Results</h1>\n",
+    );
+
+    out.push_str("<h2>Band Calculations</h2>\n<table>\n<thead><tr>\n");
+
+    // Build ordered column definitions: (header, value-fn) — unit-aware.
+    // We use a Vec<(&str, String)> per row to avoid repeating all three unit branches.
+    struct Col {
+        header: &'static str,
+        values: Vec<String>,
+    }
+
+    macro_rules! col {
+        ($hdr:expr, $vals:expr) => {
+            Col { header: $hdr, values: $vals }
+        };
+    }
+
+    let mut cols: Vec<Col> = vec![
+        col!("Band", calculations.iter().map(|c| html_escape(&c.band_name)).collect()),
+        col!("Ratio", calculations.iter().map(|c| html_escape(c.transformer_ratio_label)).collect()),
+        col!("Freq (MHz)", calculations.iter().map(|c| format!("{:.3}", c.frequency_mhz)).collect()),
+    ];
+
+    match units {
+        UnitSystem::Metric | UnitSystem::Both => {
+            cols.push(col!("Half-wave (m)", calculations.iter().map(|c| format!("{:.2}", c.half_wave_m)).collect()));
+            cols.push(col!("Half-wave corr (m)", calculations.iter().map(|c| format!("{:.2}", c.corrected_half_wave_m)).collect()));
+            cols.push(col!("Full-wave (m)", calculations.iter().map(|c| format!("{:.2}", c.full_wave_m)).collect()));
+            cols.push(col!("Full-wave corr (m)", calculations.iter().map(|c| format!("{:.2}", c.corrected_full_wave_m)).collect()));
+            cols.push(col!("Quarter-wave (m)", calculations.iter().map(|c| format!("{:.2}", c.quarter_wave_m)).collect()));
+            cols.push(col!("Quarter-wave corr (m)", calculations.iter().map(|c| format!("{:.2}", c.corrected_quarter_wave_m)).collect()));
+            cols.push(col!("EFHW (m)", calculations.iter().map(|c| format!("{:.2}", c.end_fed_half_wave_m)).collect()));
+            cols.push(col!("Loop circ (m)", calculations.iter().map(|c| format!("{:.2}", c.full_wave_loop_circumference_m)).collect()));
+            cols.push(col!("Loop side (m)", calculations.iter().map(|c| format!("{:.2}", c.full_wave_loop_square_side_m)).collect()));
+            cols.push(col!("Inv-V total (m)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_total_m)).collect()));
+            cols.push(col!("Inv-V leg (m)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_leg_m)).collect()));
+            cols.push(col!("Inv-V span 90° (m)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_span_90_m)).collect()));
+            cols.push(col!("Inv-V span 120° (m)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_span_120_m)).collect()));
+            cols.push(col!("OCFD 33 short (m)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_33_short_leg_m)).collect()));
+            cols.push(col!("OCFD 33 long (m)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_33_long_leg_m)).collect()));
+            cols.push(col!("OCFD 20 short (m)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_20_short_leg_m)).collect()));
+            cols.push(col!("OCFD 20 long (m)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_20_long_leg_m)).collect()));
+            cols.push(col!("Trap total (m)", calculations.iter().map(|c| format!("{:.2}", c.trap_dipole_total_m)).collect()));
+            cols.push(col!("Trap leg (m)", calculations.iter().map(|c| format!("{:.2}", c.trap_dipole_leg_m)).collect()));
+        }
+        _ => {}
+    }
+    if matches!(units, UnitSystem::Imperial | UnitSystem::Both) {
+        cols.push(col!("Half-wave (ft)", calculations.iter().map(|c| format!("{:.2}", c.half_wave_ft)).collect()));
+        cols.push(col!("Half-wave corr (ft)", calculations.iter().map(|c| format!("{:.2}", c.corrected_half_wave_ft)).collect()));
+        cols.push(col!("Full-wave (ft)", calculations.iter().map(|c| format!("{:.2}", c.full_wave_ft)).collect()));
+        cols.push(col!("Full-wave corr (ft)", calculations.iter().map(|c| format!("{:.2}", c.corrected_full_wave_ft)).collect()));
+        cols.push(col!("Quarter-wave (ft)", calculations.iter().map(|c| format!("{:.2}", c.quarter_wave_ft)).collect()));
+        cols.push(col!("Quarter-wave corr (ft)", calculations.iter().map(|c| format!("{:.2}", c.corrected_quarter_wave_ft)).collect()));
+        cols.push(col!("EFHW (ft)", calculations.iter().map(|c| format!("{:.2}", c.end_fed_half_wave_ft)).collect()));
+        cols.push(col!("Loop circ (ft)", calculations.iter().map(|c| format!("{:.2}", c.full_wave_loop_circumference_ft)).collect()));
+        cols.push(col!("Loop side (ft)", calculations.iter().map(|c| format!("{:.2}", c.full_wave_loop_square_side_ft)).collect()));
+        cols.push(col!("Inv-V total (ft)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_total_ft)).collect()));
+        cols.push(col!("Inv-V leg (ft)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_leg_ft)).collect()));
+        cols.push(col!("Inv-V span 90° (ft)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_span_90_ft)).collect()));
+        cols.push(col!("Inv-V span 120° (ft)", calculations.iter().map(|c| format!("{:.2}", c.inverted_v_span_120_ft)).collect()));
+        cols.push(col!("OCFD 33 short (ft)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_33_short_leg_ft)).collect()));
+        cols.push(col!("OCFD 33 long (ft)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_33_long_leg_ft)).collect()));
+        cols.push(col!("OCFD 20 short (ft)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_20_short_leg_ft)).collect()));
+        cols.push(col!("OCFD 20 long (ft)", calculations.iter().map(|c| format!("{:.2}", c.ocfd_20_long_leg_ft)).collect()));
+        cols.push(col!("Trap total (ft)", calculations.iter().map(|c| format!("{:.2}", c.trap_dipole_total_ft)).collect()));
+        cols.push(col!("Trap leg (ft)", calculations.iter().map(|c| format!("{:.2}", c.trap_dipole_leg_ft)).collect()));
+    }
+    cols.push(col!("Skip min (km)", calculations.iter().map(|c| format!("{:.0}", c.skip_distance_min_km)).collect()));
+    cols.push(col!("Skip max (km)", calculations.iter().map(|c| format!("{:.0}", c.skip_distance_max_km)).collect()));
+    cols.push(col!("Skip avg (km)", calculations.iter().map(|c| format!("{:.0}", c.skip_distance_avg_km)).collect()));
+
+    for col in &cols {
+        out.push_str(&format!("<th>{}</th>\n", col.header));
+    }
+    out.push_str("</tr></thead>\n<tbody>\n");
+
+    for row_idx in 0..calculations.len() {
+        out.push_str("<tr>\n");
+        for col in &cols {
+            out.push_str(&format!("<td>{}</td>\n", col.values[row_idx]));
+        }
+        out.push_str("</tr>\n");
+    }
+    out.push_str("</tbody>\n</table>\n");
+
+    // Non-resonant recommendation
+    out.push_str("<h2>Non-Resonant Recommendation</h2>\n");
+    match (recommendation, units) {
+        (Some(r), UnitSystem::Metric) => {
+            out.push_str(&format!(
+                "<p><strong>{:.2} m</strong> — resonance clearance: {:.2}%</p>\n",
+                r.length_m, r.min_resonance_clearance_pct
+            ));
+        }
+        (Some(r), UnitSystem::Imperial) => {
+            out.push_str(&format!(
+                "<p><strong>{:.2} ft</strong> — resonance clearance: {:.2}%</p>\n",
+                r.length_ft, r.min_resonance_clearance_pct
+            ));
+        }
+        (Some(r), UnitSystem::Both) => {
+            out.push_str(&format!(
+                "<p><strong>{:.2} m ({:.2} ft)</strong> — resonance clearance: {:.2}%</p>\n",
+                r.length_m, r.length_ft, r.min_resonance_clearance_pct
+            ));
+        }
+        (None, _) => out.push_str("<p class=\"note\">No recommendation available.</p>\n"),
+    }
+
+    // Resonant points
+    out.push_str("<h2>Resonant Points in Search Window</h2>\n");
+    out.push_str(&format!(
+        "<p class=\"note\">Window: {:.2}–{:.2} m ({:.2}–{:.2} ft)</p>\n",
+        wire_min_m,
+        wire_max_m,
+        wire_min_m / 0.3048,
+        wire_max_m / 0.3048,
+    ));
+
+    let mut points_rows = String::new();
+    for c in calculations {
+        for (harmonic, len_m) in collect_band_resonant_points_m(c, wire_min_m, wire_max_m) {
+            let len_cell = match units {
+                UnitSystem::Metric => format!("{:.2} m", len_m),
+                UnitSystem::Imperial => format!("{:.2} ft", len_m / 0.3048),
+                UnitSystem::Both => format!("{:.2} m ({:.2} ft)", len_m, len_m / 0.3048),
+            };
+            points_rows.push_str(&format!(
+                "<tr><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+                html_escape(&c.band_name),
+                harmonic,
+                len_cell
+            ));
+        }
+    }
+    if points_rows.is_empty() {
+        out.push_str("<p class=\"note\">No resonant points in this window.</p>\n");
+    } else {
+        out.push_str("<table>\n<thead><tr><th>Band</th><th>Harmonic</th><th>Length</th></tr></thead>\n<tbody>\n");
+        out.push_str(&points_rows);
+        out.push_str("</tbody>\n</table>\n");
+    }
+
+    out.push_str("</body>\n</html>\n");
+    out
+}
+
+pub fn to_advise_html(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
+    let mut out = String::from(
+        "<!DOCTYPE html>\n\
+         <html lang=\"en\">\n\
+         <head>\n\
+         <meta charset=\"UTF-8\">\n\
+         <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n\
+         <title>Rusty Wire Advise</title>\n\
+         <style>\n\
+         body{font-family:system-ui,sans-serif;margin:2rem;color:#222;}\n\
+         h1{color:#1a5276;}h2{color:#2874a6;margin-top:2rem;}\n\
+         table{border-collapse:collapse;font-size:0.85rem;}\n\
+         th{background:#2874a6;color:#fff;padding:6px 10px;text-align:left;white-space:nowrap;}\n\
+         td{border:1px solid #ccc;padding:5px 9px;}\n\
+         tr:nth-child(even) td{background:#f4f6f9;}\n\
+         .note{color:#555;font-style:italic;}\n\
+         </style>\n\
+         </head>\n\
+         <body>\n\
+         <h1>Rusty Wire Advise Candidates</h1>\n",
+    );
+    out.push_str(&format!(
+        "<p>Assumed feedpoint impedance: <strong>{:.0} Ω</strong></p>\n",
+        assumed_feedpoint_ohm
+    ));
+    out.push_str(
+        "<table>\n<thead><tr>\
+         <th>Rank</th><th>Ratio</th>\
+         <th>Length (m)</th><th>Length (ft)</th>\
+         <th>Clearance (%)</th><th>Efficiency (%)</th>\
+         <th>Mismatch loss (dB)</th><th>Score</th>\
+         <th>Validated</th><th>Status</th><th>Tradeoff note</th>\
+         </tr></thead>\n<tbody>\n",
+    );
+    for (idx, c) in candidates.iter().enumerate() {
+        let status = c
+            .validation_status
+            .map(|s| s.as_str().to_string())
+            .unwrap_or_else(|| "—".to_string());
+        out.push_str(&format!(
+            "<tr><td>{rank}</td><td>{ratio}</td>\
+             <td>{len_m:.2}</td><td>{len_ft:.2}</td>\
+             <td>{clear:.2}</td><td>{eff:.2}</td>\
+             <td>{loss:.3}</td><td>{score:.2}</td>\
+             <td>{validated}</td><td>{status}</td><td>{note}</td></tr>\n",
+            rank = idx + 1,
+            ratio = html_escape(c.ratio.as_label()),
+            len_m = c.recommended_length_m,
+            len_ft = c.recommended_length_ft,
+            clear = c.min_resonance_clearance_pct,
+            eff = c.estimated_efficiency_pct,
+            loss = c.mismatch_loss_db,
+            score = c.score,
+            validated = if c.validated { "yes" } else { "no" },
+            status = html_escape(&status),
+            note = html_escape(&c.tradeoff_note),
+        ));
+    }
+    out.push_str("</tbody>\n</table>\n</body>\n</html>\n");
+    out
+}
+
 pub fn to_yaml(
     calculations: &[WireCalculation],
     recommendation: Option<&NonResonantRecommendation>,
@@ -1134,6 +1374,14 @@ fn json_escape(input: &str) -> String {
 /// Escape a string for embedding inside a YAML double-quoted scalar.
 fn yaml_escape(input: &str) -> String {
     input.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
+}
+
+fn html_escape(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 fn csv_escape(input: &str) -> String {
@@ -1454,5 +1702,86 @@ mod tests {
     fn default_output_name_yaml() {
         assert_eq!(default_output_name(ExportFormat::Yaml), "rusty-wire-results.yaml");
         assert_eq!(default_advise_output_name(ExportFormat::Yaml), "rusty-wire-advise.yaml");
+    }
+
+    #[test]
+    fn to_html_contains_doctype_and_table() {
+        use crate::app::AppConfig;
+        use crate::app::run_calculation;
+        let results = run_calculation(AppConfig { band_indices: vec![4, 6], ..Default::default() });
+        let html = to_html(
+            &results.calculations,
+            results.recommendation.as_ref(),
+            UnitSystem::Both,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
+        );
+        assert!(html.starts_with("<!DOCTYPE html>"), "should have DOCTYPE");
+        assert!(html.contains("<table>"), "should have table");
+        assert!(html.contains("Half-wave (m)"), "should have metric header");
+        assert!(html.contains("Half-wave (ft)"), "should have imperial header");
+        assert!(html.contains("Band Calculations"), "should have heading");
+    }
+
+    #[test]
+    fn to_html_metric_only_no_ft_headers() {
+        use crate::app::AppConfig;
+        use crate::app::run_calculation;
+        let results = run_calculation(AppConfig { band_indices: vec![4], ..Default::default() });
+        let html = to_html(
+            &results.calculations,
+            results.recommendation.as_ref(),
+            UnitSystem::Metric,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
+        );
+        assert!(html.contains("Half-wave (m)"), "should have metric header");
+        assert!(!html.contains("Half-wave (ft)"), "should not have imperial header");
+    }
+
+    #[test]
+    fn to_html_imperial_only_no_m_headers() {
+        use crate::app::AppConfig;
+        use crate::app::run_calculation;
+        let config = AppConfig {
+            band_indices: vec![4],
+            units: UnitSystem::Imperial,
+            ..Default::default()
+        };
+        let results = run_calculation(config);
+        let html = to_html(
+            &results.calculations,
+            results.recommendation.as_ref(),
+            UnitSystem::Imperial,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
+        );
+        assert!(!html.contains("Half-wave (m)"), "should not have metric header");
+        assert!(html.contains("Half-wave (ft)"), "should have imperial header");
+    }
+
+    #[test]
+    fn to_advise_html_contains_candidates() {
+        let html = to_advise_html(450.0, &sample_advise_candidates());
+        assert!(html.starts_with("<!DOCTYPE html>"), "should have DOCTYPE");
+        assert!(html.contains("<table>"), "should have table");
+        assert!(html.contains("450"), "should contain feedpoint ohm");
+        assert!(html.contains("1:9"), "should contain ratio");
+        assert!(html.contains("Good match"), "should contain tradeoff note");
+        assert!(html.contains("yes"), "should mark validated candidate");
+    }
+
+    #[test]
+    fn html_escape_converts_special_chars() {
+        assert_eq!(html_escape("a&b"), "a&amp;b");
+        assert_eq!(html_escape("<tag>"), "&lt;tag&gt;");
+        assert_eq!(html_escape("\"quoted\""), "&quot;quoted&quot;");
+        assert_eq!(html_escape("plain"), "plain");
+    }
+
+    #[test]
+    fn default_output_name_html() {
+        assert_eq!(default_output_name(ExportFormat::Html), "rusty-wire-results.html");
+        assert_eq!(default_advise_output_name(ExportFormat::Html), "rusty-wire-advise.html");
     }
 }

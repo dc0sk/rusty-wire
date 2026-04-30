@@ -671,6 +671,7 @@ impl FromStr for CalcMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportFormat {
     Csv,
+    Html,
     Json,
     Markdown,
     Txt,
@@ -682,6 +683,7 @@ impl ExportFormat {
     pub fn as_str(self) -> &'static str {
         match self {
             ExportFormat::Csv => "csv",
+            ExportFormat::Html => "html",
             ExportFormat::Json => "json",
             ExportFormat::Markdown => "markdown",
             ExportFormat::Txt => "txt",
@@ -696,12 +698,13 @@ impl FromStr for ExportFormat {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "csv" => Ok(ExportFormat::Csv),
+            "html" | "htm" => Ok(ExportFormat::Html),
             "json" => Ok(ExportFormat::Json),
             "markdown" | "md" => Ok(ExportFormat::Markdown),
             "txt" | "text" => Ok(ExportFormat::Txt),
             "yaml" | "yml" => Ok(ExportFormat::Yaml),
             _ => Err(AppError::InvalidExportFormat(format!(
-                "'{s}' (must be 'csv', 'json', 'markdown', 'txt', or 'yaml')"
+                "'{s}' (must be 'csv', 'html', 'json', 'markdown', 'txt', or 'yaml')"
             ))),
         }
     }

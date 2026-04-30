@@ -67,7 +67,11 @@ use crate::app::{
 use crate::band_presets::load_named_presets;
 use crate::bands::ITURegion;
 use crate::calculations::{GroundClass, TransformerRatio};
-use crate::export::{default_output_name, export_results};
+use crate::export::{
+    default_advise_output_name, default_output_name, export_advise, export_results, to_advise_csv,
+    to_advise_html, to_advise_json, to_advise_markdown, to_advise_txt, to_advise_yaml, to_csv,
+    to_html, to_json, to_markdown, to_txt, to_yaml,
+};
 
 // ---------------------------------------------------------------------------
 // Preset tables — values the user cycles through with ←/→
@@ -269,6 +273,10 @@ struct TuiState {
     export_status: Option<String>,
     /// When set, an auto-recalculation is pending after this instant + debounce.
     pending_recalc: Option<std::time::Instant>,
+    /// Active export preview: (format, is_advise, content).
+    export_preview: Option<(ExportFormat, bool, String)>,
+    /// Vertical scroll offset for the export preview overlay.
+    preview_scroll: u16,
 }
 
 impl TuiState {
@@ -346,6 +354,8 @@ impl TuiState {
             custom_band_indices: Vec::new(),
             export_status: preset_status,
             pending_recalc: None,
+            export_preview: None,
+            preview_scroll: 0,
         }
     }
 
@@ -770,30 +780,121 @@ impl TuiState {
         self.dispatch(AppAction::RunCalculation);
     }
 
-    /// Export the current results to a file.  Sets `export_status` with either
-    /// a success message ("Exported to <file>") or an error message.
+    /// Build a preview string for the given format and open the preview overlay.
+    /// When `show_advise_panel` is active and an advise view exists, previews the
+    /// advise export; otherwise previews results.
     fn try_export(&mut self, format: ExportFormat) {
-        let Some(ref results) = self.app.results else {
-            self.export_status = Some("No results to export — run a calculation first (r).".into());
+        if self.show_advise_panel {
+            let Some(ref view) = self.advise_view else {
+                self.export_status = Some(
+                    "No advise results — run advise first (a).".into(),
+                );
+                return;
+            };
+            let content = match format {
+                ExportFormat::Csv => to_advise_csv(view.assumed_feedpoint_ohm, &view.candidates),
+                ExportFormat::Html => to_advise_html(view.assumed_feedpoint_ohm, &view.candidates),
+                ExportFormat::Json => to_advise_json(view.assumed_feedpoint_ohm, &view.candidates),
+                ExportFormat::Markdown => {
+                    to_advise_markdown(view.assumed_feedpoint_ohm, &view.candidates)
+                }
+                ExportFormat::Txt => to_advise_txt(view.assumed_feedpoint_ohm, &view.candidates),
+                ExportFormat::Yaml => to_advise_yaml(view.assumed_feedpoint_ohm, &view.candidates),
+            };
+            self.export_preview = Some((format, true, content));
+            self.preview_scroll = 0;
+        } else {
+            let Some(ref results) = self.app.results else {
+                self.export_status =
+                    Some("No results to export — run a calculation first (r).".into());
+                return;
+            };
+            let content = match format {
+                ExportFormat::Csv => to_csv(
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                ),
+                ExportFormat::Html => to_html(
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                ),
+                ExportFormat::Json => to_json(
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                ),
+                ExportFormat::Markdown => to_markdown(
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                ),
+                ExportFormat::Txt => to_txt(
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                ),
+                ExportFormat::Yaml => to_yaml(
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                ),
+            };
+            self.export_preview = Some((format, false, content));
+            self.preview_scroll = 0;
+        }
+    }
+
+    /// Commit the active export preview to disk.
+    fn confirm_export(&mut self) {
+        let Some((format, is_advise, ref content)) = self.export_preview.take() else {
             return;
         };
-        let filename = default_output_name(format);
-        match export_results(
-            format,
-            filename,
-            &results.calculations,
-            results.recommendation.as_ref(),
-            results.config.units,
-            results.config.wire_min_m,
-            results.config.wire_max_m,
-        ) {
-            Ok(()) => {
-                self.export_status = Some(format!("Exported → {filename}"));
-            }
-            Err(err) => {
-                self.export_status = Some(format!("Export failed: {err}"));
-            }
+        let filename = if is_advise {
+            default_advise_output_name(format)
+        } else {
+            default_output_name(format)
+        };
+        let result = if is_advise {
+            let Some(ref view) = self.advise_view else {
+                self.export_status = Some("Advise data lost — cannot write.".into());
+                return;
+            };
+            export_advise(format, filename, view.assumed_feedpoint_ohm, &view.candidates)
+        } else {
+            let Some(ref results) = self.app.results else {
+                self.export_status = Some("Results lost — cannot write.".into());
+                return;
+            };
+            export_results(
+                format,
+                filename,
+                &results.calculations,
+                results.recommendation.as_ref(),
+                results.config.units,
+                results.config.wire_min_m,
+                results.config.wire_max_m,
+            )
+        };
+        match result {
+            Ok(()) => self.export_status = Some(format!("Exported → {filename}")),
+            Err(err) => self.export_status = Some(format!("Export failed: {err}")),
         }
+        // content was already taken, preview is closed
+        let _ = content; // silence unused warning
     }
 
     /// Open the band-checklist overlay, initialising items from the current
@@ -823,6 +924,35 @@ impl TuiState {
         }
         // Clear any previous export status on the next keypress.
         self.export_status = None;
+
+        // Export preview overlay intercepts all keys.
+        if self.export_preview.is_some() {
+            match key.code {
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quit = true;
+                }
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    self.export_preview = None;
+                }
+                KeyCode::Enter => {
+                    self.confirm_export();
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.preview_scroll = self.preview_scroll.saturating_sub(1);
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.preview_scroll = self.preview_scroll.saturating_add(1);
+                }
+                KeyCode::PageUp => {
+                    self.preview_scroll = self.preview_scroll.saturating_sub(20);
+                }
+                KeyCode::PageDown => {
+                    self.preview_scroll = self.preview_scroll.saturating_add(20);
+                }
+                _ => {}
+            }
+            return;
+        }
 
         // Band-checklist overlay intercepts all keys.
         if self.show_band_checklist {
@@ -913,6 +1043,10 @@ impl TuiState {
             }
             KeyCode::Char('y') => {
                 self.try_export(ExportFormat::Yaml);
+                return;
+            }
+            KeyCode::Char('H') => {
+                self.try_export(ExportFormat::Html);
                 return;
             }
             KeyCode::Char('s') => {
@@ -1046,6 +1180,10 @@ fn render(f: &mut ratatui::Frame, state: &TuiState) {
     if state.show_band_checklist {
         render_band_checklist(f, area, state);
     }
+
+    if state.export_preview.is_some() {
+        render_export_preview(f, area, state);
+    }
 }
 
 fn render_title(f: &mut ratatui::Frame, area: Rect) {
@@ -1077,10 +1215,36 @@ fn render_config_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
+    // Determine the best-recommended transformer ratio (from advise view, if cached).
+    let recommended_ratio = state
+        .advise_view
+        .as_ref()
+        .and_then(|v| v.candidates.first())
+        .map(|c| c.ratio);
+
+    // Count skipped bands from the last completed results.
+    let skipped_count = state
+        .app
+        .results
+        .as_ref()
+        .map(|r| r.skipped_band_indices.len())
+        .unwrap_or(0);
+
     let items: Vec<ListItem> = state
         .all_field_values()
         .into_iter()
-        .map(|(label, value, selected)| {
+        .enumerate()
+        .map(|(i, (label, value, selected))| {
+            let is_transformer_field = ConfigField::ALL[i] == ConfigField::TransformerRatio;
+            let is_bands_field = ConfigField::ALL[i] == ConfigField::Bands;
+
+            // Annotate the Bands value when some bands were skipped.
+            let display_value = if is_bands_field && skipped_count > 0 {
+                format!("{value}  ⚠ {skipped_count} skipped")
+            } else {
+                value
+            };
+
             let (prefix, style) = if selected {
                 (
                     "► ",
@@ -1088,13 +1252,26 @@ fn render_config_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
                 )
+            } else if is_transformer_field
+                && recommended_ratio
+                    .is_some_and(|r| r == state.app.config.transformer_ratio)
+            {
+                // Current transformer ratio is the recommended one → green highlight.
+                (
+                    "✓ ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else if is_bands_field && skipped_count > 0 {
+                ("  ", Style::default().fg(Color::Yellow))
             } else {
                 ("  ", Style::default().fg(Color::White))
             };
             let line = Line::from(vec![
                 Span::styled(prefix.to_string(), style),
                 Span::styled(format!("{:<12}", label), style),
-                Span::styled(value, style),
+                Span::styled(display_value, style),
             ]);
             ListItem::new(line)
         })
@@ -1367,22 +1544,25 @@ fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         return;
     }
 
-    let text = hint_text(state.focus, state.show_band_checklist);
+    let text = hint_text(state.focus, state.show_band_checklist, state.export_preview.is_some());
     let para = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
     f.render_widget(para, area);
 }
 
-fn hint_text(focus: Focus, show_band_checklist: bool) -> &'static str {
+fn hint_text(focus: Focus, show_band_checklist: bool, show_preview: bool) -> &'static str {
+    if show_preview {
+        return " ↑↓/jk:scroll  PgUp/Dn:page  Enter:write  Esc/q:cancel";
+    }
     if show_band_checklist {
         return " ↑↓/jk:move  Space:toggle  Enter:confirm  Esc/q:cancel";
     }
 
     match focus {
         Focus::Config => {
-            " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  s:prefs  i:info  Tab:→results  q:quit"
+            " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  s:prefs  i:info  Tab:→results  q:quit"
         }
         Focus::Results => {
-            " ↑↓/jk:scroll  PgUp/Dn:page  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  s:prefs  i:info  Tab:→config   q:quit"
+            " ↑↓/jk:scroll  PgUp/Dn:page  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  s:prefs  i:info  Tab:→config   q:quit"
         }
     }
 }
@@ -1447,6 +1627,39 @@ fn info_popup_lines() -> Vec<Line<'static>> {
 // ---------------------------------------------------------------------------
 // Band-checklist overlay
 // ---------------------------------------------------------------------------
+
+fn render_export_preview(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
+    let Some((format, is_advise, ref content)) = state.export_preview else {
+        return;
+    };
+    let filename = if is_advise {
+        default_advise_output_name(format)
+    } else {
+        default_output_name(format)
+    };
+
+    let popup_area = centered_rect(90, 85, area);
+    f.render_widget(Clear, popup_area);
+
+    let title = format!(" Export preview → {filename}  (Enter:write  Esc:cancel) ");
+    let block = Block::default()
+        .title(title.as_str())
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let lines: Vec<Line<'static>> = content
+        .lines()
+        .map(|l| Line::from(l.to_string()))
+        .collect();
+
+    let para = Paragraph::new(lines)
+        .scroll((state.preview_scroll, 0))
+        .style(Style::default().fg(Color::White));
+    f.render_widget(para, inner);
+}
 
 fn render_band_checklist(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let popup_area = centered_rect(72, 80, area);
@@ -1874,9 +2087,7 @@ mod tests {
 
     #[test]
     fn hint_text_for_config_focus_matches_documented_keybindings() {
-        let text = hint_text(Focus::Config, false);
-
-        assert!(text.contains("a:advise"));
+        let text = hint_text(Focus::Config, false, false);
         assert!(text.contains("e:csv"));
         assert!(text.contains("E:json"));
         assert!(text.contains("m:md"));
@@ -1887,7 +2098,7 @@ mod tests {
 
     #[test]
     fn hint_text_for_results_focus_mentions_scroll_and_tab_back() {
-        let text = hint_text(Focus::Results, false);
+        let text = hint_text(Focus::Results, false, false);
 
         assert!(text.contains("a:advise"));
         assert!(text.contains("↑↓/jk:scroll"));
@@ -1897,7 +2108,7 @@ mod tests {
 
     #[test]
     fn hint_text_for_band_checklist_matches_overlay_controls() {
-        let text = hint_text(Focus::Config, true);
+        let text = hint_text(Focus::Config, true, false);
 
         assert!(text.contains("Space:toggle"));
         assert!(text.contains("Enter:confirm"));

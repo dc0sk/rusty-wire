@@ -309,6 +309,7 @@ impl From<CliUnitSystem> for UnitSystem {
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
 enum CliExportFormat {
     Csv,
+    Html,
     Json,
     Markdown,
     Txt,
@@ -319,6 +320,7 @@ impl From<CliExportFormat> for ExportFormat {
     fn from(format: CliExportFormat) -> Self {
         match format {
             CliExportFormat::Csv => ExportFormat::Csv,
+            CliExportFormat::Html => ExportFormat::Html,
             CliExportFormat::Json => ExportFormat::Json,
             CliExportFormat::Markdown => ExportFormat::Markdown,
             CliExportFormat::Txt => ExportFormat::Txt,
@@ -1915,7 +1917,7 @@ fn interactive_export_prompt(
 ) -> Vec<(ExportFormat, String)> {
     prompt(
         output,
-        "Export results? (none, or comma-separated formats e.g. csv,json,markdown,txt,yaml): ",
+        "Export results? (none, or comma-separated formats e.g. csv,html,json,markdown,txt,yaml): ",
     );
 
     let fmt_raw = read_line(input, "failed to read export format")
@@ -1938,6 +1940,11 @@ fn interactive_export_prompt(
                 "csv" => {
                     if !out.contains(&ExportFormat::Csv) {
                         out.push(ExportFormat::Csv);
+                    }
+                }
+                "html" | "htm" => {
+                    if !out.contains(&ExportFormat::Html) {
+                        out.push(ExportFormat::Html);
                     }
                 }
                 "json" => {
