@@ -189,6 +189,10 @@ struct Cli {
     #[arg(long)]
     validate_with_fnec: bool,
 
+    /// Remove rejected candidates from advise output (requires --validate-with-fnec)
+    #[arg(long)]
+    fnec_gate: bool,
+
     /// Maximum mismatch factor considered a pass for fnec validation (0.0..=1.0)
     #[arg(long, default_value_t = DEFAULT_FNEC_PASS_MAX_MISMATCH)]
     fnec_pass_max_mismatch: f64,
@@ -730,6 +734,7 @@ pub fn run_from_args(args: &[String]) -> bool {
             cli.output.as_deref(),
             cli.fnec_pass_max_mismatch,
             cli.fnec_reject_min_mismatch,
+            cli.fnec_gate,
         );
     }
 
@@ -791,13 +796,16 @@ fn print_advise_candidates(
     single_output: Option<&str>,
     fnec_pass_max_mismatch: f64,
     fnec_reject_min_mismatch: f64,
+    fnec_gate: bool,
 ) -> bool {
+    use crate::fnec_validation::ValidationStatus;
+
     if let Err(err) = execute_request_checked(AppRequest::new(config.clone())) {
         eprintln!("Error: {err}");
         return false;
     }
 
-    let view = if config.validate_with_fnec {
+    let mut view = if config.validate_with_fnec {
         build_advise_candidates_with_thresholds(
             config,
             5,
@@ -807,6 +815,14 @@ fn print_advise_candidates(
     } else {
         build_advise_candidates(config, 5)
     };
+
+    // Apply sustainability gate: remove rejected candidates when --fnec-gate is set.
+    if fnec_gate && config.validate_with_fnec {
+        view.candidates.retain(|c| {
+            !matches!(c.validation_status, Some(ValidationStatus::Rejected))
+        });
+    }
+
     if view.candidates.is_empty() {
         eprintln!("Error: no advise candidates available for the current selection.");
         return false;
@@ -844,12 +860,21 @@ fn print_advise_candidates(
     println!();
 
     for (idx, candidate) in view.candidates.iter().enumerate() {
+        // Validation badge for the header line.
+        let badge = match candidate.validation_status {
+            Some(ValidationStatus::Passed) => "  [PASSED]",
+            Some(ValidationStatus::Warning) => "  [WARNING]",
+            Some(ValidationStatus::Rejected) => "  [REJECTED]",
+            Some(ValidationStatus::Error) => "  [ERROR]",
+            _ => "",
+        };
         println!(
-            "{:2}. ratio {}  wire {:.2} m ({:.2} ft)",
+            "{:2}. ratio {}  wire {:.2} m ({:.2} ft){}",
             idx + 1,
             candidate.ratio.as_label(),
             candidate.recommended_length_m,
-            candidate.recommended_length_ft
+            candidate.recommended_length_ft,
+            badge
         );
         println!(
             "    efficiency {:.2}%  mismatch loss {:.3} dB  clearance {:.2}%",
@@ -871,7 +896,23 @@ fn print_advise_candidates(
                 } else {
                     "not-validated"
                 });
-            println!("    fnec: {status} ({note})");
+            println!("    fnec: {status} — {note}");
+        }
+    }
+
+    // Validation summary when fnec was active.
+    if config.validate_with_fnec {
+        let total = view.candidates.len();
+        let passed = view.candidates.iter().filter(|c| c.validation_status == Some(ValidationStatus::Passed)).count();
+        let warned = view.candidates.iter().filter(|c| c.validation_status == Some(ValidationStatus::Warning)).count();
+        let rejected = view.candidates.iter().filter(|c| c.validation_status == Some(ValidationStatus::Rejected)).count();
+        let skipped = view.candidates.iter().filter(|c| matches!(c.validation_status, Some(ValidationStatus::Skipped) | None)).count();
+        println!();
+        println!(
+            "Validation summary: {total} candidates — {passed} passed, {warned} warning, {rejected} rejected, {skipped} skipped"
+        );
+        if fnec_gate {
+            println!("  (--fnec-gate active: rejected candidates removed from ranking)");
         }
     }
 

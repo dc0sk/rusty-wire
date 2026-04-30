@@ -1257,17 +1257,31 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
     out.push(Line::from(""));
 
     for (idx, candidate) in view.candidates.iter().enumerate() {
+        let title_style = match candidate.validation_status {
+            Some(crate::fnec_validation::ValidationStatus::Rejected) => {
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+            }
+            Some(crate::fnec_validation::ValidationStatus::Warning) => {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            }
+            _ => Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+        };
+        let badge = match candidate.validation_status {
+            Some(crate::fnec_validation::ValidationStatus::Passed) => "  [PASSED]",
+            Some(crate::fnec_validation::ValidationStatus::Warning) => "  [WARNING]",
+            Some(crate::fnec_validation::ValidationStatus::Rejected) => "  [REJECTED]",
+            _ => "",
+        };
         out.push(Line::from(Span::styled(
             format!(
-                "{:2}. ratio {}  wire {:.2} m ({:.2} ft)",
+                "{:2}. ratio {}  wire {:.2} m ({:.2} ft){}",
                 idx + 1,
                 candidate.ratio.as_label(),
                 candidate.recommended_length_m,
-                candidate.recommended_length_ft
+                candidate.recommended_length_ft,
+                badge
             ),
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
+            title_style,
         )));
         out.push(Line::from(format!(
             "    efficiency {:.2}%  mismatch loss {:.3} dB  clearance {:.2}%",
@@ -1292,7 +1306,22 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
                 } else {
                     "not-validated"
                 });
-            out.push(Line::from(format!("    fnec: {status} ({note})")));
+            let fnec_style = match candidate.validation_status {
+                Some(crate::fnec_validation::ValidationStatus::Passed) => {
+                    Style::default().fg(Color::Green)
+                }
+                Some(crate::fnec_validation::ValidationStatus::Warning) => {
+                    Style::default().fg(Color::Yellow)
+                }
+                Some(crate::fnec_validation::ValidationStatus::Rejected) => {
+                    Style::default().fg(Color::Red)
+                }
+                _ => Style::default().fg(Color::DarkGray),
+            };
+            out.push(Line::from(Span::styled(
+                format!("    fnec: {status} — {note}"),
+                fnec_style,
+            )));
         }
         out.push(Line::from(""));
     }
