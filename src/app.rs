@@ -674,6 +674,7 @@ pub enum ExportFormat {
     Json,
     Markdown,
     Txt,
+    Yaml,
 }
 
 impl ExportFormat {
@@ -684,6 +685,7 @@ impl ExportFormat {
             ExportFormat::Json => "json",
             ExportFormat::Markdown => "markdown",
             ExportFormat::Txt => "txt",
+            ExportFormat::Yaml => "yaml",
         }
     }
 }
@@ -697,8 +699,9 @@ impl FromStr for ExportFormat {
             "json" => Ok(ExportFormat::Json),
             "markdown" | "md" => Ok(ExportFormat::Markdown),
             "txt" | "text" => Ok(ExportFormat::Txt),
+            "yaml" | "yml" => Ok(ExportFormat::Yaml),
             _ => Err(AppError::InvalidExportFormat(format!(
-                "'{s}' (must be 'csv', 'json', 'markdown', or 'txt')"
+                "'{s}' (must be 'csv', 'json', 'markdown', 'txt', or 'yaml')"
             ))),
         }
     }

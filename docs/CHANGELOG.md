@@ -13,6 +13,16 @@ All notable changes to Rusty Wire are documented here.
 
 ---
 
+## [2.13.0] - 2026-04-30
+
+### Added
+- **YAML export format**: `--export yaml` / `--export yml` on the CLI, `y` key in the TUI. Generates a valid YAML document (`---` marker, `results:` list for calculation output, `candidates:` list for advise output). All unit systems (Metric/Imperial/Both) are supported. Output files default to `rusty-wire-results.yaml` / `rusty-wire-advise.yaml`.
+
+### Test count
+293 lib + 56 CLI + 14 corpus + 12 contract + 5 tolerance = 380 passing; 2 ignored.
+
+---
+
 ## [2.12.0] - 2026-04-30
 
 ### Added

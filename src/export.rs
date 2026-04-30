@@ -19,6 +19,7 @@ pub fn default_output_name(format: ExportFormat) -> &'static str {
         ExportFormat::Json => "rusty-wire-results.json",
         ExportFormat::Markdown => "rusty-wire-results.md",
         ExportFormat::Txt => "rusty-wire-results.txt",
+        ExportFormat::Yaml => "rusty-wire-results.yaml",
     }
 }
 
@@ -28,6 +29,7 @@ pub fn default_advise_output_name(format: ExportFormat) -> &'static str {
         ExportFormat::Json => "rusty-wire-advise.json",
         ExportFormat::Markdown => "rusty-wire-advise.md",
         ExportFormat::Txt => "rusty-wire-advise.txt",
+        ExportFormat::Yaml => "rusty-wire-advise.yaml",
     }
 }
 
@@ -104,6 +106,7 @@ pub fn export_results(
             to_markdown(calculations, recommendation, units, wire_min_m, wire_max_m)
         }
         ExportFormat::Txt => to_txt(calculations, recommendation, units, wire_min_m, wire_max_m),
+        ExportFormat::Yaml => to_yaml(calculations, recommendation, units, wire_min_m, wire_max_m),
     };
     fs::write(output_path, content)
 }
@@ -127,6 +130,7 @@ pub fn export_advise(
         ExportFormat::Json => to_advise_json(assumed_feedpoint_ohm, candidates),
         ExportFormat::Markdown => to_advise_markdown(assumed_feedpoint_ohm, candidates),
         ExportFormat::Txt => to_advise_txt(assumed_feedpoint_ohm, candidates),
+        ExportFormat::Yaml => to_advise_yaml(assumed_feedpoint_ohm, candidates),
     };
     fs::write(output_path, content)
 }
@@ -925,12 +929,211 @@ pub fn to_advise_txt(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate])
     out
 }
 
+pub fn to_yaml(
+    calculations: &[WireCalculation],
+    recommendation: Option<&NonResonantRecommendation>,
+    units: UnitSystem,
+    wire_min_m: f64,
+    wire_max_m: f64,
+) -> String {
+    const FT: f64 = 3.280_84;
+    let mut out = String::from("---\n");
+    out.push_str("results:\n");
+    for c in calculations {
+        out.push_str(&format!("  - band: \"{}\"\n", yaml_escape(&c.band_name)));
+        out.push_str(&format!("    frequency_mhz: {:.3}\n", c.frequency_mhz));
+        out.push_str(&format!(
+            "    transformer_ratio: \"{}\"\n",
+            c.transformer_ratio_label
+        ));
+        match units {
+            UnitSystem::Metric => {
+                out.push_str(&format!("    half_wave_m: {:.2}\n", c.half_wave_m));
+                out.push_str(&format!("    half_wave_corrected_m: {:.2}\n", c.corrected_half_wave_m));
+                out.push_str(&format!("    full_wave_m: {:.2}\n", c.full_wave_m));
+                out.push_str(&format!("    full_wave_corrected_m: {:.2}\n", c.corrected_full_wave_m));
+                out.push_str(&format!("    quarter_wave_m: {:.2}\n", c.quarter_wave_m));
+                out.push_str(&format!("    quarter_wave_corrected_m: {:.2}\n", c.corrected_quarter_wave_m));
+                out.push_str(&format!("    end_fed_half_wave_m: {:.2}\n", c.end_fed_half_wave_m));
+                out.push_str(&format!("    full_wave_loop_circumference_m: {:.2}\n", c.full_wave_loop_circumference_m));
+                out.push_str(&format!("    full_wave_loop_square_side_m: {:.2}\n", c.full_wave_loop_square_side_m));
+                out.push_str(&format!("    inverted_v_total_m: {:.2}\n", c.inverted_v_total_m));
+                out.push_str(&format!("    inverted_v_leg_m: {:.2}\n", c.inverted_v_leg_m));
+                out.push_str(&format!("    inverted_v_span_90_m: {:.2}\n", c.inverted_v_span_90_m));
+                out.push_str(&format!("    inverted_v_span_120_m: {:.2}\n", c.inverted_v_span_120_m));
+                out.push_str(&format!("    ocfd_33_short_leg_m: {:.2}\n", c.ocfd_33_short_leg_m));
+                out.push_str(&format!("    ocfd_33_long_leg_m: {:.2}\n", c.ocfd_33_long_leg_m));
+                out.push_str(&format!("    ocfd_20_short_leg_m: {:.2}\n", c.ocfd_20_short_leg_m));
+                out.push_str(&format!("    ocfd_20_long_leg_m: {:.2}\n", c.ocfd_20_long_leg_m));
+                out.push_str(&format!("    trap_dipole_total_m: {:.2}\n", c.trap_dipole_total_m));
+                out.push_str(&format!("    trap_dipole_leg_m: {:.2}\n", c.trap_dipole_leg_m));
+            }
+            UnitSystem::Imperial => {
+                out.push_str(&format!("    half_wave_ft: {:.2}\n", c.half_wave_ft));
+                out.push_str(&format!("    half_wave_corrected_ft: {:.2}\n", c.corrected_half_wave_ft));
+                out.push_str(&format!("    full_wave_ft: {:.2}\n", c.full_wave_ft));
+                out.push_str(&format!("    full_wave_corrected_ft: {:.2}\n", c.corrected_full_wave_ft));
+                out.push_str(&format!("    quarter_wave_ft: {:.2}\n", c.quarter_wave_ft));
+                out.push_str(&format!("    quarter_wave_corrected_ft: {:.2}\n", c.corrected_quarter_wave_ft));
+                out.push_str(&format!("    end_fed_half_wave_ft: {:.2}\n", c.end_fed_half_wave_ft));
+                out.push_str(&format!("    full_wave_loop_circumference_ft: {:.2}\n", c.full_wave_loop_circumference_ft));
+                out.push_str(&format!("    full_wave_loop_square_side_ft: {:.2}\n", c.full_wave_loop_square_side_ft));
+                out.push_str(&format!("    inverted_v_total_ft: {:.2}\n", c.inverted_v_total_ft));
+                out.push_str(&format!("    inverted_v_leg_ft: {:.2}\n", c.inverted_v_leg_ft));
+                out.push_str(&format!("    inverted_v_span_90_ft: {:.2}\n", c.inverted_v_span_90_ft));
+                out.push_str(&format!("    inverted_v_span_120_ft: {:.2}\n", c.inverted_v_span_120_ft));
+                out.push_str(&format!("    ocfd_33_short_leg_ft: {:.2}\n", c.ocfd_33_short_leg_ft));
+                out.push_str(&format!("    ocfd_33_long_leg_ft: {:.2}\n", c.ocfd_33_long_leg_ft));
+                out.push_str(&format!("    ocfd_20_short_leg_ft: {:.2}\n", c.ocfd_20_short_leg_ft));
+                out.push_str(&format!("    ocfd_20_long_leg_ft: {:.2}\n", c.ocfd_20_long_leg_ft));
+                out.push_str(&format!("    trap_dipole_total_ft: {:.2}\n", c.trap_dipole_total_ft));
+                out.push_str(&format!("    trap_dipole_leg_ft: {:.2}\n", c.trap_dipole_leg_ft));
+            }
+            UnitSystem::Both => {
+                out.push_str(&format!("    half_wave_m: {:.2}\n", c.half_wave_m));
+                out.push_str(&format!("    half_wave_corrected_m: {:.2}\n", c.corrected_half_wave_m));
+                out.push_str(&format!("    full_wave_m: {:.2}\n", c.full_wave_m));
+                out.push_str(&format!("    full_wave_corrected_m: {:.2}\n", c.corrected_full_wave_m));
+                out.push_str(&format!("    quarter_wave_m: {:.2}\n", c.quarter_wave_m));
+                out.push_str(&format!("    quarter_wave_corrected_m: {:.2}\n", c.corrected_quarter_wave_m));
+                out.push_str(&format!("    end_fed_half_wave_m: {:.2}\n", c.end_fed_half_wave_m));
+                out.push_str(&format!("    full_wave_loop_circumference_m: {:.2}\n", c.full_wave_loop_circumference_m));
+                out.push_str(&format!("    full_wave_loop_square_side_m: {:.2}\n", c.full_wave_loop_square_side_m));
+                out.push_str(&format!("    inverted_v_total_m: {:.2}\n", c.inverted_v_total_m));
+                out.push_str(&format!("    inverted_v_leg_m: {:.2}\n", c.inverted_v_leg_m));
+                out.push_str(&format!("    inverted_v_span_90_m: {:.2}\n", c.inverted_v_span_90_m));
+                out.push_str(&format!("    inverted_v_span_120_m: {:.2}\n", c.inverted_v_span_120_m));
+                out.push_str(&format!("    ocfd_33_short_leg_m: {:.2}\n", c.ocfd_33_short_leg_m));
+                out.push_str(&format!("    ocfd_33_long_leg_m: {:.2}\n", c.ocfd_33_long_leg_m));
+                out.push_str(&format!("    ocfd_20_short_leg_m: {:.2}\n", c.ocfd_20_short_leg_m));
+                out.push_str(&format!("    ocfd_20_long_leg_m: {:.2}\n", c.ocfd_20_long_leg_m));
+                out.push_str(&format!("    trap_dipole_total_m: {:.2}\n", c.trap_dipole_total_m));
+                out.push_str(&format!("    trap_dipole_leg_m: {:.2}\n", c.trap_dipole_leg_m));
+                out.push_str(&format!("    half_wave_ft: {:.2}\n", c.half_wave_ft));
+                out.push_str(&format!("    half_wave_corrected_ft: {:.2}\n", c.corrected_half_wave_ft));
+                out.push_str(&format!("    full_wave_ft: {:.2}\n", c.full_wave_ft));
+                out.push_str(&format!("    full_wave_corrected_ft: {:.2}\n", c.corrected_full_wave_ft));
+                out.push_str(&format!("    quarter_wave_ft: {:.2}\n", c.quarter_wave_ft));
+                out.push_str(&format!("    quarter_wave_corrected_ft: {:.2}\n", c.corrected_quarter_wave_ft));
+                out.push_str(&format!("    end_fed_half_wave_ft: {:.2}\n", c.end_fed_half_wave_ft));
+                out.push_str(&format!("    full_wave_loop_circumference_ft: {:.2}\n", c.full_wave_loop_circumference_ft));
+                out.push_str(&format!("    full_wave_loop_square_side_ft: {:.2}\n", c.full_wave_loop_square_side_ft));
+                out.push_str(&format!("    inverted_v_total_ft: {:.2}\n", c.inverted_v_total_ft));
+                out.push_str(&format!("    inverted_v_leg_ft: {:.2}\n", c.inverted_v_leg_ft));
+                out.push_str(&format!("    inverted_v_span_90_ft: {:.2}\n", c.inverted_v_span_90_ft));
+                out.push_str(&format!("    inverted_v_span_120_ft: {:.2}\n", c.inverted_v_span_120_ft));
+                out.push_str(&format!("    ocfd_33_short_leg_ft: {:.2}\n", c.ocfd_33_short_leg_ft));
+                out.push_str(&format!("    ocfd_33_long_leg_ft: {:.2}\n", c.ocfd_33_long_leg_ft));
+                out.push_str(&format!("    ocfd_20_short_leg_ft: {:.2}\n", c.ocfd_20_short_leg_ft));
+                out.push_str(&format!("    ocfd_20_long_leg_ft: {:.2}\n", c.ocfd_20_long_leg_ft));
+                out.push_str(&format!("    trap_dipole_total_ft: {:.2}\n", c.trap_dipole_total_ft));
+                out.push_str(&format!("    trap_dipole_leg_ft: {:.2}\n", c.trap_dipole_leg_ft));
+            }
+        }
+        out.push_str(&format!("    skip_distance_min_km: {:.0}\n", c.skip_distance_min_km));
+        out.push_str(&format!("    skip_distance_max_km: {:.0}\n", c.skip_distance_max_km));
+        out.push_str(&format!("    skip_distance_avg_km: {:.0}\n", c.skip_distance_avg_km));
+
+        let rec_yaml = match (recommendation, units) {
+            (Some(r), UnitSystem::Metric) => format!(
+                "best_non_resonant_m: {:.2}\n      resonance_clearance_pct: {:.2}",
+                r.length_m, r.min_resonance_clearance_pct
+            ),
+            (Some(r), UnitSystem::Imperial) => format!(
+                "best_non_resonant_ft: {:.2}\n      resonance_clearance_pct: {:.2}",
+                r.length_ft, r.min_resonance_clearance_pct
+            ),
+            (Some(r), UnitSystem::Both) => format!(
+                "best_non_resonant_m: {:.2}\n      best_non_resonant_ft: {:.2}\n      resonance_clearance_pct: {:.2}",
+                r.length_m, r.length_ft, r.min_resonance_clearance_pct
+            ),
+            (None, _) => String::new(),
+        };
+        if rec_yaml.is_empty() {
+            out.push_str("    non_resonant_recommendation: null\n");
+        } else {
+            out.push_str("    non_resonant_recommendation:\n");
+            for line in rec_yaml.lines() {
+                out.push_str(&format!("      {line}\n"));
+            }
+        }
+
+        let points = collect_band_resonant_points_m(c, wire_min_m, wire_max_m);
+        if points.is_empty() {
+            out.push_str("    resonant_points_in_window: []\n");
+        } else {
+            out.push_str("    resonant_points_in_window:\n");
+            for (harmonic, len_m) in points {
+                match units {
+                    UnitSystem::Metric => out.push_str(&format!(
+                        "      - harmonic: {harmonic}\n        length_m: {len_m:.2}\n"
+                    )),
+                    UnitSystem::Imperial => out.push_str(&format!(
+                        "      - harmonic: {harmonic}\n        length_ft: {:.2}\n",
+                        len_m * FT
+                    )),
+                    UnitSystem::Both => out.push_str(&format!(
+                        "      - harmonic: {harmonic}\n        length_m: {len_m:.2}\n        length_ft: {:.2}\n",
+                        len_m * FT
+                    )),
+                }
+            }
+        }
+    }
+    out
+}
+
+pub fn to_advise_yaml(assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
+    let mut out = String::from("---\n");
+    out.push_str(&format!(
+        "assumed_feedpoint_ohm: {:.0}\n",
+        assumed_feedpoint_ohm
+    ));
+    out.push_str("candidates:\n");
+    for (idx, c) in candidates.iter().enumerate() {
+        out.push_str(&format!("  - rank: {}\n", idx + 1));
+        out.push_str(&format!("    ratio: \"{}\"\n", c.ratio.as_label()));
+        out.push_str(&format!("    recommended_length_m: {:.2}\n", c.recommended_length_m));
+        out.push_str(&format!("    recommended_length_ft: {:.2}\n", c.recommended_length_ft));
+        out.push_str(&format!("    clearance_pct: {:.2}\n", c.min_resonance_clearance_pct));
+        out.push_str(&format!("    estimated_efficiency_pct: {:.2}\n", c.estimated_efficiency_pct));
+        out.push_str(&format!("    mismatch_loss_db: {:.3}\n", c.mismatch_loss_db));
+        out.push_str(&format!("    average_length_shift_pct: {:.2}\n", c.average_length_shift_pct));
+        out.push_str(&format!("    score: {:.2}\n", c.score));
+        out.push_str(&format!(
+            "    tradeoff_note: \"{}\"\n",
+            yaml_escape(&c.tradeoff_note)
+        ));
+        out.push_str(&format!("    validated: {}\n", c.validated));
+        match c.validation_status {
+            Some(status) => out.push_str(&format!(
+                "    validation_status: \"{}\"\n",
+                status.as_str()
+            )),
+            None => out.push_str("    validation_status: null\n"),
+        }
+        match &c.validation_note {
+            Some(note) => out.push_str(&format!(
+                "    validation_note: \"{}\"\n",
+                yaml_escape(&note.replace('\n', " "))
+            )),
+            None => out.push_str("    validation_note: null\n"),
+        }
+    }
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
 
 fn json_escape(input: &str) -> String {
     input.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Escape a string for embedding inside a YAML double-quoted scalar.
+fn yaml_escape(input: &str) -> String {
+    input.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
 }
 
 fn csv_escape(input: &str) -> String {
@@ -1185,5 +1388,71 @@ mod tests {
         assert!(txt.contains("fnec validated no"));
         assert!(txt.contains("fnec status: passed"));
         assert!(txt.contains("fnec note: NEC cross-check OK"));
+    }
+
+    #[test]
+    fn to_yaml_produces_valid_structure() {
+        use crate::app::AppConfig;
+        use crate::app::run_calculation;
+        let config = AppConfig {
+            band_indices: vec![4, 6], // 40m + 20m
+            ..Default::default()
+        };
+        let results = run_calculation(config);
+        let yaml = to_yaml(
+            &results.calculations,
+            results.recommendation.as_ref(),
+            UnitSystem::Metric,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
+        );
+        assert!(yaml.starts_with("---\n"), "should start with YAML document marker");
+        assert!(yaml.contains("results:"), "should have results key");
+        assert!(yaml.contains("band: \"40m\"") || yaml.contains("band: \""), "should have band field");
+        assert!(yaml.contains("frequency_mhz:"), "should have frequency_mhz");
+        assert!(yaml.contains("half_wave_m:"), "should have half_wave_m in metric");
+        assert!(!yaml.contains("half_wave_ft:"), "should not have ft in metric mode");
+    }
+
+    #[test]
+    fn to_yaml_imperial_units_omits_metric_fields() {
+        use crate::app::AppConfig;
+        use crate::app::run_calculation;
+        let config = AppConfig {
+            band_indices: vec![4],
+            units: UnitSystem::Imperial,
+            ..Default::default()
+        };
+        let results = run_calculation(config);
+        let yaml = to_yaml(
+            &results.calculations,
+            None,
+            UnitSystem::Imperial,
+            results.config.wire_min_m,
+            results.config.wire_max_m,
+        );
+        assert!(yaml.contains("half_wave_ft:"), "should have ft field");
+        assert!(!yaml.contains("half_wave_m:"), "should not have m field");
+    }
+
+    #[test]
+    fn to_advise_yaml_includes_all_candidate_fields() {
+        let yaml = to_advise_yaml(450.0, &sample_advise_candidates());
+        assert!(yaml.starts_with("---\n"), "should start with document marker");
+        assert!(yaml.contains("assumed_feedpoint_ohm: 450"), "should include feedpoint");
+        assert!(yaml.contains("candidates:"), "should have candidates key");
+        assert!(yaml.contains("rank: 1"), "should have rank");
+        assert!(yaml.contains("ratio: \"1:9\""), "should have ratio");
+        assert!(yaml.contains("tradeoff_note:"), "should have tradeoff note");
+        assert!(yaml.contains("Good match: 95.2% efficiency"), "should include note text");
+        assert!(yaml.contains("validated: true"), "should have validated flag");
+        assert!(yaml.contains("validation_status: \"passed\""), "should have status");
+        assert!(yaml.contains("validation_note: \"NEC cross-check OK\""), "should have note");
+    }
+
+    #[test]
+    fn default_output_name_yaml() {
+        assert_eq!(default_output_name(ExportFormat::Yaml), "rusty-wire-results.yaml");
+        assert_eq!(default_advise_output_name(ExportFormat::Yaml), "rusty-wire-advise.yaml");
     }
 }

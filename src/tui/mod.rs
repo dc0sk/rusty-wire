@@ -893,6 +893,10 @@ impl TuiState {
                 self.try_export(ExportFormat::Txt);
                 return;
             }
+            KeyCode::Char('y') => {
+                self.try_export(ExportFormat::Yaml);
+                return;
+            }
             KeyCode::Char('s') => {
                 let prefs = crate::prefs::UserPrefs::from_config(&self.app.config);
                 match prefs.save() {
@@ -1357,10 +1361,10 @@ fn hint_text(focus: Focus, show_band_checklist: bool) -> &'static str {
 
     match focus {
         Focus::Config => {
-            " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  s:prefs  i:info  Tab:→results  q:quit"
+            " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  s:prefs  i:info  Tab:→results  q:quit"
         }
         Focus::Results => {
-            " ↑↓/jk:scroll  PgUp/Dn:page  r:run  a:advise  e:csv  E:json  m:md  t:txt  s:prefs  i:info  Tab:→config   q:quit"
+            " ↑↓/jk:scroll  PgUp/Dn:page  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  s:prefs  i:info  Tab:→config   q:quit"
         }
     }
 }

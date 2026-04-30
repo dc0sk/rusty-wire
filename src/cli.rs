@@ -312,6 +312,7 @@ enum CliExportFormat {
     Json,
     Markdown,
     Txt,
+    Yaml,
 }
 
 impl From<CliExportFormat> for ExportFormat {
@@ -321,6 +322,7 @@ impl From<CliExportFormat> for ExportFormat {
             CliExportFormat::Json => ExportFormat::Json,
             CliExportFormat::Markdown => ExportFormat::Markdown,
             CliExportFormat::Txt => ExportFormat::Txt,
+            CliExportFormat::Yaml => ExportFormat::Yaml,
         }
     }
 }
@@ -1913,7 +1915,7 @@ fn interactive_export_prompt(
 ) -> Vec<(ExportFormat, String)> {
     prompt(
         output,
-        "Export results? (none, or comma-separated formats e.g. csv,json,markdown,txt): ",
+        "Export results? (none, or comma-separated formats e.g. csv,json,markdown,txt,yaml): ",
     );
 
     let fmt_raw = read_line(input, "failed to read export format")
@@ -1951,6 +1953,11 @@ fn interactive_export_prompt(
                 "txt" | "text" => {
                     if !out.contains(&ExportFormat::Txt) {
                         out.push(ExportFormat::Txt);
+                    }
+                }
+                "yaml" | "yml" => {
+                    if !out.contains(&ExportFormat::Yaml) {
+                        out.push(ExportFormat::Yaml);
                     }
                 }
                 other => {
@@ -2416,8 +2423,21 @@ mod tests {
     }
 
     #[test]
-    fn interactive_export_prompt_rejects_unknown_format() {
+    fn interactive_export_prompt_accepts_yaml_format() {
         let mut input = Cursor::new(b"yaml\n".to_vec());
+        let mut output = Vec::new();
+        let results = sample_results_for_export_tests();
+
+        let exports = interactive_export_prompt(&mut input, &mut output, &results);
+
+        assert_eq!(exports.iter().map(|(f, _)| f).collect::<Vec<_>>(), vec![&ExportFormat::Yaml]);
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(!rendered.contains("unknown format"));
+    }
+
+    #[test]
+    fn interactive_export_prompt_rejects_unknown_format() {
+        let mut input = Cursor::new(b"xyz\n".to_vec());
         let mut output = Vec::new();
         let results = sample_results_for_export_tests();
 
@@ -2425,7 +2445,7 @@ mod tests {
 
         assert!(exports.is_empty());
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
-        assert!(rendered.contains("unknown format 'yaml'; skipping export."));
+        assert!(rendered.contains("unknown format 'xyz'; skipping export."));
     }
 
     #[test]
@@ -2628,7 +2648,7 @@ mod tests {
         let csv_path = default_output_name(ExportFormat::Csv);
         let _ = fs::remove_file(csv_path);
 
-        let mut input = Cursor::new(b"csv,yaml\n".to_vec());
+        let mut input = Cursor::new(b"csv,xyz\n".to_vec());
         let mut output = Vec::new();
         let results = sample_results_for_export_tests();
 
@@ -2636,7 +2656,7 @@ mod tests {
 
         assert!(exports.is_empty());
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
-        assert!(rendered.contains("unknown format 'yaml'; skipping export."));
+        assert!(rendered.contains("unknown format 'xyz'; skipping export."));
         assert!(!std::path::Path::new(csv_path).exists());
     }
 

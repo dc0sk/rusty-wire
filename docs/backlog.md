@@ -14,7 +14,7 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## CLI / Analysis
 
-- YAML and HTML export targets
+- HTML export target (YAML shipped in v2.13.0)
 - Persistent user preferences file (default units, region, mode)
 
 ## TUI (2.x, `ratatui`)

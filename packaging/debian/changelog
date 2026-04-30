@@ -1,4 +1,4 @@
-rusty-wire (2.12.0-1) unstable; urgency=medium
+rusty-wire (2.13.0-1) unstable; urgency=medium
 
   * Advise mode tradeoff notes: per-candidate one-sentence SWR/match/ATU summary.
   * Tradeoff note in all export formats (CSV, JSON, Markdown, TXT).
