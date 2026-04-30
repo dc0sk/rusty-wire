@@ -62,7 +62,7 @@ use ratatui::Terminal;
 use crate::app::{
     apply_action, band_listing_view, build_advise_candidates, execute_request_checked,
     parse_band_selection, results_display_document, AdviseView, AntennaModel, AppAction,
-    AppRequest, AppState, CalcMode, ExportFormat, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
+    AppConfig, AppRequest, AppState, CalcMode, ExportFormat, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
 };
 use crate::band_presets::load_named_presets;
 use crate::bands::ITURegion;
@@ -281,6 +281,16 @@ struct TuiState {
     collapsed_bands: std::collections::HashSet<String>,
     /// Index of the band currently selected for toggle in the results panel.
     results_band_cursor: usize,
+    /// Whether the session-name input overlay is open (save flow).
+    show_session_save: bool,
+    /// Text being typed in the session-name input overlay.
+    session_name_input: String,
+    /// Whether the session picker/load overlay is open.
+    show_session_picker: bool,
+    /// Names of sessions loaded for the picker.
+    session_picker_items: Vec<String>,
+    /// Cursor row in the session picker.
+    session_picker_cursor: usize,
 }
 
 impl TuiState {
@@ -362,6 +372,11 @@ impl TuiState {
             preview_scroll: 0,
             collapsed_bands: std::collections::HashSet::new(),
             results_band_cursor: 0,
+            show_session_save: false,
+            session_name_input: String::new(),
+            show_session_picker: false,
+            session_picker_items: Vec::new(),
+            session_picker_cursor: 0,
         }
     }
 
@@ -975,6 +990,60 @@ impl TuiState {
         self.show_band_checklist = true;
     }
 
+    /// Resync all TUI preset-index fields to match a newly loaded `AppConfig`.
+    /// Called after loading a session so the config panel reflects the session values.
+    fn sync_indices_from_config(&mut self, config: &AppConfig) {
+        if let Some(idx) = VF_PRESETS
+            .iter()
+            .position(|&v| (v - config.velocity_factor).abs() < 1e-9)
+        {
+            self.vf_idx = idx;
+        }
+        if let Some(idx) = TRANSFORMER_RATIOS
+            .iter()
+            .position(|&r| r == config.transformer_ratio)
+        {
+            self.ratio_idx = idx;
+        }
+        if let Some(idx) = WIRE_MIN_PRESETS
+            .iter()
+            .position(|&v| (v - config.wire_min_m).abs() < 1e-9)
+        {
+            self.wire_min_idx = idx;
+        }
+        if let Some(idx) = WIRE_MAX_PRESETS
+            .iter()
+            .position(|&v| (v - config.wire_max_m).abs() < 1e-9)
+        {
+            self.wire_max_idx = idx;
+        }
+        if let Some(idx) = STANDARD_ANTENNA_HEIGHTS_M
+            .iter()
+            .position(|&v| (v - config.antenna_height_m).abs() < 1e-9)
+        {
+            self.height_idx = idx;
+        }
+        if let Some(idx) = GROUND_CLASS_PRESETS
+            .iter()
+            .position(|&g| g == config.ground_class)
+        {
+            self.ground_idx = idx;
+        }
+        if let Some(idx) = CONDUCTOR_DIAMETER_PRESETS
+            .iter()
+            .position(|&v| (v - config.conductor_diameter_mm).abs() < 1e-9)
+        {
+            self.conductor_idx = idx;
+        }
+        self.custom_band_indices = config.band_indices.clone();
+        if let Some(idx) = STEP_PRESETS
+            .iter()
+            .position(|&v| (v - config.step_m).abs() < 1e-9)
+        {
+            self.step_idx = idx;
+        }
+    }
+
     fn handle_key(&mut self, key: KeyEvent) {
         if key.kind != KeyEventKind::Press {
             return;
@@ -1005,6 +1074,115 @@ impl TuiState {
                 }
                 KeyCode::PageDown => {
                     self.preview_scroll = self.preview_scroll.saturating_add(20);
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        // Session-name input overlay (save flow).
+        if self.show_session_save {
+            match key.code {
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quit = true;
+                }
+                KeyCode::Esc => {
+                    self.show_session_save = false;
+                    self.session_name_input.clear();
+                }
+                KeyCode::Enter => {
+                    let name = self.session_name_input.trim().to_string();
+                    if !name.is_empty() {
+                        match crate::sessions::SessionStore::save(&name, &self.app.config) {
+                            Ok(()) => {
+                                self.export_status = Some(format!("Session \"{name}\" saved."));
+                            }
+                            Err(err) => {
+                                self.export_status =
+                                    Some(format!("Session save failed: {err}"));
+                            }
+                        }
+                    }
+                    self.show_session_save = false;
+                    self.session_name_input.clear();
+                }
+                KeyCode::Backspace => {
+                    self.session_name_input.pop();
+                }
+                KeyCode::Char(c) => {
+                    // Reject control characters; allow printable.
+                    if !c.is_control() {
+                        self.session_name_input.push(c);
+                    }
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        // Session picker overlay (load/delete flow).
+        if self.show_session_picker {
+            match key.code {
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quit = true;
+                }
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    self.show_session_picker = false;
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if self.session_picker_cursor > 0 {
+                        self.session_picker_cursor -= 1;
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if self.session_picker_cursor + 1 < self.session_picker_items.len() {
+                        self.session_picker_cursor += 1;
+                    }
+                }
+                KeyCode::Enter => {
+                    if let Some(name) = self
+                        .session_picker_items
+                        .get(self.session_picker_cursor)
+                        .cloned()
+                    {
+                        if let Some(config) =
+                            crate::sessions::SessionStore::load_config(&name)
+                        {
+                            self.app.config = config.clone();
+                            // Sync TUI preset indices to the loaded config.
+                            self.sync_indices_from_config(&config);
+                            self.export_status =
+                                Some(format!("Session \"{name}\" loaded."));
+                        }
+                    }
+                    self.show_session_picker = false;
+                }
+                KeyCode::Char('d') => {
+                    if let Some(name) = self
+                        .session_picker_items
+                        .get(self.session_picker_cursor)
+                        .cloned()
+                    {
+                        match crate::sessions::SessionStore::delete(&name) {
+                            Ok(_) => {
+                                self.export_status =
+                                    Some(format!("Session \"{name}\" deleted."));
+                                // Refresh list.
+                                self.session_picker_items =
+                                    crate::sessions::SessionStore::list();
+                                self.session_picker_cursor = self
+                                    .session_picker_cursor
+                                    .min(self.session_picker_items.len().saturating_sub(1));
+                                if self.session_picker_items.is_empty() {
+                                    self.show_session_picker = false;
+                                }
+                            }
+                            Err(err) => {
+                                self.export_status =
+                                    Some(format!("Delete failed: {err}"));
+                            }
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -1118,6 +1296,21 @@ impl TuiState {
                     Err(err) => {
                         self.export_status = Some(format!("Preferences save failed: {err}"));
                     }
+                }
+                return;
+            }
+            KeyCode::Char('S') => {
+                self.show_session_save = true;
+                self.session_name_input.clear();
+                return;
+            }
+            KeyCode::Char('O') => {
+                self.session_picker_items = crate::sessions::SessionStore::list();
+                if self.session_picker_items.is_empty() {
+                    self.export_status = Some("No saved sessions yet. Press S to save one.".into());
+                } else {
+                    self.session_picker_cursor = 0;
+                    self.show_session_picker = true;
                 }
                 return;
             }
@@ -1249,6 +1442,14 @@ fn render(f: &mut ratatui::Frame, state: &TuiState) {
 
     if state.export_preview.is_some() {
         render_export_preview(f, area, state);
+    }
+
+    if state.show_session_save {
+        render_session_name_input(f, area, state);
+    }
+
+    if state.show_session_picker {
+        render_session_picker(f, area, state);
     }
 }
 
@@ -1622,12 +1823,30 @@ fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         return;
     }
 
-    let text = hint_text(state.focus, state.show_band_checklist, state.export_preview.is_some());
+    let text = hint_text(
+        state.focus,
+        state.show_band_checklist,
+        state.export_preview.is_some(),
+        state.show_session_save,
+        state.show_session_picker,
+    );
     let para = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
     f.render_widget(para, area);
 }
 
-fn hint_text(focus: Focus, show_band_checklist: bool, show_preview: bool) -> &'static str {
+fn hint_text(
+    focus: Focus,
+    show_band_checklist: bool,
+    show_preview: bool,
+    show_session_save: bool,
+    show_session_picker: bool,
+) -> &'static str {
+    if show_session_save {
+        return " Type a name  Enter:save  Esc:cancel";
+    }
+    if show_session_picker {
+        return " ↑↓/jk:move  Enter:load  d:delete  Esc/q:cancel";
+    }
     if show_preview {
         return " ↑↓/jk:scroll  PgUp/Dn:page  Enter:write  Esc/q:cancel";
     }
@@ -1637,10 +1856,10 @@ fn hint_text(focus: Focus, show_band_checklist: bool, show_preview: bool) -> &'s
 
     match focus {
         Focus::Config => {
-            " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  s:prefs  i:info  Tab:→results  q:quit"
+            " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  s:prefs  S:save-session  O:sessions  i:info  Tab:→results  q:quit"
         }
         Focus::Results => {
-            " ↑↓/jk:scroll  PgUp/Dn:page  [/]:band  Space:collapse  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  Tab:→config  q:quit"
+            " ↑↓/jk:scroll  PgUp/Dn:page  [/]:band  Space:collapse  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  S:save-session  O:sessions  Tab:→config  q:quit"
         }
     }
 }
@@ -1738,6 +1957,98 @@ fn render_export_preview(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         .style(Style::default().fg(Color::White));
     f.render_widget(para, inner);
 }
+
+// ── Session-name input overlay ─────────────────────────────────────────────
+
+fn render_session_name_input(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
+    let popup_area = centered_rect(60, 20, area);
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title(" Save Session ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    // Split inner: label row / input row / hint row.
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(1), // label
+            Constraint::Length(1), // input field
+            Constraint::Length(1), // hint
+        ])
+        .split(inner);
+
+    let label = Paragraph::new("Session name:");
+    f.render_widget(label, rows[0]);
+
+    // Show typed text + a blinking-cursor indicator.
+    let input_text = format!("{}▏", state.session_name_input);
+    let input = Paragraph::new(input_text).style(Style::default().fg(Color::White));
+    f.render_widget(input, rows[1]);
+
+    let hint = Paragraph::new("Enter: save   Esc: cancel")
+        .style(Style::default().fg(Color::DarkGray));
+    f.render_widget(hint, rows[2]);
+}
+
+// ── Session picker overlay ──────────────────────────────────────────────────
+
+fn render_session_picker(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
+    let popup_area = centered_rect(72, 80, area);
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title(" Load Session ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Min(0),    // list
+            Constraint::Length(1), // hint
+        ])
+        .split(inner);
+
+    let list_items: Vec<ratatui::widgets::ListItem> = state
+        .session_picker_items
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            let prefix = if i == state.session_picker_cursor {
+                "► "
+            } else {
+                "  "
+            };
+            let style = if i == state.session_picker_cursor {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+            ratatui::widgets::ListItem::new(format!("{prefix}{name}")).style(style)
+        })
+        .collect();
+
+    let list = ratatui::widgets::List::new(list_items);
+    f.render_widget(list, rows[0]);
+
+    let hint = Paragraph::new("↑↓/jk: move   Enter: load   d: delete   Esc/q: cancel")
+        .style(Style::default().fg(Color::DarkGray));
+    f.render_widget(hint, rows[1]);
+}
+
+// ── Band checklist overlay ──────────────────────────────────────────────────
 
 fn render_band_checklist(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let popup_area = centered_rect(72, 80, area);
@@ -2165,7 +2476,7 @@ mod tests {
 
     #[test]
     fn hint_text_for_config_focus_matches_documented_keybindings() {
-        let text = hint_text(Focus::Config, false, false);
+        let text = hint_text(Focus::Config, false, false, false, false);
         assert!(text.contains("e:csv"));
         assert!(text.contains("E:json"));
         assert!(text.contains("m:md"));
@@ -2176,7 +2487,7 @@ mod tests {
 
     #[test]
     fn hint_text_for_results_focus_mentions_scroll_and_tab_back() {
-        let text = hint_text(Focus::Results, false, false);
+        let text = hint_text(Focus::Results, false, false, false, false);
 
         assert!(text.contains("a:advise"));
         assert!(text.contains("↑↓/jk:scroll"));
@@ -2186,7 +2497,7 @@ mod tests {
 
     #[test]
     fn hint_text_for_band_checklist_matches_overlay_controls() {
-        let text = hint_text(Focus::Config, true, false);
+        let text = hint_text(Focus::Config, true, false, false, false);
 
         assert!(text.contains("Space:toggle"));
         assert!(text.contains("Enter:confirm"));
