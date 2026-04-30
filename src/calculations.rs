@@ -172,6 +172,11 @@ pub struct WireCalculation {
     pub skip_distance_min_km: f64,
     pub skip_distance_max_km: f64,
     pub skip_distance_avg_km: f64,
+
+    // NEC-calibrated feedpoint resistance for dipole at deployment height and ground.
+    // Derived from fnec-rust Hallén solver corpus data (corpus/reference-results.json).
+    // Used for transformer-ratio length correction and surfaced in CLI output.
+    pub dipole_feedpoint_r_ohm: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -329,14 +334,19 @@ pub fn calculate_for_band_with_environment(
     let full_wave_ft = full_wave_m * METERS_TO_FEET;
     let quarter_wave_ft = quarter_wave_m * METERS_TO_FEET;
 
-    // Use a shared nominal feedpoint reference so transformer selection has a
-    // consistent impact across resonant families and optimization behavior.
+    // NEC-calibrated feedpoint resistance: use corpus reference data instead of the
+    // classic textbook 73 Ω free-space value. Height and ground affect the radiation
+    // resistance through image-method coupling; the NEC values are validated against
+    // fnec-rust Hallén solver output (see corpus/reference-results.json).
+    let nominal_feedpoint_r = nec_calibrated_dipole_r(antenna_height_m, ground_class);
+
+    // Use the NEC-calibrated nominal for all transformer-ratio length corrections.
     let corrected_half_wave_m =
-        impedance_corrected_length_m(half_wave_m, 73.0, transformer, conductor_diameter_mm);
+        impedance_corrected_length_m(half_wave_m, nominal_feedpoint_r, transformer, conductor_diameter_mm);
     let corrected_full_wave_m =
-        impedance_corrected_length_m(full_wave_m, 73.0, transformer, conductor_diameter_mm);
+        impedance_corrected_length_m(full_wave_m, nominal_feedpoint_r, transformer, conductor_diameter_mm);
     let corrected_quarter_wave_m =
-        impedance_corrected_length_m(quarter_wave_m, 73.0, transformer, conductor_diameter_mm);
+        impedance_corrected_length_m(quarter_wave_m, nominal_feedpoint_r, transformer, conductor_diameter_mm);
     let corrected_half_wave_ft = corrected_half_wave_m * METERS_TO_FEET;
     let corrected_full_wave_ft = corrected_full_wave_m * METERS_TO_FEET;
     let corrected_quarter_wave_ft = corrected_quarter_wave_m * METERS_TO_FEET;
@@ -438,7 +448,52 @@ pub fn calculate_for_band_with_environment(
         skip_distance_min_km,
         skip_distance_max_km,
         skip_distance_avg_km,
+        dipole_feedpoint_r_ohm: nominal_feedpoint_r,
     }
+}
+
+/// Return the NEC-calibrated radiation resistance (real part of feedpoint impedance)
+/// for a half-wave dipole at the given height and ground, derived from fnec-rust
+/// Hallén solver corpus sweeps (corpus/reference-results.json, v2.9.0).
+///
+/// Reference data (7.1 MHz, 2 mm wire, 51 segments, 0.95 VF cut):
+///   free space:          R ≈  62.94 Ω
+///   7 m AGL, good:       R ≈  73.03 Ω
+///   10 m AGL, poor:      R ≈  56.38 Ω
+///   10 m AGL, average:   R ≈  54.35 Ω
+///   10 m AGL, good:      R ≈  52.84 Ω
+///   12 m AGL, good:      R ≈  45.56 Ω
+///
+/// For heights other than 7/10/12 m the value is linearly interpolated.
+/// Ground-class offset at 10 m is applied as a calibrated delta.
+pub fn nec_calibrated_dipole_r(antenna_height_m: f64, ground_class: GroundClass) -> f64 {
+    // Anchor table: resistance at each height with "good" ground (from NEC corpus).
+    const H7_GOOD: f64 = 73.03;   // 7 m AGL, good soil
+    const H10_GOOD: f64 = 52.84;  // 10 m AGL, good soil
+    const H12_GOOD: f64 = 45.56;  // 12 m AGL, good soil
+
+    // Ground-class correction deltas at 10 m AGL (NEC corpus deltas relative to "good"):
+    //   average - good ≈ +1.51 Ω;  poor - good ≈ +3.54 Ω
+    let ground_delta: f64 = match ground_class {
+        GroundClass::Good => 0.0,
+        GroundClass::Average => 1.51,
+        GroundClass::Poor => 3.54,
+    };
+
+    // Interpolate the height-dependent "good" baseline.
+    let h_good = if antenna_height_m <= 7.0 {
+        H7_GOOD
+    } else if antenna_height_m >= 12.0 {
+        H12_GOOD
+    } else if antenna_height_m <= 10.0 {
+        let t = (antenna_height_m - 7.0) / (10.0 - 7.0);
+        H7_GOOD + t * (H10_GOOD - H7_GOOD)
+    } else {
+        let t = (antenna_height_m - 10.0) / (12.0 - 10.0);
+        H10_GOOD + t * (H12_GOOD - H10_GOOD)
+    };
+
+    (h_good + ground_delta).clamp(30.0, 90.0)
 }
 
 fn height_skip_factor(antenna_height_m: f64) -> f64 {

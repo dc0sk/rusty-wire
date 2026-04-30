@@ -200,7 +200,12 @@ pub struct AdviseView {
 }
 
 pub fn optimize_transformer_candidates(config: &AppConfig) -> TransformerOptimizerView {
-    let source_impedance = assumed_feedpoint_impedance_ohm(config.mode, config.antenna_model);
+    let source_impedance = assumed_feedpoint_impedance_ohm(
+        config.mode,
+        config.antenna_model,
+        config.antenna_height_m,
+        config.ground_class,
+    );
 
     let baseline = build_optimizer_calculations(config, TransformerRatio::R1To1);
     let baseline_avg_half_wave = mean_half_wave_m(&baseline);
@@ -333,15 +338,25 @@ pub fn build_advise_candidates_with_thresholds(
     }
 }
 
-fn assumed_feedpoint_impedance_ohm(mode: CalcMode, antenna_model: Option<AntennaModel>) -> f64 {
+fn assumed_feedpoint_impedance_ohm(
+    mode: CalcMode,
+    antenna_model: Option<AntennaModel>,
+    antenna_height_m: f64,
+    ground_class: GroundClass,
+) -> f64 {
     match antenna_model {
-        Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) => 73.0,
+        // Use NEC-calibrated height/ground-aware feedpoint resistance for dipole types.
+        Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) => {
+            crate::calculations::nec_calibrated_dipole_r(antenna_height_m, ground_class)
+        }
         Some(AntennaModel::TrapDipole) => 65.0,
         Some(AntennaModel::FullWaveLoop) => 100.0,
         Some(AntennaModel::EndFedHalfWave) => 2800.0,
         Some(AntennaModel::OffCenterFedDipole) => 200.0,
         None => match mode {
-            CalcMode::Resonant => 73.0,
+            CalcMode::Resonant => {
+                crate::calculations::nec_calibrated_dipole_r(antenna_height_m, ground_class)
+            }
             CalcMode::NonResonant => 450.0,
         },
     }
@@ -2603,6 +2618,21 @@ pub fn band_display_view(
                 ));
             }
         },
+    }
+
+    // Show NEC-calibrated feedpoint resistance for dipole-family antennas.
+    // Surfaced here so users can cross-check transformer selection and expected SWR.
+    let show_feedpoint = matches!(
+        antenna_model,
+        Some(AntennaModel::Dipole)
+            | Some(AntennaModel::InvertedVDipole)
+            | None
+    );
+    if show_feedpoint {
+        lines.push(format!(
+            "  Est. feedpoint R: {:.1} \u{03a9} (NEC-calibrated)",
+            c.dipole_feedpoint_r_ohm
+        ));
     }
 
     lines.push(format!(
