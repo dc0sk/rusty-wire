@@ -73,10 +73,11 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 - Add automated test coverage for all interactive prompt paths
 
 ### 5) TUI (`ratatui`)
-- Add `src/bin/tui.rs` (or `--tui` flag on the main binary)
-- Event loop: render `AppConfig` state → dispatch input actions → recalculate → re-render
-- Feature parity with current CLI/interactive: band selection, antenna model, calc mode, wire window, transformer, export
-- Shared `AppState` / `AppAction` types so GUI reuse is straightforward
+- ✅ Add `src/bin/tui.rs` (or `--tui` flag on the main binary)
+- ✅ Event loop: render `AppConfig` state → dispatch input actions → recalculate → re-render
+- ✅ Feature parity with current CLI/interactive: band selection, antenna model, calc mode, wire window, transformer, export
+- ✅ Shared `AppState` / `AppAction` types so GUI reuse is straightforward
+- **Status**: Completed in v2.8.0+. TUI accessible via `--tui` / `-t` flag with 35 comprehensive unit tests.
 
 ---
 

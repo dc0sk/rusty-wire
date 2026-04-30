@@ -7,8 +7,8 @@ last_updated: 2026-04-30
 
 # Project Review — Rusty Wire
 
-**Date:** 2026-04-29  
-**Scope:** Full codebase review at v2.7.0, covering project understanding, requirements, research, testing, and architecture.
+**Date:** 2026-04-30  
+**Scope:** Full codebase review at v2.8.0, covering project understanding, requirements, research, testing, and architecture.
 
 ---
 
@@ -25,7 +25,7 @@ Rusty Wire is a command-line and terminal-UI application for amateur (ham) radio
 | **ITU region support** | Region 1/2/3 with band variants for 80 m, 40 m, and 60 m |
 | **Transformer advice** | Recommends and ranks balun/unun ratios; `--advise` mode ranks candidates by a scored model |
 | **Export** | CSV, JSON, Markdown, TXT — in metric, imperial, or both |
-| **Frontends** | CLI with `--interactive` prompt mode, and a full-screen TUI (`rusty-wire-tui`) built with ratatui |
+| **Frontends** | CLI with `--interactive` prompt mode, and a full-screen TUI (v2.8.0+) accessible via `--tui` or `-t` flag, built with ratatui |
 | **Extensibility** | Named band presets from TOML, persistent user preferences, optional fnec-rust cross-validation |
 
 ### Engineering posture
@@ -36,7 +36,10 @@ The project is well beyond a prototype. It has:
 - A pre-push hook enforcing `fmt` + `check` + `test`
 - Committed SPDX and CycloneDX SBOMs
 - Multi-architecture CI packaging (x86_64 + aarch64 Debian + Arch)
-- Detailed documentation across architecture, math, testing, roadmap, and calibration
+- Detailed documentation across architecture, math, testing, roadmap, calibration, and requirements engineering
+- **Formal requirements document** (`docs/requirements.md`) with functional/non-functional/compatibility contracts, parameter contracts, tolerance matrix, gap register, and traceability matrix
+- **Comprehensive corpus validation framework** with 9 active test cases (6 skip-distance baseline, 1 non-resonant multi-band, 1 NEC baseline) and roadmap for Phase 2/3 NEC extensions
+- **TUI feature parity** with 35+ unit tests covering all keyboard interactions and state transitions
 
 The project is clearly the work of a single, disciplined author with a coherent vision and above-average engineering hygiene for a personal tool.
 
@@ -46,7 +49,7 @@ The project is clearly the work of a single, disciplined author with a coherent 
 
 ### 2.1 Requirements
 
-**Finding: requirements exist only implicitly.**
+**Finding: formal requirements document established (v2.8.0).**
 
 Functional requirements are scattered across `README.md`, `docs/roadmap.md`, `docs/backlog.md`, and code comments. There is no single requirements document that states what the tool must do, at what precision, and under what constraints. This is common for personal projects, but it creates two practical problems:
 

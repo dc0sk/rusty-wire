@@ -35,9 +35,17 @@ See `~/git/fnec-rust/corpus/` for fnec-rust's validation framework and proven NE
 
 **Note on impedance**: The negative imaginary part (capacitive reactance) indicates the antenna is electrically slightly longer than resonant at 7.1 MHz. This is expected behavior for thin-wire dipoles with the standard half-wave geometry used by rusty-wire.
 
+### In Progress — Phase 2 (External Generation)
+
+**Status**: NEC decks for Phase 2 are being generated in the fnec-rust project corpus and will be imported into rusty-wire corpus upon completion. This approach leverages fnec-rust's proven NEC validation framework and ensures cross-tool consistency.
+
+**Generation Location**: `~/git/fnec-rust/corpus/` (Hallén solver + Python MoM cross-validation)
+
+**Import Timeline**: Phase 2 decks will be committed to rusty-wire corpus/ when fnec-rust generation is complete, then integrated into tests/corpus_validation.rs with CI gates.
+
 ### Deferred — Remaining Work
 
-## Phase 2 Completion (GAP-011 Continuation)
+## Phase 2 Completion (GAP-011 Continuation) — To Be Generated in fnec-rust
 
 ### 1. Resonant Dipole Variants (High Priority)
 

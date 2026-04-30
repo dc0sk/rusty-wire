@@ -20,3 +20,11 @@ pub mod tui;
 pub fn run_cli(args: &[String]) -> bool {
     cli::run_from_args(args)
 }
+
+/// Run the Text User Interface (TUI) with optional band preset config path.
+///
+/// Returns `Ok(())` on successful exit or user quit, `Err(msg)` on initialization failure.
+/// The TUI auto-discovers `~/.config/rusty-wire/bands.toml` and `./bands.toml` for presets.
+pub fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
+    tui::run(None)
+}

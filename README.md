@@ -99,9 +99,54 @@ cargo build --release
 # Interactive planning session
 ./target/release/rusty-wire --interactive
 
+# Launch the TUI (full-screen mode)
+./target/release/rusty-wire --tui
+
 # During development
 cargo run -- [OPTIONS]
 ```
+
+---
+
+## TUI Mode (Full-Screen Terminal Interface)
+
+Rusty Wire includes a keyboard-driven Text User Interface (`--tui` or `-t` flag) with ratatui:
+
+```bash
+rusty-wire --tui
+```
+
+### TUI Features
+
+- **Real-time configuration**: Adjust band presets, antenna models, mode, velocity factor, height, and ground class
+- **Live recalculation**: Results update as you modify settings (with debounce for non-resonant search)
+- **Band selection**: Cycle through named presets or open a checklist to pick custom bands
+- **Export formats**: Press `e`/`E`/`m`/`t` to export results as CSV/JSON/Markdown/plain text without leaving the TUI
+- **Advise panel**: Press `a` to toggle ranked balun/unun candidates with efficiency estimates
+- **Keyboard navigation**: Arrow keys or vim keys (`hjkl`) to navigate; Tab to switch focus between config and results
+- **Persistent preferences**: Press `s` to save current settings as defaults (`~/.config/rusty-wire/config.toml`)
+- **Project info**: Press `i` or `?` to view metadata and keybindings
+
+### Keybindings Reference
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Select previous config field |
+| `↓` / `j` | Select next config field |
+| `←` / `h` | Decrease field value |
+| `→` / `l` | Increase field value |
+| `r` / `Enter` | Run calculation |
+| `e` | Export CSV |
+| `E` | Export JSON |
+| `m` | Export Markdown |
+| `t` | Export plain text |
+| `s` | Save preferences |
+| `a` | Toggle advise panel |
+| `i` / `?` | Toggle project info |
+| `Tab` | Toggle focus (config ↔ results) |
+| `PgUp` / `PgDn` | Scroll results |
+| `q` / `Esc` | Quit |
+| `Ctrl-C` | Quit |
 
 ---
 
