@@ -55,7 +55,7 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 - Introduce view-friendly metadata where useful: recommended-transformer explanations, skipped-band reasons, per-band annotations
 
 ### 2) Custom-band and frequency input
-- Support user-defined band presets via a config file (`bands.toml` or similar)
+- ✅ Support user-defined band presets via a config file (`bands.toml` or similar) — v2.16.0
 - `--freq-list <f1,f2,...>` for multiple explicit frequencies in one run
 
 ### 3) Additional antenna models
