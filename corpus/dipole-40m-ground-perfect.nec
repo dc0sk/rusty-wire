@@ -1,0 +1,9 @@
+CM Half-wave dipole at 40m (7.1 MHz) over perfect-conducting ground
+CM Horizontal wire at 10 m AGL, 20.07 m total (0.95 VF), GN 1 PEC
+CE
+GW 1 51 -10.035 0 10 10.035 0 10 0.001
+GE 0
+GN 1
+EX 0 1 26 0 1.0 0.0
+FR 0 1 0 0 7.1 0.0
+EN

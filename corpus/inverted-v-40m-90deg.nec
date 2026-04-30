@@ -1,0 +1,12 @@
+CM Inverted-V at 40m (7.1 MHz), 90 degree apex angle
+CM Apex at (0, 0, 12 m); each leg 10.035 m at 45 deg from horizontal
+CM Leg endpoints at (+-7.096, 0, 4.904 m); good ground (GN 2)
+CM Total wire length: 20.07 m (0.95 VF); feed at apex, segment 1 of wire 1
+CE
+GW 1 26 0 0 12 7.096 0 4.904 0.001
+GW 2 26 0 0 12 -7.096 0 4.904 0.001
+GE 0
+GN 2 0 0 0 20.0 0.03
+EX 0 1 1 0 1.0 0.0
+FR 0 1 0 0 7.1 0.0
+EN

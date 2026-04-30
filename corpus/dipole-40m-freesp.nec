@@ -1,0 +1,8 @@
+CM Half-wave dipole at 40m (7.1 MHz), free space
+CM Wire: 20.07 m (lambda/2 with 0.95 velocity factor), z-axis centred at origin
+CE
+GW 1 51 0 0 -10.035 0 0 10.035 0.001
+GE
+EX 0 1 26 0 1.0 0.0
+FR 0 1 0 0 7.1 0.0
+EN
