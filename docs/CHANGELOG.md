@@ -13,6 +13,14 @@ All notable changes to Rusty Wire are documented here.
 
 ---
 
+## [2.16.0] - 2026-04-30
+
+### Added
+- **Custom band entries in `bands.toml`** (roadmap item 2): users can define arbitrary `[[band]]` entries alongside `[presets]` in their `bands.toml` config file; each entry is validated and appended to every calculation run. `freq_center_mhz` is optional (defaults to midpoint). Missing file is silently ignored; parse errors produce a warning.
+- **macOS release bundles**: tagged releases now upload `rusty-wire-<version>-x86_64-macos.tar.gz` and `rusty-wire-<version>-aarch64-macos.tar.gz` (containing binary + README + LICENSE) via GitHub Actions on `macos-13` / `macos-14` runners.
+
+---
+
 ## [2.15.0] - 2026-04-30
 
 ### Added
