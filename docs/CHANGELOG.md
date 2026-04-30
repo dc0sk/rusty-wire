@@ -1,18 +1,42 @@
+---
+project: rusty-wire
+doc: docs/CHANGELOG.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Changelog
 
 All notable changes to Rusty Wire are documented here.
+
+## [2.8.0] - 2026-04-30
+
+### Added
+- **NEC-requirements roadmap**: added comprehensive `docs/nec-requirements.md` with Phase 2/3 specifications for 14+ NEC decks (ground variants, height-aware, inverted-V, EFHW, conductor correction). Includes templates, execution procedures, tolerance gates, and integration plan for full COMP-001 resonant tolerance verification.
+- **Minimal NEC baseline (GAP-011)**: created 40m free-space resonant dipole NEC deck (`corpus/dipole-40m-freesp.nec`, fnec-rust reference: Z = 62.94 − j69.28 Ω) and enabled corpus test `corpus_resonant_dipole_40m_nec` for CI-gated baseline validation. Non-NEC corpus complete (6 skip-distance + 1 non-resonant multi-band + 1 NEC baseline = 9 active tests).
+
+### Infrastructure
+- **NEC reference integration**: fnec-rust Hallén solver validated against Python MoM for NEC-2 impedance reference generation; corpus test framework ready for 14+ additional NEC decks (Phase 3).
+- **Requirements gap closure**: GAP-011 status changed from "deferred" to "partial"; COMP-001 now has baseline dipole (free space) CI-gated with remaining antenna types and ground variants specified for Phase 3 continuation.
+
+### Changed
+- **Interactive-mode test coverage** (slices 1–5): extended injected-I/O unit tests to cover all remaining interactive prompt paths — export format normalization (uppercase tokens), menu option 4 (ITU region change), menu option 5 (project info), deduplication of alias formats, mixed valid/invalid abort behavior, multi-format defaults, and single-format explicit output paths. Unit test count: 275 (up from 242 at v2.7.0).
 
 ## [Unreleased]
 
 ### Added
 - **TUI advise panel toggle**: press `a` in the TUI to toggle ranked wire + balun/unun candidates directly in the results panel. The view reuses app-layer optimizer ranking and auto-hides whenever configuration changes to avoid stale recommendations.
 
-### Changed
-- **Interactive-mode test coverage** (slices 1–5): extended injected-I/O unit tests to cover all remaining interactive prompt paths — export format normalization (uppercase tokens), menu option 4 (ITU region change), menu option 5 (project info), deduplication of alias formats, mixed valid/invalid abort behavior, multi-format defaults, and single-format explicit output paths. Unit test count: 255 (up from 242 at v2.7.0).
-
 ### Infrastructure
 - **Packaging version sync guardrails**: added `scripts/sync-packaging-version.sh` (one-command Arch/Debian version patch), `scripts/check-packaging-version-sync.sh` (CI validation), and `.github/workflows/packaging-version-sync.yml` (PR + main branch enforcement). Debian changelog fixed from 2.6.0-1 to 2.7.0-1.
 - **Release tag version gate**: `.github/workflows/release-packaging.yml` now runs a `verify-tag-version-sync` job first; all release steps are gated on Cargo.toml, PKGBUILD, and Debian changelog being at the same version as the pushed tag.
+- **Requirements document**: added `docs/requirements.md` covering functional/non-functional requirements, component contracts, parameter contracts (PAR-001/PAR-002), gap register, and full traceability matrix.
+- **Export format contract tests**: `tests/export_format_contract.rs` locks PAR-001 v1 (CSV) and PAR-002 v1 (JSON) output schema against accidental breaking changes.
+- **Corpus validation infrastructure**: `tests/corpus_validation.rs` + `corpus/` directory with `reference-results.json` and `skip_distance_40m_itut_p368.notes` seed case; see `docs/corpus-guide.md`.
+- **CI coverage gate**: `.github/workflows/coverage.yml` using `cargo-tarpaulin` with 90% threshold (NFR-003).
+- **CI corpus validation**: `.github/workflows/corpus-validation.yml` runs corpus tests and structure verification on PR and main push.
+- **Pre-commit hook**: `.githooks/pre-commit` runs `cargo fmt --check`, `cargo clippy`, and `cargo test` before each commit.
+- **Makefile**: 11 make targets (`check`, `test`, `coverage`, `corpus`, `contract`, `lint`, `fmt`, `build`, `docs-validate`, `clean`, `help`) wrapping common dev-cycle commands.
 
 ## [2.7.0] — 2026-04-29
 

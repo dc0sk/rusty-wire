@@ -1,4 +1,4 @@
-rusty-wire (2.7.0-1) unstable; urgency=medium
+rusty-wire (2.8.0-1) unstable; urgency=medium
 
   * Initial Debian packaging.
 

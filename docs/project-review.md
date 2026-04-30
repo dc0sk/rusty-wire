@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/project-review.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Project Review — Rusty Wire
 
 **Date:** 2026-04-29  
@@ -80,11 +87,11 @@ The math in `docs/math.md` is admirably transparent. Formulas are cited to the A
 
 **Finding: good breadth, gaps in depth and feedback loop.**
 
-The three-layer strategy (unit + integration + shell regression) is solid. 255 tests for a ~13,000 line codebase is respectable. The pre-push hook ensures tests are not skipped accidentally.
+The three-layer strategy (unit + integration + shell regression) is solid. 275 lib tests + corpus/contract integration tests for a ~13,000 line codebase is respectable. The pre-push hook ensures tests are not skipped accidentally.
 
 **Gaps identified:**
 
-**Coverage is untracked.** There is no `cargo tarpaulin` or `cargo llvm-cov` configured. The 255-test count is known, but which code paths those tests exercise is not. `calculations.rs` and the non-resonant optimizer in `app.rs` are the most algorithmic parts of the codebase, and it is unclear how thoroughly their edge cases are covered.
+**Coverage is improving.** A `ci/coverage.yml` gate using `cargo-tarpaulin` is now in place (90% threshold per NFR-003). `calculations.rs` has grown from 23 to 44 unit tests, covering all `GroundClass`/`TransformerRatio` variants, skip-factor branches (including fallback/clamp), `WireCalculation::fmt`, and optimizer edge cases. Exact line-coverage percentage is not yet measured on this machine (tarpaulin compile failed); the CI gate will surface the number on the first passing run.
 
 **No property-based tests.** The optimizer in `calculations.rs` has mathematical invariants that are ideal candidates for property-based testing:
 - For any wire length `L` returned by the non-resonant optimizer, `d(L)` should be ≥ `d(L ± step)`.
@@ -95,7 +102,7 @@ The `proptest` crate would let these be verified over thousands of random inputs
 
 **Shell regression scripts are second-class.** The regression scripts (`test-itu-region-bands.sh`, `test-multi-optima.sh`, `test-nec-calibration.sh`) require the binary to be pre-built and do not run inside `cargo test`. This means they are easy to skip (the hook only runs `cargo test`, not `./scripts/test-all.sh`) and they do not appear in CI on pull requests.
 
-**Interactive mode testing is incomplete.** The changelog notes slices 1–5 of interactive-mode coverage were added in 2.7.0 (up to 255 tests). The roadmap still lists "interactive-mode testability" as a priority. It is not clear which interactive paths remain uncovered.
+**Interactive mode testing is thoroughly covered.** The changelog notes slices 1–5 of interactive-mode coverage were added in 2.7.0 (up to 255 lib tests at the time; now 275, with 50+ unit tests in src/cli.rs for all interactive prompt paths). GAP-009 was resolved in 2026-04-30.
 
 **No mutation testing.** It is possible to write a test suite that passes even when the optimizer's comparison operator is flipped (e.g., `>` vs. `≥`). A single `cargo mutants` run on `calculations.rs` would reveal whether the existing tests would catch such regressions.
 
@@ -148,7 +155,7 @@ This split would enforce the layer boundaries that are currently maintained only
 
 | Area | Strength | Primary gap |
 |---|---|---|
-| **Requirements** | Feature scope is well understood by the author | No requirements doc; no precision contracts; `steering.md` is an AI config file |
+| **Requirements** | docs/requirements.md established with FR/NFR/COMP/PAR/GAP traceability | Several GAPs still open; NEC corpus deferred (GAP-011) |
 | **Research** | Math is cited and transparent | Key constants (conductor model, scoring weights) are unvalidated against real NEC data |
-| **Testing** | 255 tests, pre-push hook, shell regressions | Coverage untracked, no property tests, regression scripts not in CI, no mutation testing |
+| **Testing** | 275 tests, CI coverage gate, export format contracts, corpus seed case | Property tests missing, regression scripts not in CI, no mutation testing |
 | **Architecture** | Clean I/O-free app layer, shadow types, layer separation | `app.rs` too large, monolithic crate, library API is a stub, fnec interface undocumented |

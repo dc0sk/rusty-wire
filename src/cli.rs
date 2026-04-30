@@ -2047,6 +2047,11 @@ mod tests {
     use super::*;
     use std::fs;
     use std::io::Cursor;
+    use std::sync::Mutex;
+
+    // Serialize all tests that read or write the default export file names to
+    // prevent false failures caused by parallel test execution.
+    static DEFAULT_EXPORT_PATH_LOCK: Mutex<()> = Mutex::new(());
 
     fn sample_results_for_export_tests() -> AppResults {
         AppResults {
@@ -2457,6 +2462,7 @@ mod tests {
 
     #[test]
     fn interactive_export_prompt_multiple_formats_use_default_output_paths() {
+        let _guard = DEFAULT_EXPORT_PATH_LOCK.lock().unwrap();
         let mut input = Cursor::new(b"csv,json\n".to_vec());
         let mut output = Vec::new();
         let results = sample_results_for_export_tests();
@@ -2477,6 +2483,7 @@ mod tests {
 
     #[test]
     fn interactive_export_prompt_deduplicates_alias_formats_in_input_order() {
+        let _guard = DEFAULT_EXPORT_PATH_LOCK.lock().unwrap();
         let mut input = Cursor::new(b"md,text,markdown,txt,text\n".to_vec());
         let mut output = Vec::new();
         let results = sample_results_for_export_tests();
@@ -2497,6 +2504,10 @@ mod tests {
 
     #[test]
     fn interactive_export_prompt_mixed_valid_and_invalid_formats_aborts_export() {
+        let _guard = DEFAULT_EXPORT_PATH_LOCK.lock().unwrap();
+        let csv_path = default_output_name(ExportFormat::Csv);
+        let _ = fs::remove_file(csv_path);
+
         let mut input = Cursor::new(b"csv,yaml\n".to_vec());
         let mut output = Vec::new();
         let results = sample_results_for_export_tests();
@@ -2506,7 +2517,7 @@ mod tests {
         assert!(exports.is_empty());
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
         assert!(rendered.contains("unknown format 'yaml'; skipping export."));
-        assert!(!std::path::Path::new(default_output_name(ExportFormat::Csv)).exists());
+        assert!(!std::path::Path::new(csv_path).exists());
     }
 
     // --- prompt_calc_mode_with_default ---

@@ -1,0 +1,21 @@
+{
+  "comment": "Golden corpus reference metadata. See docs/corpus-guide.md for documentation.",
+  "schema_version": "1.0",
+  "cases": {
+    "_template": {
+      "comment": "This is a template showing the structure of a corpus case.",
+      "source": "Tool name and version (e.g., EZNEC v7.0 (NEC-2))",
+      "source_url": "URL to reference tool or dataset repository (optional)",
+      "generated_date": "YYYY-MM-DD when reference was generated",
+      "metrics": {
+        "metric_name": {
+          "expected": 0.0,
+          "rel_tol": 0.01,
+          "abs_tol": 0.1
+        }
+      },
+      "status": "active | experimental | deferred",
+      "notes": "Free-form notes on the case (reference locally in <case-name>.notes)"
+    }
+  }
+}

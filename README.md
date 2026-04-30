@@ -1,6 +1,6 @@
 # Rusty Wire
 
-![Version](https://img.shields.io/badge/version-2.7.0-blue)
+![Version](https://img.shields.io/badge/version-2.8.0-blue)
 ![License](https://img.shields.io/badge/license-GPL--2.0--or--later-green)
 ![Rust edition](https://img.shields.io/badge/rust-2021-orange)
 
@@ -228,6 +228,30 @@ cargo test
 ```
 
 See [docs/testing.md](docs/testing.md) for the complete test strategy.
+
+---
+
+## Development & Contributing
+
+After cloning the repository, install the git hooks to enforce quality checks before pushing:
+
+```bash
+make install-hooks
+```
+
+This installs pre-push hooks that run format checks, compilation, tests, and SBOM validation.
+You can also use `make` to run individual checks:
+
+```bash
+make fmt           # Format code
+make lint          # Run clippy linter
+make test          # Run all tests
+make build         # Build in debug mode
+make release       # Build optimized binary
+make help          # Show all available targets
+```
+
+For full requirements engineering context, see [docs/requirements.md](docs/requirements.md).
 
 ---
 
