@@ -15,6 +15,7 @@ priority = "optional"
 assets = [
     { source = "target/release/rusty-wire", dest = "/usr/bin/rusty-wire", mode = "755" },
     { source = "README.md", dest = "/usr/share/doc/rusty-wire/README.md", mode = "644" },
+    { source = "target/man/rusty-wire.1.gz", dest = "/usr/share/man/man1/rusty-wire.1.gz", mode = "644" },
 ]
 extended-description = """\
 Wire antenna length calculator for amateur radio operators. \
