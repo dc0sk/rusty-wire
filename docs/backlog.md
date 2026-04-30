@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/backlog.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Backlog
 
 Ideas that have not yet been agreed on for the roadmap.

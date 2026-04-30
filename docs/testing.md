@@ -1,8 +1,16 @@
+---
+project: rusty-wire
+doc: docs/testing.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Testing
 
-Rusty Wire uses three test layers:
+Rusty Wire uses four test layers:
 
-- Rust tests via `cargo test` (unit + integration)
+- Rust unit tests via `cargo test --lib` (calculations, CLI, TUI, app layer)
+- Rust integration tests via `cargo test --test '*'` (binary behavior, export format contracts, corpus validation)
 - `scripts/test-itu-region-bands.sh` for region-band regression checks
 - `scripts/test-multi-optima.sh` for non-resonant multi-optima regression sweeps
 - `scripts/test-nec-calibration.sh` for conductor-calibration regression checks
@@ -12,6 +20,19 @@ All of the above can be run together:
 ```bash
 ./scripts/test-all.sh
 ```
+
+## Test Files
+
+| File | Layer | What it covers |
+|:-----|:------|:--------------|
+| `src/calculations.rs` (mod tests) | unit | All `TransformerRatio`/`GroundClass` variants, skip-factor branches, antenna formulas, optimizer edge cases — 44 tests |
+| `src/cli.rs` (mod tests) | unit | Interactive prompt I/O, export format selection, mode dispatch |
+| `src/app.rs` (mod tests) | unit | App-layer calculation dispatch, velocity factor range |
+| `src/tui/mod.rs` (mod tests) | unit | TUI key handling, band preset cycling, checklist overlay, scroll |
+| `tests/cli_integration.rs` | integration | Real binary invocation: flags, exit codes, output content |
+| `tests/export_format_contract.rs` | contract | PAR-001 v1 (CSV) and PAR-002 v1 (JSON) field order, precision, schema |
+| `tests/corpus_validation.rs` | corpus | Golden reference cases against published standards (ITU-R P.368) |
+| `tests/tolerance_helpers.rs` | helpers | Reusable tolerance-check utilities for corpus tests |
 
 ## Primary Command
 
@@ -24,6 +45,8 @@ Useful variants:
 ```bash
 cargo test -- --nocapture
 cargo test cli_integration
+cargo test --test export_format_contract
+cargo test --test corpus_validation
 ```
 
 ## Integration Coverage
@@ -35,6 +58,25 @@ Integration tests live in `tests/cli_integration.rs` and validate real binary be
 - region-aware band listing
 - transformer recommendation resolution
 - export path behavior for single and multi-format runs
+- height and ground-class skip-distance scaling (monotonicity checks)
+
+## Output Format Contract Tests
+
+`tests/export_format_contract.rs` locks the PAR-001 v1 (CSV) and PAR-002 v1 (JSON) output contracts:
+- Header field order and unit-specific columns
+- Numeric precision (frequency: 3 decimal places, lengths: 2 decimal places)
+- JSON array structure and field naming
+- Backward compatibility: same inputs produce same results in both formats
+
+These are CI-gated. A contract failure means a breaking format change has occurred without a version bump.
+
+## Corpus Validation Tests
+
+`tests/corpus_validation.rs` validates calculations against published reference standards:
+- **Active**: `corpus_skip_distance_40m_itut_p368` — 40m skip distance vs ITU-R P.368-10 (2019)
+- **Deferred (GAP-011)**: NEC-dependent cases (dipole, inverted-V, OCFD) pending NEC reference sweeps
+
+See `docs/corpus-guide.md` and `corpus/` for adding new cases.
 
 ## Regression Scripts
 

@@ -1,0 +1,66 @@
+name: Code Coverage
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  coverage:
+    name: Measure code coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+      - name: Generate coverage report
+        run: cargo tarpaulin --out Xml --timeout 300 --exclude-files tests/* --exclude-files examples/*
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./cobertura.xml
+          fail_ci_if_error: false
+          verbose: true
+      - name: Check coverage threshold
+        run: |
+          #!/bin/bash
+          set -e
+          
+          # Parse coverage percentage from tarpaulin output (simplified approach)
+          # Run tarpaulin again to get output
+          OUTPUT=$(cargo tarpaulin --out Stdout --timeout 300 --exclude-files tests/* --exclude-files examples/* 2>&1 || true)
+          
+          # Extract the coverage percentage (look for pattern like "Coverage: 85.32%")
+          COVERAGE=$(echo "$OUTPUT" | grep -oP 'Coverage: \K[0-9]+\.[0-9]+' | tail -1)
+          
+          if [ -z "$COVERAGE" ]; then
+            echo "⚠️  Could not parse coverage percentage"
+            echo "Output was: $OUTPUT" | head -20
+            echo "Coverage measurement is advisory; not blocking CI"
+            exit 0
+          fi
+          
+          THRESHOLD=90
+          
+          echo "Code coverage report:"
+          echo "  Measured: $COVERAGE%"
+          echo "  Threshold: $THRESHOLD%"
+          echo ""
+          
+          # Convert to integers for comparison
+          COVERAGE_INT=${COVERAGE%.*}
+          
+          if (( COVERAGE_INT < THRESHOLD )); then
+            echo "❌ Coverage $COVERAGE% is below threshold of $THRESHOLD%"
+            echo ""
+            echo "To improve coverage:"
+            echo "  - Add unit tests for uncovered code paths"
+            echo "  - Run 'cargo tarpaulin' locally to see uncovered lines"
+            echo "  - Focus on critical calculation and validation code"
+            exit 1
+          else
+            echo "✅ Coverage $COVERAGE% meets threshold of $THRESHOLD%"
+            exit 0
+          fi

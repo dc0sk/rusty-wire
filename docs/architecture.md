@@ -1,3 +1,10 @@
+---
+project: rusty-wire
+doc: docs/architecture.md
+status: living
+last_updated: 2026-04-30
+---
+
 # Architecture
 
 This document describes the current architecture of Rusty Wire, including module responsibilities, key types, and the main execution flows.
