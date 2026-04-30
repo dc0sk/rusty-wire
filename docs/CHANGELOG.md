@@ -13,6 +13,24 @@ All notable changes to Rusty Wire are documented here.
 
 ---
 
+## [2.12.0] - 2026-04-30
+
+### Added
+- **EFHW transformer comparison** (`compare_efhw_transformers()`): for EFHW mode the results header now shows a ranked comparison table for 1:49, 1:56, and 1:64 transformer ratios — SWR, efficiency %, and mismatch loss dB for the calculated feedpoint impedance, with the best ratio flagged. Visible in both CLI output and the TUI results panel.
+- **`--transformer-sweep <RATIOS>`**: like `--velocity-sweep` but iterates over a comma-separated list of transformer ratios (1:1, 1:4, 1:9, 1:49, 1:56, 1:64). Prints a table of SWR, efficiency, and per-band resonant lengths (or non-resonant wire length) for each ratio.
+- **Sustainability gating for advise output** (`--fnec-gate`): when combined with `--validate-with-fnec`, removes `Rejected` candidates from the `--advise` output. Candidates receive `[PASSED]`/`[WARNING]`/`[REJECTED]`/`[ERROR]` status badges in CLI; TUI advise panel colours candidate titles and fnec status lines green/yellow/red accordingly. A validation summary is printed at the end of the advise block.
+- **Trap dipole guidance** (`trap_dipole_guidance_view()`): in trap dipole mode with ≥ 2 bands selected, a structured guidance section is appended to the results document (CLI and TUI). For each adjacent band pair the section shows:
+  - Recommended trap resonant frequency (upper-band centre)
+  - Inner section per side: feedpoint to trap (quarter-wave at upper band × VF)
+  - Outer section per side: trap to tip (for lower-band resonance)
+  - Full tip-to-tip span
+  - Three example L/C component pairs (standard capacitor values, solved inductance), with a note to target coil Qu > 200 and use silver-mica or NP0 capacitors.
+
+### Test count
+288 lib + 56 CLI + 14 corpus + 12 contract + 5 tolerance = 375 passing; 2 ignored.
+
+---
+
 ## [2.11.0] - 2026-04-30
 
 ### Added

@@ -14,9 +14,6 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## CLI / Analysis
 
-- `--transformer-sweep <r1,r2,...>` — like `--velocity-sweep` but over transformer ratios
-- `advise` mode: user provides a target band set and gets ranked wire-length + balun/unun candidates with compact scoring metadata (including estimated efficiency and tradeoff hints)
-- `advise` validation pass with `fnec-rust`: for top-ranked candidates, run a cross-check sweep to flag configurations that are unlikely to be thermally/efficiency sustainable in practical operation
 - YAML and HTML export targets
 - Persistent user preferences file (default units, region, mode)
 
@@ -41,15 +38,8 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## Antenna Models
 
-- **Trap dipole guidance**: For trap dipole mode, provide detailed information on:
-  - Which trap frequencies / components to use (Q-factor, impedance guidance)
-  - Physical installation positions along the wire
-  - Leg length calculations for optimal multi-band resonance
-  - Common trap configurations (40m/20m, 80m/40m, etc.)
 - Hybrid / multi-section models
-- Ranked transformer recommendation for EFHW (compare 1:49, 1:56, 1:64)
 - Balun/unun optimizer engine: score candidate transformer ratios against selected bands and feed assumptions; this should be implemented before `advise` mode
-- Sustainability gating for advise output: integrate an optional `fnec-rust` verification step that marks candidates as validated, warning, or rejected based on configurable thresholds
 
 ## Practical Limits Follow-up
 

@@ -22,7 +22,15 @@ New ideas that are not yet agreed on go to `docs/backlog.md` first.
 
 ---
 
-## Recently Completed (2.3.0 and earlier)
+## Recently Completed
+
+### v2.12.0
+- ✅ **EFHW transformer comparison**: ranked 1:49/1:56/1:64 table in results header and TUI panel, showing SWR/efficiency/loss per ratio.
+- ✅ **`--transformer-sweep`**: sweep over comma-separated transformer ratios; shows SWR, efficiency, and per-band lengths per ratio.
+- ✅ **Sustainability gating (`--fnec-gate`)**: removes `Rejected` candidates from `--advise` output; status badges in CLI and colour-coded TUI panel.
+- ✅ **Trap dipole guidance**: structured section with trap frequency, inner/outer leg lengths, full span, and example L/C component pairs per band pair.
+
+### v2.3.0 and earlier
 
 - clap-based CLI with `--interactive`, named band/range selection, ITU region support
 - antenna model expansion: dipole, inverted-v, EFHW, loop, OCFD; recommended transformer defaults
@@ -51,7 +59,7 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 - `--freq-list <f1,f2,...>` for multiple explicit frequencies in one run
 
 ### 3) Additional antenna models
-- Trap dipole and other multi-section models
+- ✅ Trap dipole multi-section model with structured guidance (trap freq, leg lengths, component examples) — v2.12.0
 - Evaluate antenna-specific feed recommendations at the app layer
 
 ### 3a) Balun optimizer foundation (prerequisite for advise mode)
