@@ -1,4 +1,5 @@
 /// Define ham radio and shortwave bands with their characteristics
+use serde::Deserialize;
 use std::fmt;
 use std::str::FromStr;
 
@@ -87,6 +88,66 @@ impl fmt::Display for Band {
             "{} [{}] ({}-{} MHz)",
             self.name, self.band_type, self.freq_low_mhz, self.freq_high_mhz
         )
+    }
+}
+
+/// A user-defined band loaded from a `bands.toml` file.
+///
+/// Unlike [`Band`], this type owns its name string and does not require
+/// static lifetime bounds.  `freq_center_mhz` is optional and defaults to
+/// the midpoint of the low/high range when omitted.
+#[derive(Debug, Clone, Deserialize)]
+pub struct OwnedBand {
+    /// Display name, e.g. `"FT8-40m"`.
+    pub name: String,
+    /// Lower edge of the band in MHz (must be > 0).
+    pub freq_low_mhz: f64,
+    /// Upper edge of the band in MHz (must be ≥ `freq_low_mhz`).
+    pub freq_high_mhz: f64,
+    /// Explicit centre frequency.  Defaults to `(freq_low_mhz + freq_high_mhz) / 2`
+    /// when absent.
+    pub freq_center_mhz: Option<f64>,
+}
+
+impl OwnedBand {
+    /// Resolved centre frequency (explicit value or computed midpoint).
+    pub fn center_mhz(&self) -> f64 {
+        self.freq_center_mhz
+            .unwrap_or((self.freq_low_mhz + self.freq_high_mhz) / 2.0)
+    }
+
+    /// Validate that the frequency values are physically plausible.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.freq_low_mhz <= 0.0 || self.freq_low_mhz > 1000.0 {
+            return Err(format!(
+                "custom band '{}': freq_low_mhz ({}) must be in (0, 1000]",
+                self.name, self.freq_low_mhz
+            ));
+        }
+        if self.freq_high_mhz < self.freq_low_mhz {
+            return Err(format!(
+                "custom band '{}': freq_high_mhz ({}) must be ≥ freq_low_mhz ({})",
+                self.name, self.freq_high_mhz, self.freq_low_mhz
+            ));
+        }
+        if self.freq_high_mhz > 1000.0 {
+            return Err(format!(
+                "custom band '{}': freq_high_mhz ({}) must be ≤ 1000 MHz",
+                self.name, self.freq_high_mhz
+            ));
+        }
+        if let Some(center) = self.freq_center_mhz {
+            if center < self.freq_low_mhz || center > self.freq_high_mhz {
+                return Err(format!(
+                    "custom band '{}': freq_center_mhz ({center}) must be between freq_low_mhz ({}) and freq_high_mhz ({})",
+                    self.name, self.freq_low_mhz, self.freq_high_mhz
+                ));
+            }
+        }
+        if self.name.trim().is_empty() {
+            return Err("custom band: name must not be empty".to_string());
+        }
+        Ok(())
     }
 }
 

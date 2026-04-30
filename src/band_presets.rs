@@ -2,21 +2,43 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 
+use crate::bands::OwnedBand;
+
 #[derive(Debug, Deserialize)]
 struct BandPresetFile {
     presets: Option<HashMap<String, Vec<String>>>,
+    band: Option<Vec<OwnedBand>>,
+}
+
+fn read_bands_file(path: &str) -> Result<BandPresetFile, String> {
+    let file_text = fs::read_to_string(path)
+        .map_err(|err| format!("failed to read bands config '{path}': {err}"))?;
+    toml::from_str(&file_text)
+        .map_err(|err| format!("failed to parse bands config '{path}': {err}"))
 }
 
 fn read_preset_map(path: &str) -> Result<HashMap<String, Vec<String>>, String> {
-    let file_text = fs::read_to_string(path)
-        .map_err(|err| format!("failed to read preset config '{path}': {err}"))?;
-
-    let parsed: BandPresetFile = toml::from_str(&file_text)
-        .map_err(|err| format!("failed to parse preset config '{path}': {err}"))?;
-
+    let parsed = read_bands_file(path)?;
     parsed
         .presets
-        .ok_or_else(|| format!("preset config '{path}' does not define a [presets] table"))
+        .ok_or_else(|| format!("bands config '{path}' does not define a [presets] table"))
+}
+
+/// Load user-defined `[[band]]` entries from a bands TOML file.
+///
+/// Returns an empty `Vec` (not an error) when the file does not exist or
+/// contains no `[[band]]` entries — both are valid states for callers that
+/// load bands opportunistically.
+pub(crate) fn load_custom_bands(path: &str) -> Result<Vec<OwnedBand>, String> {
+    if !std::path::Path::new(path).exists() {
+        return Ok(Vec::new());
+    }
+    let parsed = read_bands_file(path)?;
+    let bands = parsed.band.unwrap_or_default();
+    for band in &bands {
+        band.validate().map_err(|e| format!("in '{path}': {e}"))?;
+    }
+    Ok(bands)
 }
 
 fn normalize_preset_tokens(
@@ -195,6 +217,93 @@ Alpha = [" 80m-10m "]
                 ("Alpha".to_string(), "80m-10m".to_string()),
                 ("zulu".to_string(), "40m,20m".to_string()),
             ]
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_custom_bands_returns_empty_when_file_missing() {
+        let result = load_custom_bands("/tmp/nonexistent-rusty-wire-bands-12345.toml");
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn load_custom_bands_parses_band_entries() {
+        let dir = temp_test_dir("custom-bands-parse");
+        let config_path = dir.join("bands.toml");
+        write_file(
+            &config_path,
+            r#"
+[[band]]
+name = "FT8-40m"
+freq_low_mhz = 7.074
+freq_high_mhz = 7.076
+
+[[band]]
+name = "WSPR-20m"
+freq_low_mhz = 14.0956
+freq_high_mhz = 14.0956
+freq_center_mhz = 14.0956
+"#,
+        );
+
+        let bands =
+            load_custom_bands(config_path.to_str().unwrap()).expect("custom bands should load");
+        assert_eq!(bands.len(), 2);
+        assert_eq!(bands[0].name, "FT8-40m");
+        assert!((bands[0].center_mhz() - 7.075).abs() < 1e-6);
+        assert_eq!(bands[1].name, "WSPR-20m");
+        assert!((bands[1].center_mhz() - 14.0956).abs() < 1e-6);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_custom_bands_coexists_with_presets() {
+        let dir = temp_test_dir("custom-bands-mixed");
+        let config_path = dir.join("bands.toml");
+        write_file(
+            &config_path,
+            r#"
+[presets]
+portable = ["40m", "20m"]
+
+[[band]]
+name = "FT8-40m"
+freq_low_mhz = 7.074
+freq_high_mhz = 7.076
+"#,
+        );
+
+        let bands =
+            load_custom_bands(config_path.to_str().unwrap()).expect("mixed file should load");
+        assert_eq!(bands.len(), 1);
+        assert_eq!(bands[0].name, "FT8-40m");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_custom_bands_rejects_invalid_frequency_range() {
+        let dir = temp_test_dir("custom-bands-invalid");
+        let config_path = dir.join("bands.toml");
+        write_file(
+            &config_path,
+            r#"
+[[band]]
+name = "bad"
+freq_low_mhz = 20.0
+freq_high_mhz = 10.0
+"#,
+        );
+
+        let err = load_custom_bands(config_path.to_str().unwrap())
+            .expect_err("invalid range should fail");
+        assert!(
+            err.contains("freq_high_mhz"),
+            "error should mention the field: {err}"
         );
 
         let _ = std::fs::remove_dir_all(&dir);

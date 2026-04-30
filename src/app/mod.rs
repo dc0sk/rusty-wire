@@ -293,6 +293,10 @@ pub struct AppConfig {
     pub freq_list_mhz: Vec<f64>,
     /// Whether to validate advise candidates using fnec-rust (if available).
     pub validate_with_fnec: bool,
+    /// User-defined bands loaded from a `bands.toml` file.
+    /// These are always appended to the calculation results, independent of
+    /// `band_indices` / `freq_list_mhz` / `custom_freq_mhz`.
+    pub extra_bands: Vec<crate::bands::OwnedBand>,
 }
 
 impl Default for AppConfig {
@@ -314,6 +318,7 @@ impl Default for AppConfig {
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
             validate_with_fnec: false,
+            extra_bands: vec![],
         }
     }
 }
@@ -660,7 +665,7 @@ pub struct SkippedBandDetail {
 /// This is a pure, I/O-free function suitable for use from both the CLI and
 /// any future GUI front-end.
 pub fn run_calculation(config: AppConfig) -> AppResults {
-    let (calculations, skipped_band_indices) = if !config.freq_list_mhz.is_empty() {
+    let (mut calculations, skipped_band_indices) = if !config.freq_list_mhz.is_empty() {
         let calcs = config
             .freq_list_mhz
             .iter()
@@ -718,6 +723,29 @@ pub fn run_calculation(config: AppConfig) -> AppResults {
             config.conductor_diameter_mm,
         )
     };
+
+    // Append user-defined extra bands from a bands.toml file.
+    for owned_band in &config.extra_bands {
+        let stub = crate::bands::Band {
+            name: "custom",
+            band_type: crate::bands::BandType::HF,
+            freq_low_mhz: owned_band.freq_low_mhz,
+            freq_high_mhz: owned_band.freq_high_mhz,
+            freq_center_mhz: owned_band.center_mhz(),
+            typical_skip_km: (0.0, 0.0),
+            regions: &[],
+        };
+        let mut calc = calculate_for_band_with_environment(
+            &stub,
+            config.velocity_factor,
+            config.transformer_ratio,
+            config.antenna_height_m,
+            config.ground_class,
+            config.conductor_diameter_mm,
+        );
+        calc.band_name = owned_band.name.clone();
+        calculations.push(calc);
+    }
 
     // For resonant mode use the default search window; for non-resonant use the
     // user-supplied window.  Optima (tied candidates) are only relevant in
@@ -2914,6 +2942,42 @@ mod tests {
         assert_eq!(results.calculations.len(), 1);
         assert_eq!(results.calculations[0].band_name, "160m");
         assert_eq!(results.skipped_band_indices, vec![0, 100]);
+    }
+
+    #[test]
+    fn run_calculation_appends_extra_bands() {
+        let extra = crate::bands::OwnedBand {
+            name: "FT8-40m".to_string(),
+            freq_low_mhz: 7.074,
+            freq_high_mhz: 7.076,
+            freq_center_mhz: None,
+        };
+        let config = AppConfig {
+            band_indices: vec![4], // 40m
+            extra_bands: vec![extra],
+            ..AppConfig::default()
+        };
+        let results = run_calculation(config);
+        // Standard 40m + custom FT8-40m
+        assert_eq!(results.calculations.len(), 2);
+        let names: Vec<&str> = results
+            .calculations
+            .iter()
+            .map(|c| c.band_name.as_str())
+            .collect();
+        assert!(names.contains(&"40m"), "standard band should be present");
+        assert!(names.contains(&"FT8-40m"), "custom band should be appended");
+        // Custom band centre should be ~7.075 MHz → half-wave in ballpark 18–22 m
+        let ft8 = results
+            .calculations
+            .iter()
+            .find(|c| c.band_name == "FT8-40m")
+            .unwrap();
+        assert!(
+            ft8.half_wave_m > 18.0 && ft8.half_wave_m < 22.0,
+            "half-wave length should be ~20 m, got {}",
+            ft8.half_wave_m
+        );
     }
 
     #[test]

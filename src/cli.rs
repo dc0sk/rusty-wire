@@ -15,7 +15,7 @@ use crate::app::{
     DEFAULT_ANTENNA_HEIGHT_M, DEFAULT_BAND_SELECTION, DEFAULT_CONDUCTOR_DIAMETER_MM,
     DEFAULT_GROUND_CLASS, DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
-use crate::band_presets::load_preset_selection;
+use crate::band_presets::{load_custom_bands, load_preset_selection};
 use crate::bands::{ITURegion, ALL_REGIONS};
 use crate::calculations::{
     GroundClass, TransformerRatio, DEFAULT_NON_RESONANT_CONFIG, MAX_CONDUCTOR_DIAMETER_MM,
@@ -676,6 +676,20 @@ pub fn run_from_args(args: &[String]) -> bool {
         custom_freq_mhz: cli.freq,
         freq_list_mhz: cli.freq_list.unwrap_or_default(),
         validate_with_fnec: cli.validate_with_fnec,
+        extra_bands: {
+            let bands_path = cli
+                .bands_config
+                .as_deref()
+                .map(|s| s.to_string())
+                .unwrap_or_else(resolve_bands_config_path);
+            match load_custom_bands(&bands_path) {
+                Ok(bands) => bands,
+                Err(err) => {
+                    eprintln!("Warning: could not load custom bands from '{bands_path}': {err}");
+                    vec![]
+                }
+            }
+        },
     };
 
     // Persist preferences when requested.  The calculation continues after
@@ -1765,6 +1779,7 @@ fn calculate_selected_bands_with_defaults(
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
         validate_with_fnec: false,
+        extra_bands: vec![],
     };
 
     let results = match execute_request_checked(AppRequest::new(config)) {
@@ -1873,6 +1888,7 @@ fn quick_calculation_with_defaults(
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
         validate_with_fnec: false,
+        extra_bands: vec![],
     };
 
     let results = match execute_request_checked(AppRequest::new(config)) {
@@ -2438,6 +2454,7 @@ mod tests {
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
             validate_with_fnec: false,
+            extra_bands: vec![],
         };
 
         // Assert the formatter input mapping separately since this function prints to stdout.

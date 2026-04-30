@@ -306,6 +306,7 @@ mod tests {
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
             validate_with_fnec: false,
+            extra_bands: vec![],
         }
     }
 
@@ -412,6 +413,7 @@ mod persistence_tests {
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
             validate_with_fnec: false,
+            extra_bands: vec![],
         }
     }
 

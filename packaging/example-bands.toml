@@ -8,15 +8,42 @@
 #
 # You can also point directly to any file with --bands-config <path>.
 #
-# Format
-# ------
-# Each preset is a named list of band tokens under [presets].
+# ─── Custom bands ([[band]] entries) ──────────────────────────────────────────
+#
+# Define your own frequency entries that will be appended to every calculation
+# run.  Each [[band]] entry requires:
+#
+#   name          – display label shown in results (e.g. "FT8-40m")
+#   freq_low_mhz  – lower edge of the band in MHz
+#   freq_high_mhz – upper edge of the band in MHz
+#
+# Optional:
+#   freq_center_mhz – explicit centre frequency; defaults to the midpoint
+#                     of freq_low_mhz and freq_high_mhz when omitted.
+#
+# Example:
+#   [[band]]
+#   name = "FT8-40m"
+#   freq_low_mhz = 7.074
+#   freq_high_mhz = 7.076
+#
+#   [[band]]
+#   name = "WSPR-20m"
+#   freq_low_mhz  = 14.0956
+#   freq_high_mhz = 14.0956
+#   freq_center_mhz = 14.0956
+#
+# ─── Band presets ([presets] table) ───────────────────────────────────────────
+#
+# A preset is a named list of band tokens under [presets].
 # Band tokens are the same strings accepted by --bands (e.g. "40m", "20m",
 # "80m-10m", "160m").  Tokens are comma-joined internally, so you may write
 # them as separate list items for readability.
 #
+# Use --bands-preset <name> to activate a preset.
+#
 # Example presets
-# ---------------
+# ───────────────
 
 [presets]
 
