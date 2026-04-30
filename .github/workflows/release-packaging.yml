@@ -168,6 +168,56 @@ jobs:
             rusty-wire-${{ needs.create-release.outputs.version }}-${{ matrix.archive_suffix }}.tar.gz
             rusty-wire-${{ needs.create-release.outputs.version }}-${{ matrix.archive_suffix }}.pkg
 
+  # ── 1b. Build and upload a Windows MSI installer ───────────────────────────
+  release-windows-msi:
+    name: Build Windows MSI installer
+    needs: create-release
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: windows-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: windows-x86_64-cargo-
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Build Windows MSI
+        shell: pwsh
+        run: |
+          $version = "${{ needs.create-release.outputs.version }}"
+          $binaryPath = "target\release\rusty-wire.exe"
+          $msiName    = "rusty-wire-${version}-x86_64-windows.msi"
+          $wixBin     = "${env:WIX}bin"
+
+          & "${wixBin}\candle.exe" `
+            "-dVersion=${version}" `
+            "-dBinaryPath=${binaryPath}" `
+            packaging\windows\rusty-wire.wxs `
+            -o rusty-wire.wixobj
+
+          & "${wixBin}\light.exe" `
+            rusty-wire.wixobj `
+            -o "${msiName}"
+
+      - name: Upload MSI to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: "rusty-wire-${{ needs.create-release.outputs.version }}-x86_64-windows.msi"
+
   # ── 2. Build and upload a Debian package for each target arch ───────────────
   release-deb:
     name: Build .deb (${{ matrix.arch }})

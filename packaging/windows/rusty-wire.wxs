@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX v3 source for the rusty-wire MSI installer.
+
+  Variables injected at build time (candle -d...):
+    Version     – semver string, e.g. 2.16.0
+    BinaryPath  – path to rusty-wire.exe, e.g. target\release\rusty-wire.exe
+
+  The installer:
+    • Installs rusty-wire.exe into C:\Program Files\rusty-wire\
+    • Appends that directory to the system PATH
+    • Supports clean removal via "Add or Remove Programs"
+    • UpgradeCode is fixed so Windows detects and removes previous versions
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="rusty-wire"
+           Language="1033"
+           Version="$(var.Version)"
+           Manufacturer="dc0sk"
+           UpgradeCode="3F8A2C1D-74B9-4E60-A5F2-D3C891047B5E">
+
+    <Package InstallerVersion="200"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Description="rusty-wire – antenna modelling and band planning tool"
+             Manufacturer="dc0sk" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of rusty-wire is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- ── Directory layout ──────────────────────────────────────────────── -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="rusty-wire" />
+      </Directory>
+    </Directory>
+
+    <!-- ── Components ────────────────────────────────────────────────────── -->
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+
+      <!-- Main executable -->
+      <Component Id="MainExecutable" Guid="*">
+        <File Id="rusty_wire_exe"
+              Source="$(var.BinaryPath)"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- PATH entry (system-wide) -->
+      <Component Id="PathEntry" Guid="7D4B9E2A-F130-4C85-B6D3-8A5E021F3C47">
+        <RegistryValue Root="HKLM"
+                       Key="Software\rusty-wire"
+                       Name="InstallDir"
+                       Type="string"
+                       Value="[INSTALLFOLDER]"
+                       KeyPath="yes" />
+        <Environment Id="PATH_ENV"
+                     Name="PATH"
+                     Value="[INSTALLFOLDER]"
+                     Part="last"
+                     Action="set"
+                     Permanent="no"
+                     System="yes" />
+      </Component>
+
+    </ComponentGroup>
+
+    <!-- ── Feature ───────────────────────────────────────────────────────── -->
+    <Feature Id="ProductFeature" Title="rusty-wire" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+
+  </Product>
+</Wix>
