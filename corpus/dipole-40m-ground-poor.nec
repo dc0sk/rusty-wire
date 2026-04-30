@@ -1,0 +1,10 @@
+CM Half-wave dipole at 40m (7.1 MHz) over poor-conductivity ground
+CM Horizontal wire at 10 m AGL, 20.07 m total (0.95 VF)
+CM GN 2 poor soil: EPSE=4.0, SIG=0.001 S/m
+CE
+GW 1 51 -10.035 0 10 10.035 0 10 0.001
+GE 0
+GN 2 0 0 0 4.0 0.001
+EX 0 1 26 0 1.0 0.0
+FR 0 1 0 0 7.1 0.0
+EN

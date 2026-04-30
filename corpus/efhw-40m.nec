@@ -1,0 +1,11 @@
+CM End-Fed Half-Wave (EFHW) at 40m (7.1 MHz)
+CM Single horizontal wire at 3 m AGL; total length 20.07 m (0.95 VF)
+CM Feed at segment 1 (end-fed, high-impedance end)
+CM Good ground (GN 2): EPSE=20.0, SIG=0.03 S/m
+CE
+GW 1 51 0 0 3 20.07 0 3 0.001
+GE 0
+GN 2 0 0 0 20.0 0.03
+EX 0 1 1 0 1.0 0.0
+FR 0 1 0 0 7.1 0.0
+EN
