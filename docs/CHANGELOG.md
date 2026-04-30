@@ -24,12 +24,23 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+---
+
+## [2.9.0] - 2026-04-30
+
 ### Added
 - **TUI `--tui` flag**: single binary now supports both CLI and TUI modes; use `rusty-wire --tui` or `-t` to launch the full-screen ratatui interface with all feature parity
 - **TUI keybinding documentation**: updated README with comprehensive TUI keybinding table and feature list
+- **Phase 2 NEC corpus integration**: imported 11 NEC reference decks from fnec-rust project (`corpus/dipole-40m-freesp.nec`, 5 ground variants, 3 height-aware, `efhw-40m.nec`, `inverted-v-40m-90deg.nec`); populated `corpus/reference-results.json` with fnec-rust Hallén solver impedance values
+- **5 new Phase 2 corpus tests**: `corpus_nec_dipole_10m_good_ground`, `corpus_nec_dipole_7m_good_ground`, `corpus_nec_dipole_12m_good_ground`, `corpus_nec_efhw_40m`, `corpus_nec_inverted_v_40m_90deg` — all CI-gated; total active corpus tests: 14
+
+### Fixed
+- **CLI `--freq` space-separated parsing bug**: `run_from_args` was calling `get_matches_from` without the required argv[0] placeholder, causing `--freq 7.1` (space-separated) to fail with "unexpected argument"; prepend dummy `"rusty-wire"` fixes parsing
+- **Tolerance helper batch test**: test values were outside their own declared tolerance bands
 
 ### Infrastructure
 - **nec-requirements roadmap updated**: Phase 2 NEC deck generation delegated to fnec-rust project for external generation, ensuring cross-tool consistency and enabling future imports
+- **Test count**: 362 passing across all layers (275 lib + 56 CLI + 14 corpus + 12 contract + 5 tolerance); 2 ignored
 
 ---
 
