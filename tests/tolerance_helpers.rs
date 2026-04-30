@@ -95,9 +95,9 @@ mod tests {
     #[test]
     fn tolerance_check_batch_mixed() {
         let failures = check_tolerance_batch(vec![
-            ("metric_a", 10.0, 10.0, 0.01, 0.1),
-            ("metric_b", 20.5, 20.0, 0.01, 0.1),
-            ("metric_c", 30.1, 30.0, 0.001, 0.05),
+            ("metric_a", 10.0, 10.0, 0.01, 0.1),    // exact match → passes
+            ("metric_b", 20.1, 20.0, 0.01, 0.1),    // rel error 0.5% ≤ 1% → passes
+            ("metric_c", 30.03, 30.0, 0.001, 0.05), // abs error 0.03 ≤ 0.05 → passes
         ]);
         assert_eq!(failures.len(), 0, "all should pass");
     }

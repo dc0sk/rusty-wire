@@ -434,7 +434,14 @@ pub fn run_from_args(args: &[String]) -> bool {
     // compiled-in defaults (ValueSource::DefaultValue) vs. the command line.
     // This lets us apply persistent user preferences as fallbacks for any
     // flag the user did not explicitly pass.
-    let matches = Cli::command().get_matches_from(args.iter().map(|s| s.as_str()));
+    //
+    // get_matches_from expects argv[0] (the binary name) as the first element,
+    // matching the layout of std::env::args(). Callers (lib.rs run_cli) pass
+    // args with the binary name already stripped, so we prepend a placeholder.
+    let argv: Vec<&str> = std::iter::once("rusty-wire")
+        .chain(args.iter().map(|s| s.as_str()))
+        .collect();
+    let matches = Cli::command().get_matches_from(argv);
     let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
 
     // Load persistent preferences; all fields are Option<T> so absent prefs
