@@ -267,6 +267,8 @@ struct TuiState {
     custom_band_indices: Vec<usize>,
     /// Status message shown in the hints bar.
     export_status: Option<String>,
+    /// When set, an auto-recalculation is pending after this instant + debounce.
+    pending_recalc: Option<std::time::Instant>,
 }
 
 impl TuiState {
@@ -343,6 +345,7 @@ impl TuiState {
             band_checklist_cursor: 0,
             custom_band_indices: Vec::new(),
             export_status: preset_status,
+            pending_recalc: None,
         }
     }
 
@@ -675,6 +678,9 @@ impl TuiState {
     }
 
     fn dispatch(&mut self, action: AppAction) {
+        // Schedule a debounced auto-recalculation for any config-change action.
+        // RunCalculation itself must NOT set this or we'd loop.
+        let is_config_change = !matches!(action, AppAction::RunCalculation | AppAction::ClearResults | AppAction::ClearError);
         let region_change = match &action {
             AppAction::SetItuRegion(region) => Some((
                 *region,
@@ -723,6 +729,9 @@ impl TuiState {
                 }
             }
         }
+        if is_config_change {
+            self.pending_recalc = Some(std::time::Instant::now());
+        }
     }
 
     fn toggle_advise_panel(&mut self) {
@@ -749,6 +758,15 @@ impl TuiState {
 
     fn run_calculation(&mut self) {
         self.results_scroll = 0;
+        self.pending_recalc = None;
+        self.dispatch(AppAction::RunCalculation);
+    }
+
+    /// Automatic recalculation triggered by the debounce timer.
+    /// Does NOT reset the scroll position so the user can read results
+    /// while tweaking config fields.
+    fn auto_recalculate(&mut self) {
+        self.pending_recalc = None;
         self.dispatch(AppAction::RunCalculation);
     }
 
@@ -1522,7 +1540,16 @@ pub fn run(band_preset_config: Option<&str>) -> Result<(), Box<dyn std::error::E
     // Run an initial calculation so the results panel is populated immediately.
     state.run_calculation();
 
+    const RECALC_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
+
     loop {
+        // Fire auto-recalculation once the debounce window has elapsed.
+        if let Some(pending) = state.pending_recalc {
+            if pending.elapsed() >= RECALC_DEBOUNCE {
+                state.auto_recalculate();
+            }
+        }
+
         terminal.draw(|f| render(f, &state))?;
 
         if event::poll(std::time::Duration::from_millis(200))? {
@@ -2030,6 +2057,30 @@ mod tests {
         state.handle_key(press(KeyCode::Char('r')));
 
         assert_eq!(state.results_scroll, 0);
+        assert!(state.app.results.is_some());
+        assert!(state.pending_recalc.is_none(), "explicit r should not leave a pending recalc");
+    }
+
+    #[test]
+    fn config_change_schedules_pending_recalc() {
+        let mut state = TuiState::new(None);
+        assert!(state.pending_recalc.is_none());
+
+        state.handle_key(press(KeyCode::Right)); // change a config field
+
+        assert!(state.pending_recalc.is_some(), "config change should schedule auto-recalc");
+    }
+
+    #[test]
+    fn auto_recalculate_does_not_reset_scroll() {
+        let mut state = TuiState::new(None);
+        state.run_calculation();
+        state.results_scroll = 5;
+
+        state.auto_recalculate();
+
+        assert_eq!(state.results_scroll, 5, "auto-recalc should preserve scroll position");
+        assert!(state.pending_recalc.is_none(), "auto_recalculate should clear the pending flag");
         assert!(state.app.results.is_some());
     }
 
