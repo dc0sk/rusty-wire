@@ -3,11 +3,80 @@
 /// Each `to_*` function is a pure string transform; `export_results` is the
 /// only function that touches the file system.  Both are accessible from
 /// future GUI code (e.g. to pipe content into a preview widget).
+///
+/// `ExportFormatter` is implemented on `ExportFormat` so callers can dispatch
+/// through the trait without matching on the enum themselves.
 use crate::app::{AdviseCandidate, ExportFormat, UnitSystem};
 use crate::calculations::{NonResonantRecommendation, WireCalculation};
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
+
+// ---------------------------------------------------------------------------
+// Formatter trait
+// ---------------------------------------------------------------------------
+
+/// Produces export strings for results or advise output in a specific format.
+///
+/// Implemented on [`ExportFormat`] so front-ends can dispatch without
+/// an explicit match on the enum.
+pub trait ExportFormatter {
+    /// Format wire-calculation results as a string ready for writing to a file.
+    fn format_results(
+        &self,
+        calculations: &[WireCalculation],
+        recommendation: Option<&NonResonantRecommendation>,
+        units: UnitSystem,
+        wire_min_m: f64,
+        wire_max_m: f64,
+    ) -> String;
+
+    /// Format transformer-advise candidates as a string ready for writing to a file.
+    fn format_advise(&self, assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String;
+}
+
+impl ExportFormatter for ExportFormat {
+    fn format_results(
+        &self,
+        calculations: &[WireCalculation],
+        recommendation: Option<&NonResonantRecommendation>,
+        units: UnitSystem,
+        wire_min_m: f64,
+        wire_max_m: f64,
+    ) -> String {
+        match self {
+            ExportFormat::Csv => {
+                to_csv(calculations, recommendation, units, wire_min_m, wire_max_m)
+            }
+            ExportFormat::Html => {
+                to_html(calculations, recommendation, units, wire_min_m, wire_max_m)
+            }
+            ExportFormat::Json => {
+                to_json(calculations, recommendation, units, wire_min_m, wire_max_m)
+            }
+            ExportFormat::Markdown => {
+                to_markdown(calculations, recommendation, units, wire_min_m, wire_max_m)
+            }
+            ExportFormat::Txt => {
+                to_txt(calculations, recommendation, units, wire_min_m, wire_max_m)
+            }
+            ExportFormat::Yaml => {
+                to_yaml(calculations, recommendation, units, wire_min_m, wire_max_m)
+            }
+        }
+    }
+
+    fn format_advise(&self, assumed_feedpoint_ohm: f64, candidates: &[AdviseCandidate]) -> String {
+        match self {
+            ExportFormat::Csv => to_advise_csv(assumed_feedpoint_ohm, candidates),
+            ExportFormat::Html => to_advise_html(assumed_feedpoint_ohm, candidates),
+            ExportFormat::Json => to_advise_json(assumed_feedpoint_ohm, candidates),
+            ExportFormat::Markdown => to_advise_markdown(assumed_feedpoint_ohm, candidates),
+            ExportFormat::Txt => to_advise_txt(assumed_feedpoint_ohm, candidates),
+            ExportFormat::Yaml => to_advise_yaml(assumed_feedpoint_ohm, candidates),
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // File-name helpers
@@ -93,25 +162,9 @@ pub fn export_results(
     wire_min_m: f64,
     wire_max_m: f64,
 ) -> io::Result<()> {
-    let output_path = validate_export_path(output)
-        .map_err(|msg| io::Error::new(io::ErrorKind::InvalidInput, msg))?;
-    if let Some(parent) = output_path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)?;
-        }
-    }
-
-    let content = match format {
-        ExportFormat::Csv => to_csv(calculations, recommendation, units, wire_min_m, wire_max_m),
-        ExportFormat::Html => to_html(calculations, recommendation, units, wire_min_m, wire_max_m),
-        ExportFormat::Json => to_json(calculations, recommendation, units, wire_min_m, wire_max_m),
-        ExportFormat::Markdown => {
-            to_markdown(calculations, recommendation, units, wire_min_m, wire_max_m)
-        }
-        ExportFormat::Txt => to_txt(calculations, recommendation, units, wire_min_m, wire_max_m),
-        ExportFormat::Yaml => to_yaml(calculations, recommendation, units, wire_min_m, wire_max_m),
-    };
-    fs::write(output_path, content)
+    let content =
+        format.format_results(calculations, recommendation, units, wire_min_m, wire_max_m);
+    write_export_file(output, content)
 }
 
 pub fn export_advise(
@@ -120,6 +173,12 @@ pub fn export_advise(
     assumed_feedpoint_ohm: f64,
     candidates: &[AdviseCandidate],
 ) -> io::Result<()> {
+    let content = format.format_advise(assumed_feedpoint_ohm, candidates);
+    write_export_file(output, content)
+}
+
+/// Write `content` to `output`, creating parent directories as needed.
+fn write_export_file(output: &str, content: String) -> io::Result<()> {
     let output_path = validate_export_path(output)
         .map_err(|msg| io::Error::new(io::ErrorKind::InvalidInput, msg))?;
     if let Some(parent) = output_path.parent() {
@@ -127,15 +186,6 @@ pub fn export_advise(
             fs::create_dir_all(parent)?;
         }
     }
-
-    let content = match format {
-        ExportFormat::Csv => to_advise_csv(assumed_feedpoint_ohm, candidates),
-        ExportFormat::Html => to_advise_html(assumed_feedpoint_ohm, candidates),
-        ExportFormat::Json => to_advise_json(assumed_feedpoint_ohm, candidates),
-        ExportFormat::Markdown => to_advise_markdown(assumed_feedpoint_ohm, candidates),
-        ExportFormat::Txt => to_advise_txt(assumed_feedpoint_ohm, candidates),
-        ExportFormat::Yaml => to_advise_yaml(assumed_feedpoint_ohm, candidates),
-    };
     fs::write(output_path, content)
 }
 
