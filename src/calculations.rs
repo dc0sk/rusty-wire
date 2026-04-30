@@ -1268,8 +1268,8 @@ mod tests {
             GroundClass::Average,
         );
 
-        let avg_min = calculate_average_min_distance(&[calc.clone()]);
-        let avg_max = calculate_average_max_distance(&[calc.clone()]);
+        let avg_min = calculate_average_min_distance(std::slice::from_ref(&calc));
+        let avg_max = calculate_average_max_distance(std::slice::from_ref(&calc));
 
         assert_eq!(avg_min, calc.skip_distance_min_km);
         assert_eq!(avg_max, calc.skip_distance_max_km);
@@ -1402,7 +1402,7 @@ mod tests {
             step_m: 0.1,
             preferred_center_m: 20.0,
         };
-        let optima = calculate_non_resonant_optima(&[calc.clone()], 0.95, config);
+        let optima = calculate_non_resonant_optima(std::slice::from_ref(&calc), 0.95, config);
         let best = calculate_best_non_resonant_length(&[calc], 0.95, config).unwrap();
 
         // Best recommendation should be one of the optima

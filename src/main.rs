@@ -16,7 +16,7 @@ fn main() {
         }
     } else {
         // Launch CLI mode (skip program name)
-        if !rusty_wire::run_cli(&args[1..].to_vec()) {
+        if !rusty_wire::run_cli(&args[1..]) {
             process::exit(1);
         }
     }

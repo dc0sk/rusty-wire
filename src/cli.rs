@@ -533,7 +533,7 @@ pub fn run_from_args(args: &[String]) -> bool {
             }
         },
         (None, Some(preset_name)) => {
-            let config_path = cli.bands_config.as_deref().unwrap_or_else(|| {
+            let config_path = cli.bands_config.as_deref().unwrap_or({
                 // When --bands-config is not specified, probe the standard
                 // locations in priority order so the user doesn't need to
                 // pass the path explicitly when the file is in the default
@@ -844,8 +844,8 @@ fn print_advise_candidates(
             cmp.feedpoint_r_ohm
         );
         println!(
-            "  {:<5}  {:<8}  {:<6}  {:<11}  {}",
-            "Ratio", "Target Z", "SWR", "Efficiency", "Loss"
+            "  {:<5}  {:<8}  {:<6}  {:<11}  Loss",
+            "Ratio", "Target Z", "SWR", "Efficiency"
         );
         for entry in &cmp.entries {
             let marker = if entry.is_best {

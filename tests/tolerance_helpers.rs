@@ -1,6 +1,6 @@
-/// Tolerance checking utilities for numeric output validation.
-///
-/// See docs/requirements.md for the tolerance matrix and policy.
+//! Tolerance checking utilities for numeric output validation.
+//!
+//! See docs/requirements.md for the tolerance matrix and policy.
 
 /// Check if a measured value falls within the tolerance bounds.
 ///

@@ -3282,7 +3282,7 @@ pub fn band_display_view(
 // ---------------------------------------------------------------------------
 
 /// The complete application state that any front-end (TUI, GUI) renders.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AppState {
     /// Current configuration being shown or edited.
     pub config: AppConfig,
@@ -3290,16 +3290,6 @@ pub struct AppState {
     pub results: Option<AppResults>,
     /// Last error produced by a failed `RunCalculation` or invalid action.
     pub error: Option<AppError>,
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            config: AppConfig::default(),
-            results: None,
-            error: None,
-        }
-    }
 }
 
 /// All actions that can be dispatched to `apply_action`.
@@ -3529,6 +3519,7 @@ fn build_calculations(
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
 
@@ -4448,6 +4439,7 @@ mod tests {
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod app_error_tests {
     use super::*;
 

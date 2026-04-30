@@ -132,9 +132,10 @@ fn corpus_infrastructure_ready() {
 /// when the wire is cut to rusty-wire's recommended resonant length.
 ///
 /// Note (GAP-011): This is a minimal baseline validation. Missing:
-/// - Ground-based variants (perfect ground, finite-conductivity ground)
-/// - Height-aware impedance scaling (7m, 10m, 12m)
-/// - Inverted-V and EFHW NEC references
+///   - Ground-based variants (perfect ground, finite-conductivity ground)
+///   - Height-aware impedance scaling (7m, 10m, 12m)
+///   - Inverted-V and EFHW NEC references
+///
 /// See docs/nec-requirements.md for full scope and remaining work.
 #[test]
 fn corpus_resonant_dipole_40m_nec() {
@@ -161,7 +162,7 @@ fn corpus_resonant_dipole_40m_nec() {
     let rw_dipole_len: f64 = half_wave_line
         .trim_start()
         .strip_prefix("Half-wave:")
-        .and_then(|s| s.trim().split_whitespace().next())
+        .and_then(|s| s.split_whitespace().next())
         .and_then(|s| s.parse().ok())
         .expect("failed to parse dipole length");
 
@@ -173,7 +174,7 @@ fn corpus_resonant_dipole_40m_nec() {
     // Sanity checks on rusty-wire's resonant dipole length
     // At 7.1 MHz: λ/2 ≈ 21.1 m; with velocity factor ~0.95 → ~20.1 m
     assert!(
-        rw_dipole_len >= 19.0 && rw_dipole_len <= 21.5,
+        (19.0..=21.5).contains(&rw_dipole_len),
         "resonant dipole length {rw_dipole_len} m should be near 20 m (λ/2 at 7.1 MHz)"
     );
 
@@ -248,7 +249,7 @@ fn corpus_nec_dipole_10m_good_ground() {
     let rw_len: f64 = half_wave_line
         .trim_start()
         .strip_prefix("Half-wave:")
-        .and_then(|s| s.trim().split_whitespace().next())
+        .and_then(|s| s.split_whitespace().next())
         .and_then(|s| s.parse().ok())
         .expect("failed to parse dipole length");
 
@@ -301,7 +302,7 @@ fn corpus_nec_dipole_7m_good_ground() {
     let rw_len: f64 = half_wave_line
         .trim_start()
         .strip_prefix("Half-wave:")
-        .and_then(|s| s.trim().split_whitespace().next())
+        .and_then(|s| s.split_whitespace().next())
         .and_then(|s| s.parse().ok())
         .expect("failed to parse dipole length");
 
@@ -351,7 +352,7 @@ fn corpus_nec_dipole_12m_good_ground() {
     let rw_len: f64 = half_wave_line
         .trim_start()
         .strip_prefix("Half-wave:")
-        .and_then(|s| s.trim().split_whitespace().next())
+        .and_then(|s| s.split_whitespace().next())
         .and_then(|s| s.parse().ok())
         .expect("failed to parse dipole length");
 
@@ -403,14 +404,14 @@ fn corpus_nec_efhw_40m() {
     let rw_len: f64 = efhw_line
         .trim_start()
         .strip_prefix("End-fed half-wave:")
-        .and_then(|s| s.trim().split_whitespace().next())
+        .and_then(|s| s.split_whitespace().next())
         .and_then(|s| s.parse().ok())
         .expect("failed to parse EFHW length");
 
     // NEC deck uses 20.07m (λ/2 × 0.95 VF). rusty-wire recommends ~19.99m (slightly
     // different VF coefficient). Tolerance: ±2% relative or ±0.5m absolute.
     assert!(
-        rw_len >= 18.0 && rw_len <= 22.0,
+        (18.0..=22.0).contains(&rw_len),
         "EFHW length {rw_len:.2} m should be near 20 m (λ/2 at 7.1 MHz)"
     );
 
@@ -459,7 +460,7 @@ fn corpus_nec_inverted_v_40m_90deg() {
     let total_len: f64 = total_line
         .trim_start()
         .strip_prefix("Inverted-V total:")
-        .and_then(|s| s.trim().split_whitespace().next())
+        .and_then(|s| s.split_whitespace().next())
         .and_then(|s| s.parse().ok())
         .expect("failed to parse Inverted-V total length");
 
@@ -471,14 +472,14 @@ fn corpus_nec_inverted_v_40m_90deg() {
     let span: f64 = span_line
         .trim_start()
         .strip_prefix("Inverted-V span at 90 deg apex:")
-        .and_then(|s| s.trim().split_whitespace().next())
+        .and_then(|s| s.split_whitespace().next())
         .and_then(|s| s.parse().ok())
         .expect("failed to parse span");
 
     // NEC deck: total wire 20.07m, each leg 10.035m at 45° → span = 2 × 10.035 × cos(45°) ≈ 14.19m
     // rusty-wire uses its own VF, so allow ±5% on total length.
     assert!(
-        total_len >= 17.0 && total_len <= 21.0,
+        (17.0..=21.0).contains(&total_len),
         "Inverted-V total {total_len:.2} m should be near 18-20 m at 7.1 MHz"
     );
     // At 90° apex, span ≈ total_len / sqrt(2). rusty-wire 13.09m is within range.
@@ -843,7 +844,6 @@ fn corpus_non_resonant_multi_band_40m_20m() {
         .filter_map(|l| {
             l.trim_start()
                 .strip_prefix("Half-wave:")?
-                .trim()
                 .split_whitespace()
                 .next()?
                 .parse::<f64>()
@@ -863,13 +863,13 @@ fn corpus_non_resonant_multi_band_40m_20m() {
 
     // 40m half-wave should be roughly 19–21 m
     assert!(
-        hw_40m >= 18.0 && hw_40m <= 22.0,
+        (18.0..=22.0).contains(&hw_40m),
         "40m half-wave {hw_40m:.2} m is outside expected range 18–22 m"
     );
 
     // 20m half-wave should be roughly 9–11 m
     assert!(
-        hw_20m >= 8.5 && hw_20m <= 11.0,
+        (8.5..=11.0).contains(&hw_20m),
         "20m half-wave {hw_20m:.2} m is outside expected range 8.5–11 m"
     );
 

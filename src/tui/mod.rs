@@ -510,11 +510,7 @@ impl TuiState {
                     }
                     ConfigField::StepSize => {
                         let s = STEP_PRESETS[self.step_idx];
-                        if s < 0.1 {
-                            format!("{:.2} m", s)
-                        } else {
-                            format!("{:.2} m", s)
-                        }
+                        format!("{:.2} m", s)
                     }
                 };
                 let selected = i == self.field_idx && self.focus == Focus::Config;
@@ -1114,12 +1110,11 @@ impl TuiState {
                 KeyCode::Backspace => {
                     self.session_name_input.pop();
                 }
-                KeyCode::Char(c) => {
+                KeyCode::Char(c)
                     // Reject control characters; allow printable.
-                    if !c.is_control() {
+                    if !c.is_control() => {
                         self.session_name_input.push(c);
                     }
-                }
                 _ => {}
             }
             return;
@@ -1134,15 +1129,13 @@ impl TuiState {
                 KeyCode::Esc | KeyCode::Char('q') => {
                     self.show_session_picker = false;
                 }
-                KeyCode::Up | KeyCode::Char('k') => {
-                    if self.session_picker_cursor > 0 {
-                        self.session_picker_cursor -= 1;
-                    }
+                KeyCode::Up | KeyCode::Char('k') if self.session_picker_cursor > 0 => {
+                    self.session_picker_cursor -= 1;
                 }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    if self.session_picker_cursor + 1 < self.session_picker_items.len() {
-                        self.session_picker_cursor += 1;
-                    }
+                KeyCode::Down | KeyCode::Char('j')
+                    if self.session_picker_cursor + 1 < self.session_picker_items.len() =>
+                {
+                    self.session_picker_cursor += 1;
                 }
                 KeyCode::Enter => {
                     if let Some(name) = self
@@ -1197,15 +1190,13 @@ impl TuiState {
                 KeyCode::Esc | KeyCode::Char('q') => {
                     self.show_band_checklist = false;
                 }
-                KeyCode::Up | KeyCode::Char('k') => {
-                    if self.band_checklist_cursor > 0 {
-                        self.band_checklist_cursor -= 1;
-                    }
+                KeyCode::Up | KeyCode::Char('k') if self.band_checklist_cursor > 0 => {
+                    self.band_checklist_cursor -= 1;
                 }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    if self.band_checklist_cursor + 1 < self.band_checklist_items.len() {
-                        self.band_checklist_cursor += 1;
-                    }
+                KeyCode::Down | KeyCode::Char('j')
+                    if self.band_checklist_cursor + 1 < self.band_checklist_items.len() =>
+                {
+                    self.band_checklist_cursor += 1;
                 }
                 KeyCode::Char(' ') => {
                     if let Some(item) = self
