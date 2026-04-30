@@ -137,21 +137,36 @@ jobs:
       - name: Build release binary
         run: cargo build --release --locked
 
-      - name: Package macOS tarball
+      - name: Package macOS artifacts
         run: |
           VERSION=${{ needs.create-release.outputs.version }}
           BUNDLE_DIR="rusty-wire-${VERSION}-${{ matrix.archive_suffix }}"
           ARCHIVE="${BUNDLE_DIR}.tar.gz"
+          PKG="${BUNDLE_DIR}.pkg"
+
+          # tarball (for manual extraction)
           mkdir -p "$BUNDLE_DIR"
           cp target/release/rusty-wire "$BUNDLE_DIR/"
           cp README.md LICENSE "$BUNDLE_DIR/"
           tar czf "$ARCHIVE" "$BUNDLE_DIR"
 
-      - name: Upload macOS bundle to GitHub Release
+          # .pkg installer (installs rusty-wire into /usr/local/bin)
+          mkdir -p pkg-root/usr/local/bin
+          cp target/release/rusty-wire pkg-root/usr/local/bin/
+          pkgbuild \
+            --root pkg-root \
+            --identifier io.github.dc0sk.rusty-wire \
+            --version "$VERSION" \
+            --install-location / \
+            "$PKG"
+
+      - name: Upload macOS artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: "rusty-wire-${{ needs.create-release.outputs.version }}-${{ matrix.archive_suffix }}.tar.gz"
+          files: |
+            rusty-wire-${{ needs.create-release.outputs.version }}-${{ matrix.archive_suffix }}.tar.gz
+            rusty-wire-${{ needs.create-release.outputs.version }}-${{ matrix.archive_suffix }}.pkg
 
   # ── 2. Build and upload a Debian package for each target arch ───────────────
   release-deb:
