@@ -52,17 +52,17 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 Items identified during the v2.14.0 project review.
 
 ### Quick wins
-- **A. Doc version sync**: bring `README.md` and `docs/cli-guide.md` up to v2.14.0; document `--export html`, `--validate-with-fnec`, `--fnec-gate`, and TUI saved sessions.
-- **B. CONTRIBUTING.md**: codify the shadow-type pattern (CLI types vs domain types), the I/O-free app layer, test requirements, commit convention, and PR checklist.
-- **C. Clippy cleanup**: ~14 warnings across the tree (collapsible `if`/`match`, `clamp`, `RangeInclusive::contains`, field-after-`Default`, unnecessary `to_vec`, `trim().split_whitespace()` redundancy). Tighten pre-push to `-- -D warnings`.
-- **D. `cargo audit` in CI**: add a GitHub Actions job that runs `cargo audit` on every PR.
+- ~~**A. Doc version sync**~~ ✅ done
+- ~~**B. CONTRIBUTING.md**~~ ✅ done
+- ~~**C. Clippy cleanup**~~ ✅ done
+- ~~**D. `cargo audit` in CI**~~ ✅ done
 
 ### Medium refactors
-- **E. Split `src/app.rs`**: ~5,100 lines is a god module. Move into `src/app/{mod,state,views,display}.rs` (state machine, view types, formatting helpers).
-- **F. Export formatter trait**: extract `trait ExportFormatter` from `src/export.rs` to remove ~500 LOC of duplication across the 12 `to_*` formatters.
-- **G. Sessions / prefs persistence tests**: roundtrip tests for `SessionStore::save/list/delete` and `UserPrefs::save/load/apply_to_config` using a `tempfile` + `XDG_CONFIG_HOME` override.
-- **H. TUI overlay tests**: state-driven integration tests for the export-preview, session-save, session-picker, and band-checklist overlays (no terminal needed; drive `handle_key` directly).
+- ~~**E. Split `src/app.rs`**~~ ✅ done — `src/app/{mod,state,advise}.rs`
+- ~~**F. Export formatter trait**~~ ✅ done — `trait ExportFormatter` in `src/export.rs`
+- ~~**G. Sessions / prefs persistence tests**~~ ✅ done — roundtrip tests in `src/sessions.rs` + `src/prefs.rs`
+- ~~**H. TUI overlay tests**~~ ✅ done — session-save, session-picker, export-preview integration tests
 
 ### Pre-3.x foundation
-- **I. `RequestContext` on `AppRequest`**: optional `request_id` + `timestamp` to make `AppRequest`/`AppResponse` IPC- and async-friendly for the iced GUI.
-- **J. Canonical TUI screenshots**: regenerate `docs/images/tui/*.png` via the existing `tui-doc-snapshots` binary so `docs/tui-screenshots.md` references real images.
+- ~~**I. `RequestContext` on `AppRequest`**~~ ✅ done — `AppRequest`/`AppResponse` carry optional `RequestContext { request_id, timestamp_secs }`
+- ~~**J. Canonical TUI screenshots**~~ ✅ done — `scripts/render-tui-snapshots.py` renders `docs/images/tui/*.png` from the `tui-doc-snapshots` HTML output
