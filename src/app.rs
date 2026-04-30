@@ -896,6 +896,41 @@ pub struct ResultsDisplayDocument {
     pub warning_lines: Vec<String>,
 }
 
+/// One example L/C component pair satisfying a trap's resonant condition.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrapDipoleComponentExample {
+    /// Capacitor value (pF).
+    pub cap_pf: f64,
+    /// Required inductance (μH) for this capacitor to resonate at the trap frequency.
+    pub ind_uh: f64,
+}
+
+/// Structured guidance for a single trap dipole band pair.
+#[derive(Debug, Clone)]
+pub struct TrapDipoleGuidanceSection {
+    /// Human-readable label, e.g. "40m / 20m".
+    pub label: String,
+    /// Recommended trap resonant frequency (MHz) — equals upper-band centre.
+    pub trap_freq_mhz: f64,
+    /// Inner section per side: feedpoint to trap (m).
+    pub inner_leg_m: f64,
+    /// Outer section per side: trap to tip (m).
+    pub outer_section_m: f64,
+    /// Total leg per side: inner + outer (m).
+    pub total_leg_m: f64,
+    /// Full tip-to-tip span (m).
+    pub full_span_m: f64,
+    /// Example L/C pairs for the trap at `trap_freq_mhz`.
+    pub component_examples: Vec<TrapDipoleComponentExample>,
+}
+
+/// View model for the trap dipole guidance block shown in results.
+#[derive(Debug, Clone)]
+pub struct TrapDipoleGuidanceView {
+    pub velocity_factor: f64,
+    pub sections: Vec<TrapDipoleGuidanceSection>,
+}
+
 #[derive(Debug, Clone)]
 pub struct ResonantCompromiseNarrative {
     pub heading: &'static str,
@@ -1565,6 +1600,11 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
             lines: non_resonant_recommendation_display_lines(results),
         });
     }
+    if let Some(trap_guidance) = trap_dipole_guidance_view(results) {
+        sections.push(ResultsTextSectionView {
+            lines: trap_dipole_guidance_display_lines(&trap_guidance, results.config.units),
+        });
+    }
 
     ResultsDisplayDocument {
         overview_heading: overview.heading,
@@ -1864,6 +1904,167 @@ pub fn resonant_compromise_narrative(results: &AppResults) -> ResonantCompromise
         notes,
         empty_message: "(none available in this window)",
     }
+}
+
+/// Choose three representative capacitor values (pF) from a standard series
+/// for a trap with the given L·C product (μH·pF).  The returned values yield
+/// inductors in roughly the 1–20 μH range, which is practical for HF traps.
+fn select_trap_cap_examples(lc_product: f64) -> [f64; 3] {
+    // Boundaries: cap_min gives L≈20 μH, cap_max gives L≈1 μH.
+    // Pick three representative values from standard E6/E12 series.
+    if lc_product < 80.0 {
+        [47.0, 33.0, 22.0]
+    } else if lc_product < 200.0 {
+        [100.0, 68.0, 47.0]
+    } else if lc_product < 600.0 {
+        [470.0, 220.0, 100.0]
+    } else if lc_product < 2_000.0 {
+        [1_000.0, 470.0, 220.0]
+    } else {
+        [3_300.0, 1_500.0, 1_000.0]
+    }
+}
+
+/// Build structured trap-dipole guidance for the currently selected bands.
+///
+/// Returns `None` when not in trap-dipole mode or when fewer than two bands
+/// are selected (the calculation requires an upper and a lower band).
+pub fn trap_dipole_guidance_view(results: &AppResults) -> Option<TrapDipoleGuidanceView> {
+    if !matches!(results.config.antenna_model, Some(AntennaModel::TrapDipole)) {
+        return None;
+    }
+
+    // Collect Band objects for every selected index.
+    // `band_indices` are 1-based (matching user display); convert to 0-based for lookup.
+    let mut bands: Vec<Band> = results
+        .config
+        .band_indices
+        .iter()
+        .filter_map(|&idx| {
+            idx.checked_sub(1)
+                .and_then(|i| get_band_by_index_for_region(i, results.config.itu_region))
+        })
+        .collect();
+
+    if bands.len() < 2 {
+        return None;
+    }
+
+    // Sort descending by frequency (highest = upper band, lowest = lower band).
+    bands.sort_by(|a, b| {
+        b.freq_center_mhz
+            .partial_cmp(&a.freq_center_mhz)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let vf = results.config.velocity_factor;
+
+    // For each adjacent (upper, lower) pair compute one guidance section.
+    // The first pair is the most useful; additional pairs cover multi-trap cases.
+    let mut sections = Vec::new();
+    for pair in bands.windows(2) {
+        let upper = &pair[0];
+        let lower = &pair[1];
+
+        let f_upper = upper.freq_center_mhz;
+        let f_lower = lower.freq_center_mhz;
+
+        // Quarter-wave inner leg (upper-band driven element per side).
+        let inner_leg_m = (71.58 / f_upper) * vf;
+        // Trap-dipole total leg per side for the lower band (uses TRAP_DIPOLE_COEFF_M/2).
+        let total_leg_m = (68.58 / f_lower) * vf;
+        let outer_section_m = (total_leg_m - inner_leg_m).max(0.0);
+        let full_span_m = total_leg_m * 2.0;
+
+        // Trap resonant frequency = upper-band centre.
+        let trap_freq_mhz = f_upper;
+        // L·C product in μH·pF:  L[μH] × C[pF] = 25 330 / f[MHz]²
+        let lc_product = 25_330.0 / (trap_freq_mhz * trap_freq_mhz);
+        let cap_values = select_trap_cap_examples(lc_product);
+        let component_examples: Vec<TrapDipoleComponentExample> = cap_values
+            .iter()
+            .map(|&c| TrapDipoleComponentExample {
+                cap_pf: c,
+                ind_uh: lc_product / c,
+            })
+            .collect();
+
+        sections.push(TrapDipoleGuidanceSection {
+            label: format!("{} / {}", lower.name, upper.name),
+            trap_freq_mhz,
+            inner_leg_m,
+            outer_section_m,
+            total_leg_m,
+            full_span_m,
+            component_examples,
+        });
+    }
+
+    if sections.is_empty() {
+        return None;
+    }
+
+    Some(TrapDipoleGuidanceView {
+        velocity_factor: vf,
+        sections,
+    })
+}
+
+/// Format trap-dipole guidance into display lines.
+pub fn trap_dipole_guidance_display_lines(
+    view: &TrapDipoleGuidanceView,
+    units: UnitSystem,
+) -> Vec<String> {
+    const M_TO_FT: f64 = 3.280_84;
+    let mut lines = Vec::new();
+    lines.push(String::new());
+    lines.push(format!(
+        "Trap dipole guidance (VF {:.2}):",
+        view.velocity_factor
+    ));
+
+    for section in &view.sections {
+        lines.push(format!("  \u{2500}\u{2500} {} \u{2500}\u{2500}", section.label));
+        lines.push(format!(
+            "  Trap resonant frequency:  {:.3} MHz",
+            section.trap_freq_mhz
+        ));
+
+        let fmt_len = |m: f64| match units {
+            UnitSystem::Metric => format!("{:.2} m", m),
+            UnitSystem::Imperial => format!("{:.1} ft", m * M_TO_FT),
+            UnitSystem::Both => format!("{:.2} m  ({:.1} ft)", m, m * M_TO_FT),
+        };
+
+        lines.push(format!(
+            "  Inner section (feedpoint \u{2192} trap): {}",
+            fmt_len(section.inner_leg_m)
+        ));
+        lines.push(format!(
+            "  Outer section (trap \u{2192} tip):       {}",
+            fmt_len(section.outer_section_m)
+        ));
+        lines.push(format!(
+            "  Total leg per side:                {}",
+            fmt_len(section.total_leg_m)
+        ));
+        lines.push(format!(
+            "  Full span (tip-to-tip):            {}",
+            fmt_len(section.full_span_m)
+        ));
+        lines.push(format!(
+            "  Component examples at {:.3} MHz (target coil Qu \u{003e} 200, use silver-mica or NP0 cap):",
+            section.trap_freq_mhz
+        ));
+        let examples: Vec<String> = section
+            .component_examples
+            .iter()
+            .map(|ex| format!("{:.0} pF \u{2192} {:.2} \u{03bc}H", ex.cap_pf, ex.ind_uh))
+            .collect();
+        lines.push(format!("    {}", examples.join("  |  ")));
+    }
+
+    lines
 }
 
 pub fn resonant_compromise_view(results: &AppResults) -> ResonantCompromiseView {
@@ -4823,5 +5024,98 @@ mod state_machine_tests {
         assert_eq!(expl.ratio, TransformerRatio::R1To4);
         assert!(expl.reason.contains("200"));
         assert!(expl.reason.contains("1:4"));
+    }
+
+    // ── Trap-dipole guidance ──────────────────────────────────────────────────
+
+    fn make_trap_dipole_results(band_indices: Vec<usize>) -> AppResults {
+        let config = AppConfig {
+            antenna_model: Some(AntennaModel::TrapDipole),
+            band_indices,
+            velocity_factor: 0.95,
+            itu_region: ITURegion::Region2,
+            ..Default::default()
+        };
+        run_calculation(config)
+    }
+
+    #[test]
+    fn trap_dipole_guidance_view_returns_none_for_non_trap_model() {
+        let config = AppConfig {
+            antenna_model: Some(AntennaModel::Dipole),
+            band_indices: vec![4, 6], // 40m + 20m
+            ..Default::default()
+        };
+        let results = run_calculation(config);
+        assert!(trap_dipole_guidance_view(&results).is_none());
+    }
+
+    #[test]
+    fn trap_dipole_guidance_view_returns_none_for_single_band() {
+        let results = make_trap_dipole_results(vec![6]); // only 20m (1-based index 6 → BANDS[5])
+        assert!(trap_dipole_guidance_view(&results).is_none());
+    }
+
+    #[test]
+    fn trap_dipole_guidance_view_40m_20m_pair_is_correct() {
+        let results = make_trap_dipole_results(vec![4, 6]); // 40m (idx 4) + 20m (idx 6)
+        let view = trap_dipole_guidance_view(&results).expect("should produce guidance");
+        assert_eq!(view.sections.len(), 1);
+        let s = &view.sections[0];
+        // Upper band is 20m (~14.175 MHz), trap at that frequency.
+        assert!((s.trap_freq_mhz - 14.175).abs() < 0.5);
+        // Inner leg ≈ quarter-wave for 20m × VF 0.95: 71.58/14.175*0.95 ≈ 4.80 m
+        assert!(s.inner_leg_m > 4.0 && s.inner_leg_m < 5.5);
+        // Outer section should be positive (extends beyond 20m element to reach 40m).
+        assert!(s.outer_section_m > 3.0);
+        // Total leg ≈ 68.58/7.15*0.95 = 9.11*0.95 ≈ 8.65 m per side.
+        assert!(s.total_leg_m > 7.5 && s.total_leg_m < 10.5);
+        // Full span is 2× total leg.
+        assert!((s.full_span_m - s.total_leg_m * 2.0).abs() < 0.01);
+        // Three component examples.
+        assert_eq!(s.component_examples.len(), 3);
+        // Each example satisfies L*C ≈ 25330/f²
+        for ex in &s.component_examples {
+            let lc = ex.ind_uh * ex.cap_pf;
+            let expected = 25_330.0 / (s.trap_freq_mhz * s.trap_freq_mhz);
+            assert!((lc - expected).abs() / expected < 0.001, "L×C mismatch: {lc} vs {expected}");
+        }
+    }
+
+    #[test]
+    fn trap_dipole_guidance_view_80m_40m_pair_is_correct() {
+        let results = make_trap_dipole_results(vec![2, 4]); // 80m (idx 2) + 40m (idx 4)
+        let view = trap_dipole_guidance_view(&results).expect("should produce guidance");
+        assert_eq!(view.sections.len(), 1);
+        let s = &view.sections[0];
+        // Trap should be at 40m band centre (~7.15 MHz).
+        assert!((s.trap_freq_mhz - 7.15).abs() < 1.0);
+        assert!(s.inner_leg_m > 4.0 && s.inner_leg_m < 12.0);
+        assert!(s.outer_section_m > 0.0);
+        assert!(s.full_span_m > 15.0);
+    }
+
+    #[test]
+    fn trap_dipole_guidance_display_lines_contains_key_fields() {
+        let results = make_trap_dipole_results(vec![4, 6]);
+        let view = trap_dipole_guidance_view(&results).unwrap();
+        let lines = trap_dipole_guidance_display_lines(&view, UnitSystem::Both);
+        let combined = lines.join("\n");
+        assert!(combined.contains("Trap dipole guidance"), "missing heading");
+        assert!(combined.contains("MHz"), "missing MHz label");
+        assert!(combined.contains("Inner section"), "missing inner section");
+        assert!(combined.contains("Outer section"), "missing outer section");
+        assert!(combined.contains("Full span"), "missing full span");
+        assert!(combined.contains("pF"), "missing capacitor example");
+        assert!(combined.contains("μH"), "missing inductor example");
+    }
+
+    #[test]
+    fn trap_dipole_guidance_appears_in_results_display_document() {
+        let results = make_trap_dipole_results(vec![4, 6]);
+        let doc = results_display_document(&results);
+        let all_lines: Vec<&str> = doc.sections.iter().flat_map(|s| s.lines.iter().map(|l| l.as_str())).collect();
+        let combined = all_lines.join("\n");
+        assert!(combined.contains("Trap dipole guidance"), "guidance section should appear in doc");
     }
 }
