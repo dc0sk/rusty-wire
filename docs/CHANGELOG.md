@@ -13,6 +13,15 @@ All notable changes to Rusty Wire are documented here.
 
 ---
 
+## [2.17.0] - 2026-04-30
+
+### Added
+- **Man page** (`docs/man/rusty-wire.1.md`): full CLI reference in pandoc-flavoured Markdown, generated to a Unix man page at release time via `pandoc`. Bundled in every release package: `.gz` in Linux tarballs and `.deb` (`/usr/share/man/man1/`), `.gz` in macOS tarballs and `.pkg` (`/usr/local/share/man/man1/`), plain-text `.txt` in Windows `.msi` (`C:\Program Files\rusty-wire\`).
+- **macOS `.pkg` installer**: native macOS package installer added alongside the tarball for both x86_64 and aarch64. Installs `rusty-wire` to `/usr/local/bin` and the man page to `/usr/local/share/man/man1/`.
+- **Windows `.msi` installer**: native Windows installer using WiX Toolset v3. Installs `rusty-wire.exe` to `C:\Program Files\rusty-wire\`, adds it to the system PATH, and bundles the plain-text manual. Supports clean removal via "Add or Remove Programs"; fixed `UpgradeCode` for in-place upgrades.
+
+---
+
 ## [2.16.0] - 2026-04-30
 
 ### Added
