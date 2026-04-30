@@ -1344,7 +1344,7 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
     let layout = results_section_layout(results);
     let band_views = band_display_rows(results)
         .iter()
-        .map(|row| band_display_view(row, results.config.units, results.config.antenna_model))
+        .map(|row| band_display_view(row, results.config.units, results.config.antenna_model, results.config.transformer_ratio))
         .collect();
 
     let mut sections = Vec::new();
@@ -2202,6 +2202,7 @@ pub fn band_display_view(
     row: &BandDisplayRow,
     units: UnitSystem,
     antenna_model: Option<AntennaModel>,
+    transformer_ratio: TransformerRatio,
 ) -> BandDisplayView {
     let c = &row.calc;
     let mut lines = vec![
@@ -2620,8 +2621,8 @@ pub fn band_display_view(
         },
     }
 
-    // Show NEC-calibrated feedpoint resistance for dipole-family antennas.
-    // Surfaced here so users can cross-check transformer selection and expected SWR.
+    // Show NEC-calibrated feedpoint resistance and estimated SWR for dipole-family antennas.
+    // SWR is computed at resonance (X=0) against the transformer output impedance.
     let show_feedpoint = matches!(
         antenna_model,
         Some(AntennaModel::Dipole)
@@ -2629,9 +2630,17 @@ pub fn band_display_view(
             | None
     );
     if show_feedpoint {
+        let r = c.dipole_feedpoint_r_ohm;
+        let target_z = 50.0 * transformer_ratio.impedance_ratio();
+        // SWR = max(R, Z_target) / min(R, Z_target) — purely resistive (resonant wire assumption).
+        let swr = if r > 0.0 && target_z > 0.0 {
+            r.max(target_z) / r.min(target_z)
+        } else {
+            1.0
+        };
         lines.push(format!(
-            "  Est. feedpoint R: {:.1} \u{03a9} (NEC-calibrated)",
-            c.dipole_feedpoint_r_ohm
+            "  Est. feedpoint R: {:.1} \u{03a9} (NEC-calibrated, SWR \u{2248} {:.1}:1 into {} \u{03a9})",
+            r, swr, target_z as u32
         ));
     }
 
@@ -3664,7 +3673,7 @@ mod tests {
         let results = run_calculation(AppConfig::default());
         let rows = band_display_rows(&results);
 
-        let view = band_display_view(&rows[0], UnitSystem::Metric, Some(AntennaModel::Dipole));
+        let view = band_display_view(&rows[0], UnitSystem::Metric, Some(AntennaModel::Dipole), TransformerRatio::R1To1);
         assert!(!view.title.is_empty());
         assert!(!view.lines.is_empty());
         assert!(view.lines[0].starts_with("  Frequency:"));
