@@ -13,6 +13,21 @@ All notable changes to Rusty Wire are documented here.
 
 ---
 
+## [2.15.0] - 2026-04-30
+
+### Added
+- **`RequestContext` on `AppRequest`/`AppResponse`**: optional `request_id: u64` + `timestamp_secs: u64` fields, making the app-layer boundary IPC- and async-friendly for future GUI front-ends.
+- **TUI overlay integration tests**: state-driven tests for session-save, session-picker, and export-preview overlays (no terminal required; drives `handle_key` directly).
+- **Persistence roundtrip tests**: `SessionStore` save/list/delete and `UserPrefs` save/load tests using a `tempfile`-based `HOME` override with a shared `ENV_MUTEX`.
+- **Canonical TUI screenshot renderer** (`scripts/render-tui-snapshots.py`): parses the `tui-doc-snapshots` HTML output and renders each section to a PNG via Pillow + DejaVu Sans Mono.
+- **Branch-protection script** (`scripts/protect-main-branch.sh`): applies GitHub REST API branch-protection rules to `main` given a `GITHUB_TOKEN`.
+
+### Refactored
+- **`src/app.rs` → `src/app/`**: split the ~5 100-line god module into `mod.rs`, `state.rs`, and `advise.rs` with full backward-compatible re-exports.
+- **`trait ExportFormatter`**: extracted from `src/export.rs`; all `export_results` / `export_advise` paths delegate through the trait, removing inline match duplication.
+
+---
+
 ## [2.14.0] - 2026-04-30
 
 ### Added
