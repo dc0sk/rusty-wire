@@ -13,6 +13,13 @@ All notable changes to Rusty Wire are documented here.
 
 ---
 
+## [2.17.1] - 2026-04-30
+
+### Fixed
+- **Windows MSI**: replaced en-dash (U+2013) with ASCII hyphen in WiX `Package/@Description` attribute; WiX v3 defaults to code page 1252, which does not include that character, causing build error `LGHT0311`.
+
+---
+
 ## [2.17.0] - 2026-04-30
 
 ### Added
