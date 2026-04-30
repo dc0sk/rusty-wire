@@ -9,11 +9,11 @@ use crate::app::{
     build_advise_candidates_with_thresholds, execute_request_checked, format_quiet_summary,
     parse_band_selection, parse_single_band_token, recommended_transformer_ratio,
     recommended_transformer_ratio_fallback_message, resolve_wire_window_inputs,
-    results_display_document, validate_config, validate_velocity_sweep,
-    velocity_sweep_display_lines, velocity_sweep_view, AntennaModel, AppConfig, AppRequest,
-    AppResults, CalcMode, ExportFormat, UnitSystem, DEFAULT_ANTENNA_HEIGHT_M,
-    DEFAULT_BAND_SELECTION, DEFAULT_CONDUCTOR_DIAMETER_MM, DEFAULT_GROUND_CLASS,
-    DEFAULT_ITU_REGION, FEET_TO_METERS,
+    results_display_document, transformer_sweep_display_lines, transformer_sweep_view,
+    validate_config, validate_velocity_sweep, velocity_sweep_display_lines, velocity_sweep_view,
+    AntennaModel, AppConfig, AppRequest, AppResults, CalcMode, ExportFormat, UnitSystem,
+    DEFAULT_ANTENNA_HEIGHT_M, DEFAULT_BAND_SELECTION, DEFAULT_CONDUCTOR_DIAMETER_MM,
+    DEFAULT_GROUND_CLASS, DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
 use crate::band_presets::load_preset_selection;
 use crate::bands::{ITURegion, ALL_REGIONS};
@@ -176,6 +176,10 @@ struct Cli {
     /// Run a sweep over multiple velocity factors (comma-separated, e.g. 0.66,0.85,0.95)
     #[arg(long, value_delimiter = ',')]
     velocity_sweep: Option<Vec<f64>>,
+
+    /// Run a sweep over multiple transformer ratios (comma-separated, e.g. 1:1,1:4,1:9,1:49)
+    #[arg(long, value_delimiter = ',')]
+    transformer_sweep: Option<Vec<TransformerRatio>>,
 
     /// Print ranked wire + balun/unun advise candidates for the selected setup
     #[arg(long)]
@@ -714,6 +718,11 @@ pub fn run_from_args(args: &[String]) -> bool {
         return run_velocity_sweep(&velocity_values, config, units);
     }
 
+    // Transformer sweep overrides single-run output
+    if let Some(ratios) = cli.transformer_sweep {
+        return run_transformer_sweep(&ratios, config, units);
+    }
+
     if cli.advise {
         return print_advise_candidates(
             &config,
@@ -921,6 +930,46 @@ fn run_velocity_sweep(velocities: &[f64], base_config: AppConfig, units: UnitSys
 
     if let Some(view) = velocity_sweep_view(&results_by_vf) {
         for line in velocity_sweep_display_lines(&view, units) {
+            println!("{line}");
+        }
+    }
+    true
+}
+
+// ---------------------------------------------------------------------------
+// Transformer sweep
+// ---------------------------------------------------------------------------
+
+fn run_transformer_sweep(
+    ratios: &[crate::calculations::TransformerRatio],
+    base_config: AppConfig,
+    units: UnitSystem,
+) -> bool {
+    if ratios.is_empty() {
+        eprintln!("Error: --transformer-sweep requires at least one ratio.");
+        return false;
+    }
+
+    // Derive the feedpoint impedance from the optimizer (uses NEC calibration).
+    let feedpoint_r =
+        crate::app::optimize_transformer_candidates(&base_config).assumed_feedpoint_ohm;
+
+    let mut results_by_ratio: Vec<(crate::calculations::TransformerRatio, AppResults)> =
+        Vec::new();
+    for &ratio in ratios {
+        let mut sweep_config = base_config.clone();
+        sweep_config.transformer_ratio = ratio;
+        match execute_request_checked(AppRequest::new(sweep_config)) {
+            Ok(response) => results_by_ratio.push((ratio, response.results)),
+            Err(err) => {
+                eprintln!("Error at ratio {}: {err}", ratio.as_label());
+                return false;
+            }
+        }
+    }
+
+    if let Some(view) = transformer_sweep_view(&results_by_ratio, feedpoint_r) {
+        for line in transformer_sweep_display_lines(&view, units) {
             println!("{line}");
         }
     }

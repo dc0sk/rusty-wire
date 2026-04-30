@@ -2353,6 +2353,199 @@ pub fn validate_velocity_sweep(velocities: &[f64]) -> Result<(), AppError> {
 }
 
 // ---------------------------------------------------------------------------
+// Transformer sweep
+// ---------------------------------------------------------------------------
+
+/// One row in a transformer sweep table — one transformer ratio and its match metrics.
+#[derive(Debug, Clone)]
+pub struct TransformerSweepRow {
+    pub ratio: TransformerRatio,
+    pub target_z_ohm: f64,
+    pub swr: f64,
+    pub efficiency_pct: f64,
+    pub mismatch_loss_db: f64,
+    /// Non-resonant mode: the recommended wire length (None when no recommendation exists).
+    pub non_resonant_length_m: Option<f64>,
+    pub non_resonant_length_ft: Option<f64>,
+    pub non_resonant_clearance_pct: Option<f64>,
+    /// Resonant mode: per-band (band_name, half_wave_m, half_wave_ft).
+    pub resonant_band_lengths: Vec<(String, f64, f64)>,
+}
+
+/// View model for a transformer ratio sweep.
+#[derive(Debug, Clone)]
+pub struct TransformerSweepView {
+    pub mode: CalcMode,
+    pub assumed_feedpoint_ohm: f64,
+    pub bands_label: String,
+    pub itu_region_label: String,
+    pub rows: Vec<TransformerSweepRow>,
+}
+
+/// Build a transformer sweep view from a pre-computed set of `(ratio, results)` pairs.
+///
+/// Returns `None` if the input is empty.
+pub fn transformer_sweep_view(
+    results_by_ratio: &[(TransformerRatio, AppResults)],
+    assumed_feedpoint_ohm: f64,
+) -> Option<TransformerSweepView> {
+    let (_, first) = results_by_ratio.first()?;
+    let mode = first.config.mode;
+    let bands_label = first
+        .calculations
+        .iter()
+        .map(|c| c.band_name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let itu_region_label = first.config.itu_region.short_name().to_string();
+
+    let rows = results_by_ratio
+        .iter()
+        .map(|(ratio, res)| {
+            let target_z = 50.0 * ratio.impedance_ratio();
+            let gamma = if assumed_feedpoint_ohm > 0.0 {
+                ((target_z - assumed_feedpoint_ohm).abs() / (target_z + assumed_feedpoint_ohm))
+                    .clamp(0.0, 0.999_999)
+            } else {
+                0.0
+            };
+            let efficiency_pct = (1.0 - gamma * gamma) * 100.0;
+            let mismatch_loss_db = -10.0 * (1.0 - gamma * gamma).log10();
+            let swr = if assumed_feedpoint_ohm > 0.0 {
+                assumed_feedpoint_ohm.max(target_z) / assumed_feedpoint_ohm.min(target_z)
+            } else {
+                1.0
+            };
+
+            match mode {
+                CalcMode::NonResonant => TransformerSweepRow {
+                    ratio: *ratio,
+                    target_z_ohm: target_z,
+                    swr,
+                    efficiency_pct,
+                    mismatch_loss_db,
+                    non_resonant_length_m: res.recommendation.as_ref().map(|r| r.length_m),
+                    non_resonant_length_ft: res.recommendation.as_ref().map(|r| r.length_ft),
+                    non_resonant_clearance_pct: res
+                        .recommendation
+                        .as_ref()
+                        .map(|r| r.min_resonance_clearance_pct),
+                    resonant_band_lengths: Vec::new(),
+                },
+                CalcMode::Resonant => TransformerSweepRow {
+                    ratio: *ratio,
+                    target_z_ohm: target_z,
+                    swr,
+                    efficiency_pct,
+                    mismatch_loss_db,
+                    non_resonant_length_m: None,
+                    non_resonant_length_ft: None,
+                    non_resonant_clearance_pct: None,
+                    resonant_band_lengths: res
+                        .calculations
+                        .iter()
+                        .map(|c| (c.band_name.clone(), c.half_wave_m, c.half_wave_ft))
+                        .collect(),
+                },
+            }
+        })
+        .collect();
+
+    Some(TransformerSweepView {
+        mode,
+        assumed_feedpoint_ohm,
+        bands_label,
+        itu_region_label,
+        rows,
+    })
+}
+
+/// Render a `TransformerSweepView` to display lines (no I/O).
+pub fn transformer_sweep_display_lines(
+    view: &TransformerSweepView,
+    units: UnitSystem,
+) -> Vec<String> {
+    let mode_label = match view.mode {
+        CalcMode::Resonant => "resonant",
+        CalcMode::NonResonant => "non-resonant",
+    };
+    let mut lines = vec![
+        String::new(),
+        format!(
+            "Transformer sweep \u{2014} {mode_label} | {} | Region {} | feedpoint R: {:.0} \u{03a9}:",
+            view.bands_label, view.itu_region_label, view.assumed_feedpoint_ohm
+        ),
+    ];
+
+    match view.mode {
+        CalcMode::NonResonant => {
+            lines.push(format!(
+                "  {:<5}  {:<7}  {:<6}  {:<11}  {:<8}  {:<24}  {}",
+                "Ratio", "Target Z", "SWR", "Efficiency", "Loss", "Length", "Clearance"
+            ));
+            lines.push(format!("  {}", "\u{2500}".repeat(78)));
+            for row in &view.rows {
+                let len_str = match (row.non_resonant_length_m, row.non_resonant_length_ft) {
+                    (Some(m), Some(ft)) => match units {
+                        UnitSystem::Metric => format!("{:.2} m", m),
+                        UnitSystem::Imperial => format!("{:.1} ft", ft),
+                        UnitSystem::Both => format!("{:.2} m / {:.1} ft", m, ft),
+                    },
+                    _ => "\u{2014}".to_string(),
+                };
+                let clearance_str = row
+                    .non_resonant_clearance_pct
+                    .map(|p| format!("{:.1}%", p))
+                    .unwrap_or_else(|| "\u{2014}".to_string());
+                lines.push(format!(
+                    "  {:<5}  {:>5.0} \u{03a9}  {:>4.2}:1  {:>9.2}%  {:.3} dB  {:<24}  {}",
+                    row.ratio.as_label(),
+                    row.target_z_ohm,
+                    row.swr,
+                    row.efficiency_pct,
+                    row.mismatch_loss_db,
+                    len_str,
+                    clearance_str
+                ));
+            }
+        }
+        CalcMode::Resonant => {
+            lines.push(format!(
+                "  {:<5}  {:<7}  {:<6}  {:<11}  {:<8}  {}",
+                "Ratio", "Target Z", "SWR", "Efficiency", "Loss", "Per-band lengths"
+            ));
+            lines.push(format!("  {}", "\u{2500}".repeat(78)));
+            for row in &view.rows {
+                let band_parts: Vec<String> = row
+                    .resonant_band_lengths
+                    .iter()
+                    .map(|(name, m, ft)| {
+                        let len_str = match units {
+                            UnitSystem::Metric => format!("{:.2} m", m),
+                            UnitSystem::Imperial => format!("{:.1} ft", ft),
+                            UnitSystem::Both => format!("{:.2} m / {:.1} ft", m, ft),
+                        };
+                        format!("{}={}", name, len_str)
+                    })
+                    .collect();
+                lines.push(format!(
+                    "  {:<5}  {:>5.0} \u{03a9}  {:>4.2}:1  {:>9.2}%  {:.3} dB  {}",
+                    row.ratio.as_label(),
+                    row.target_z_ohm,
+                    row.swr,
+                    row.efficiency_pct,
+                    row.mismatch_loss_db,
+                    band_parts.join("  ")
+                ));
+            }
+        }
+    }
+
+    lines.push(String::new());
+    lines
+}
+
+// ---------------------------------------------------------------------------
 // Quiet summary
 // ---------------------------------------------------------------------------
 
@@ -4212,6 +4405,68 @@ mod app_error_tests {
         assert!(combined.contains("0.85"), "expected 0.85 in output");
         assert!(combined.contains("0.95"), "expected 0.95 in output");
         assert!(combined.contains("resonant"));
+    }
+
+    #[test]
+    fn transformer_sweep_view_resonant_has_band_lengths_and_efficiency() {
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            band_indices: vec![5, 7],
+            antenna_model: Some(AntennaModel::Dipole),
+            ..AppConfig::default()
+        };
+        let mut c1to1 = config.clone();
+        c1to1.transformer_ratio = TransformerRatio::R1To1;
+        let mut c1to4 = config.clone();
+        c1to4.transformer_ratio = TransformerRatio::R1To4;
+
+        let feedpoint_r = 50.0; // 1:1 maps perfectly to 50 Ω
+        let results = vec![
+            (TransformerRatio::R1To1, run_calculation(c1to1)),
+            (TransformerRatio::R1To4, run_calculation(c1to4)),
+        ];
+        let view = transformer_sweep_view(&results, feedpoint_r).expect("view should be produced");
+        assert_eq!(view.mode, CalcMode::Resonant);
+        assert_eq!(view.rows.len(), 2);
+        assert_eq!(view.rows[0].ratio, TransformerRatio::R1To1);
+        assert_eq!(view.rows[1].ratio, TransformerRatio::R1To4);
+        for row in &view.rows {
+            assert_eq!(row.resonant_band_lengths.len(), 2);
+        }
+        // 1:1 into 50 Ω feedpoint should be a perfect match.
+        let row1to1 = &view.rows[0];
+        assert!(row1to1.efficiency_pct > 99.9);
+        assert!(row1to1.swr < 1.01);
+        // 1:4 (200 Ω) into 50 Ω feedpoint should have higher SWR.
+        let row1to4 = &view.rows[1];
+        assert!(row1to4.swr > 3.5);
+    }
+
+    #[test]
+    fn transformer_sweep_display_lines_contains_ratio_labels() {
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            band_indices: vec![7],
+            antenna_model: Some(AntennaModel::Dipole),
+            ..AppConfig::default()
+        };
+        let mut c1to1 = config.clone();
+        c1to1.transformer_ratio = TransformerRatio::R1To1;
+        let mut c1to9 = config.clone();
+        c1to9.transformer_ratio = TransformerRatio::R1To9;
+
+        let feedpoint_r = 73.0;
+        let results = vec![
+            (TransformerRatio::R1To1, run_calculation(c1to1)),
+            (TransformerRatio::R1To9, run_calculation(c1to9)),
+        ];
+        let view = transformer_sweep_view(&results, feedpoint_r).unwrap();
+        let lines = transformer_sweep_display_lines(&view, UnitSystem::Metric);
+        let combined = lines.join("\n");
+        assert!(combined.contains("1:1"), "expected 1:1 in output");
+        assert!(combined.contains("1:9"), "expected 1:9 in output");
+        assert!(combined.contains("resonant"));
+        assert!(combined.contains("feedpoint R:"));
     }
 
     #[test]
