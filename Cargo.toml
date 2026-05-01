@@ -12,6 +12,7 @@ categories = ["command-line-utilities"]
 name = "rusty-wire"
 section = "hamradio"
 priority = "optional"
+copyright = "packaging/debian/copyright"
 assets = [
     { source = "target/release/rusty-wire", dest = "/usr/bin/rusty-wire", mode = "755" },
     { source = "README.md", dest = "/usr/share/doc/rusty-wire/README.md", mode = "644" },
