@@ -41,6 +41,7 @@ fn wire_params(config: &AppConfig, calc: &WireCalculation) -> (f64, bool) {
         Some(AntennaModel::FullWaveLoop) => (calc.full_wave_loop_circumference_m, false),
         Some(AntennaModel::OffCenterFedDipole) => (calc.ocfd_33_long_leg_m, false),
         Some(AntennaModel::TrapDipole) => (calc.trap_dipole_leg_m, true),
+        Some(AntennaModel::HybridMultiSection) => (calc.corrected_half_wave_m, true),
     }
 }
 

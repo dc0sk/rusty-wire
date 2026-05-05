@@ -460,6 +460,9 @@ pub fn transformer_ratio_explanation(
         Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) => {
             "Center-fed dipoles present ~50 \u{03a9} at resonance; a 1:1 balun is typical."
         }
+        Some(AntennaModel::HybridMultiSection) => {
+            "Hybrid multi-section dipoles are still center-fed dipole-family antennas; a 1:1 balun is typical."
+        }
         Some(AntennaModel::TrapDipole) => {
             "Trap dipoles present ~50\u{2013}75 \u{03a9} at resonance; a 1:1 balun is typical."
         }

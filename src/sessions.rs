@@ -103,6 +103,7 @@ impl SessionConfig {
                     AntennaModel::FullWaveLoop => "loop",
                     AntennaModel::OffCenterFedDipole => "ocfd",
                     AntennaModel::TrapDipole => "trap-dipole",
+                    AntennaModel::HybridMultiSection => "hybrid-multi",
                 }
                 .to_string()
             }),

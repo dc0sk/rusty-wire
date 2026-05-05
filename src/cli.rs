@@ -222,6 +222,8 @@ enum CliAntennaModel {
     OffCenterFedDipole,
     #[clap(name = "trap-dipole", help = "Trap dipole model")]
     TrapDipole,
+    #[clap(name = "hybrid-multi", help = "Hybrid multi-section dipole model")]
+    HybridMultiSection,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -270,6 +272,7 @@ impl From<CliAntennaModel> for AntennaModel {
             CliAntennaModel::FullWaveLoop => AntennaModel::FullWaveLoop,
             CliAntennaModel::OffCenterFedDipole => AntennaModel::OffCenterFedDipole,
             CliAntennaModel::TrapDipole => AntennaModel::TrapDipole,
+            CliAntennaModel::HybridMultiSection => AntennaModel::HybridMultiSection,
         }
     }
 }
@@ -1171,6 +1174,7 @@ fn antenna_summary(antenna_model: Option<AntennaModel>) -> &'static str {
         Some(AntennaModel::FullWaveLoop) => "loop",
         Some(AntennaModel::OffCenterFedDipole) => "ocfd",
         Some(AntennaModel::TrapDipole) => "trap-dipole",
+        Some(AntennaModel::HybridMultiSection) => "hybrid-multi",
         None => "all models",
     }
 }
@@ -1318,13 +1322,17 @@ fn prompt_antenna_model_with_default(
     writeln!(output, "  v) Inverted-V").ok();
     writeln!(output, "  o) Off-center-fed dipole (OCFD)").ok();
     writeln!(output, "  t) Trap dipole").ok();
+    writeln!(output, "  h) Hybrid multi-section dipole").ok();
     let prompt_str = match default {
-        Some(AntennaModel::EndFedHalfWave) => "Select antenna model (d/e/l/v/o/t) [e]: ",
-        Some(AntennaModel::FullWaveLoop) => "Select antenna model (d/e/l/v/o/t) [l]: ",
-        Some(AntennaModel::InvertedVDipole) => "Select antenna model (d/e/l/v/o/t) [v]: ",
-        Some(AntennaModel::OffCenterFedDipole) => "Select antenna model (d/e/l/v/o/t) [o]: ",
-        Some(AntennaModel::TrapDipole) => "Select antenna model (d/e/l/v/o/t) [t]: ",
-        _ => "Select antenna model (d/e/l/v/o/t) [d]: ",
+        Some(AntennaModel::EndFedHalfWave) => "Select antenna model (d/e/l/v/o/t/h) [e]: ",
+        Some(AntennaModel::FullWaveLoop) => "Select antenna model (d/e/l/v/o/t/h) [l]: ",
+        Some(AntennaModel::InvertedVDipole) => "Select antenna model (d/e/l/v/o/t/h) [v]: ",
+        Some(AntennaModel::OffCenterFedDipole) => "Select antenna model (d/e/l/v/o/t/h) [o]: ",
+        Some(AntennaModel::TrapDipole) => "Select antenna model (d/e/l/v/o/t/h) [t]: ",
+        Some(AntennaModel::HybridMultiSection) => {
+            "Select antenna model (d/e/l/v/o/t/h) [h]: "
+        }
+        _ => "Select antenna model (d/e/l/v/o/t/h) [d]: ",
     };
     prompt(output, prompt_str);
     let line = read_line(input, "failed to read antenna model");
@@ -1343,6 +1351,9 @@ fn prompt_antenna_model_with_default(
             Some(AntennaModel::OffCenterFedDipole)
         }
         "t" | "trap" | "trap-dipole" | "trapdipole" => Some(AntennaModel::TrapDipole),
+        "h" | "hybrid" | "hybrid-multi" | "hybrid-multi-section" | "multi-section" => {
+            Some(AntennaModel::HybridMultiSection)
+        }
         _ => default,
     }
 }
@@ -2136,6 +2147,7 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
             AntennaModel::FullWaveLoop => "loop",
             AntennaModel::OffCenterFedDipole => "ocfd",
             AntennaModel::TrapDipole => "trap-dipole",
+            AntennaModel::HybridMultiSection => "hybrid-multi",
         };
         cmd.push_str(&format!(" --antenna {}", shell_quote(antenna)));
     }
@@ -2603,7 +2615,7 @@ mod tests {
         let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
         assert!(rendered.contains("Enter one band (e.g. 20m) [20m]: "));
         assert!(rendered.contains("Select calculation mode (1-2) [2]: "));
-        assert!(rendered.contains("Select antenna model (d/e/l/v/o/t) [e]: "));
+        assert!(rendered.contains("Select antenna model (d/e/l/v/o/t/h) [e]: "));
         assert!(rendered.contains("Enter velocity factor (0.5-1.0) [0.85]: "));
         assert!(rendered.contains("Antenna height in meters (7/10/12) [12]: "));
         assert!(rendered.contains("Ground class (poor/average/good) [good]: "));

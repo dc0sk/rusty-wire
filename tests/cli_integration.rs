@@ -373,6 +373,7 @@ fn default_antenna_mode_shows_all_models_per_band() {
     assert!(stdout.contains("Full-wave loop circumference:"));
     assert!(stdout.contains("Inverted-V total:"));
     assert!(stdout.contains("OCFD 33/67 legs:"));
+    assert!(stdout.contains("Hybrid total:"));
 }
 
 #[test]
@@ -464,6 +465,23 @@ fn ocfd_antenna_mode_shows_ocfd_guidance_compromises() {
     assert!(stdout.contains("33/67 legs:"));
     assert!(stdout.contains("20/80 legs:"));
     assert!(stdout.contains("Optimized split:"));
+}
+
+#[test]
+fn hybrid_multi_antenna_mode_shows_section_split_guidance() {
+    let output = binary()
+        .args(["--bands", "40m", "--antenna", "hybrid-multi"])
+        .output()
+        .expect("failed to run rusty-wire");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(output.status.success());
+    assert!(stdout.contains("Antenna model: hybrid multi-section dipole"));
+    assert!(stdout.contains("Hybrid total:"));
+    assert!(stdout.contains("Section split (40/35/25):"));
+    assert!(stdout.contains(
+        "Closest combined compromises to resonant points (hybrid multi-section guidance):"
+    ));
 }
 
 #[test]
