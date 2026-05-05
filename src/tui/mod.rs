@@ -1838,6 +1838,31 @@ fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         return;
     }
 
+    // When the Transformer field is selected, show the one-sentence explanation
+    // for the recommended ratio instead of the generic key-binding hint.
+    if state.focus == Focus::Config
+        && state.current_field() == ConfigField::TransformerRatio
+        && !state.show_band_checklist
+        && state.export_preview.is_none()
+        && !state.show_session_save
+        && !state.show_session_picker
+    {
+        let expl = crate::app::transformer_ratio_explanation(
+            state.app.config.mode,
+            state.app.config.antenna_model,
+        );
+        let text = format!(
+            " Recommended: {}  —  {}",
+            expl.ratio.as_label(),
+            expl.reason
+        );
+        f.render_widget(
+            Paragraph::new(text).style(Style::default().fg(Color::DarkGray)),
+            area,
+        );
+        return;
+    }
+
     let text = hint_text(
         state.focus,
         state.show_band_checklist,
@@ -1871,10 +1896,10 @@ fn hint_text(
 
     match focus {
         Focus::Config => {
-            " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  s:prefs  S:save-session  O:sessions  i:info  Tab:→results  q:quit"
+            " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  N:nec  s:prefs  S:save-session  O:sessions  i:info  Tab:→results  q:quit"
         }
         Focus::Results => {
-            " ↑↓/jk:scroll  PgUp/Dn:page  [/]:band  Space:collapse  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  S:save-session  O:sessions  Tab:→config  q:quit"
+            " ↑↓/jk:scroll  PgUp/Dn:page  [/]:band  Space:collapse  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  N:nec  S:save-session  O:sessions  Tab:→config  q:quit"
         }
     }
 }
