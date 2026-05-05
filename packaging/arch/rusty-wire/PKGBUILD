@@ -1,6 +1,6 @@
 # Maintainer: Simon Keimer <dc0sk@example.com>
 pkgname=rusty-wire
-pkgver=2.18.0
+pkgver=2.19.0
 pkgrel=1
 pkgdesc="Wire antenna length calculator for amateur radio operators – CLI and TUI"
 arch=('x86_64' 'aarch64')

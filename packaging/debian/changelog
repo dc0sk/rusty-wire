@@ -1,3 +1,11 @@
+rusty-wire (2.19.0-1) unstable; urgency=medium
+
+  * Transformer mismatch warning: ResultsDisplayDocument.transformer_mismatch_warning flags configured vs recommended ratio; warning_lines updated automatically.
+  * TUI: config panel shows warning prefix when transformer ratio mismatches the model recommendation.
+  * TUI: light-mode contrast improvements (Blue replaces Cyan; Reset/DIM replace hardcoded White/DarkGray).
+
+ -- Simon Keimer <dc0sk@example.com>  Mon, 05 May 2026 00:00:00 +0000
+
 rusty-wire (2.18.0-1) unstable; urgency=medium
 
   * NEC2 card deck export (--export nec / TUI N key): CM/GW/GE/GN/FR/EX/RP/EN cards for all antenna models.

@@ -1,6 +1,6 @@
 # Rusty Wire
 
-![Version](https://img.shields.io/badge/version-2.18.0-blue)
+![Version](https://img.shields.io/badge/version-2.19.0-blue)
 ![License](https://img.shields.io/badge/license-GPL--2.0--or--later-green)
 ![Rust edition](https://img.shields.io/badge/rust-2021-orange)
 
@@ -19,7 +19,7 @@ amateur and shortwave bands. It covers six antenna models, recommends transforme
 automatically, and fits comfortably into shell scripts as well as interactive
 planning sessions.
 
-**2.18.0: NEC2 card deck export (`--export nec` / TUI `N`), interactive-mode test coverage, app-layer API hardening · 3.x roadmap: desktop GUI (`iced`)**
+**2.19.0: transformer mismatch warnings, TUI light-mode contrast, antenna-specific feed recommendations · 3.x roadmap: desktop GUI (`iced`)**
 
 ---
 
