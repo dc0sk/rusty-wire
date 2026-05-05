@@ -50,13 +50,13 @@ New ideas that are not yet agreed on go to `docs/backlog.md` first.
 Work needed before or alongside the TUI. Items are roughly in dependency order.
 
 ### 1) App-layer API hardening
-- Stabilise `AppConfig` / `AppResults` / `AppRequest` / `AppResponse` as the single shared interface used by CLI, TUI, and future GUI
-- Separate pure result formatting from terminal printing so TUI can reuse summaries, labels, warnings, and recommendation text
-- Introduce view-friendly metadata where useful: recommended-transformer explanations, skipped-band reasons, per-band annotations
+- ✅ Stabilise `AppConfig` / `AppResults` / `AppRequest` / `AppResponse` as the single shared interface used by CLI, TUI, and future GUI
+- ✅ Separate pure result formatting from terminal printing so TUI can reuse summaries, labels, warnings, and recommendation text — `results_display_document()` used by both CLI and TUI
+- ✅ Introduce view-friendly metadata: `ResultsDisplayDocument` carries `transformer_explanation: TransformerRatioExplanation` and `skipped_band_details: Vec<SkippedBandDetail>` for structured access by TUI/GUI without extra calls
 
 ### 2) Custom-band and frequency input
 - ✅ Support user-defined band presets via a config file (`bands.toml` or similar) — v2.16.0
-- `--freq-list <f1,f2,...>` for multiple explicit frequencies in one run
+- ✅ `--freq-list <f1,f2,...>` for multiple explicit frequencies in one run — implemented, integration-tested
 
 ### 3) Additional antenna models
 - ✅ Trap dipole multi-section model with structured guidance (trap freq, leg lengths, component examples) — v2.12.0
