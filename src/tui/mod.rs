@@ -1465,7 +1465,7 @@ fn render_title(f: &mut ratatui::Frame, area: Rect) {
     ))
     .style(
         Style::default()
-            .fg(Color::Cyan)
+            .fg(Color::Blue)
             .add_modifier(Modifier::BOLD),
     );
     f.render_widget(title, area);
@@ -1474,7 +1474,7 @@ fn render_title(f: &mut ratatui::Frame, area: Rect) {
 fn render_config_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let focused = state.focus == Focus::Config;
     let border_style = if focused {
-        Style::default().fg(Color::Cyan)
+        Style::default().fg(Color::Blue)
     } else {
         Style::default().fg(Color::DarkGray)
     };
@@ -1493,6 +1493,14 @@ fn render_config_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         .as_ref()
         .and_then(|v| v.candidates.first())
         .map(|c| c.ratio);
+
+    // Model-based recommended ratio (independent of advise view).
+    let recommended_model_ratio = crate::app::transformer_ratio_explanation(
+        state.app.config.mode,
+        state.app.config.antenna_model,
+    )
+    .ratio;
+    let has_results = state.app.results.is_some();
 
     // Count skipped bands from the last completed results.
     let skipped_count = state
@@ -1517,11 +1525,15 @@ fn render_config_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
                 value
             };
 
+            let transformer_mismatch = is_transformer_field
+                && has_results
+                && state.app.config.transformer_ratio != recommended_model_ratio;
+
             let (prefix, style) = if selected {
                 (
                     "► ",
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(Color::Blue)
                         .add_modifier(Modifier::BOLD),
                 )
             } else if is_transformer_field
@@ -1534,10 +1546,18 @@ fn render_config_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
                         .fg(Color::Green)
                         .add_modifier(Modifier::BOLD),
                 )
+            } else if transformer_mismatch {
+                // Ratio differs from model recommendation → amber warning.
+                (
+                    "⚠ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
             } else if is_bands_field && skipped_count > 0 {
                 ("  ", Style::default().fg(Color::Yellow))
             } else {
-                ("  ", Style::default().fg(Color::White))
+                ("  ", Style::default().fg(Color::Reset))
             };
             let line = Line::from(vec![
                 Span::styled(prefix.to_string(), style),
@@ -1555,7 +1575,7 @@ fn render_config_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
 fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let focused = state.focus == Focus::Results;
     let border_style = if focused {
-        Style::default().fg(Color::Cyan)
+        Style::default().fg(Color::Blue)
     } else {
         Style::default().fg(Color::DarkGray)
     };
@@ -1582,7 +1602,7 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
                 Line::from(""),
                 Line::from(Span::styled(
                     "  No advise data yet. Press a to generate candidates.",
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().add_modifier(Modifier::DIM),
                 )),
             ]
         }
@@ -1599,7 +1619,7 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
             Line::from(""),
             Line::from(Span::styled(
                 "Adjust configuration above and press r to retry.",
-                Style::default().fg(Color::DarkGray),
+                Style::default().add_modifier(Modifier::DIM),
             )),
         ]
     } else if let Some(ref results) = state.app.results {
@@ -1610,7 +1630,7 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         out.push(Line::from(Span::styled(
             doc.overview_heading.to_string(),
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::Blue)
                 .add_modifier(Modifier::BOLD),
         )));
         for l in &doc.overview_header_lines {
@@ -1626,7 +1646,7 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
             let title_text = format!("{}{}", indicator, band_view.title);
             let header_style = if is_cursor {
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(Color::Blue)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
@@ -1651,7 +1671,7 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
             for (i, l) in section.lines.iter().enumerate() {
                 let style = if i == 0 {
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(Color::Blue)
                         .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default()
@@ -1674,12 +1694,12 @@ fn render_results_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
             Line::from(""),
             Line::from(Span::styled(
                 "  No results yet.",
-                Style::default().fg(Color::DarkGray),
+                Style::default().add_modifier(Modifier::DIM),
             )),
             Line::from(""),
             Line::from(Span::styled(
                 "  Configure your antenna above, then press r to calculate.",
-                Style::default().fg(Color::DarkGray),
+                Style::default().add_modifier(Modifier::DIM),
             )),
         ]
     };
@@ -1696,7 +1716,7 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
     out.push(Line::from(Span::styled(
         "Advise candidates",
         Style::default()
-            .fg(Color::Cyan)
+            .fg(Color::Blue)
             .add_modifier(Modifier::BOLD),
     )));
     out.push(Line::from(format!(
@@ -1712,7 +1732,7 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
                 cmp.feedpoint_r_ohm
             ),
             Style::default()
-                .fg(Color::Yellow)
+                .fg(Color::Blue)
                 .add_modifier(Modifier::BOLD),
         )));
         out.push(Line::from(format!(
@@ -1788,7 +1808,7 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
         )));
         out.push(Line::from(Span::styled(
             format!("    note: {}", candidate.tradeoff_note),
-            Style::default().fg(Color::Yellow),
+            Style::default().add_modifier(Modifier::DIM),
         )));
         if let Some(note) = &candidate.validation_note {
             let status = candidate
@@ -1809,7 +1829,7 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
                 Some(crate::fnec_validation::ValidationStatus::Rejected) => {
                     Style::default().fg(Color::Red)
                 }
-                _ => Style::default().fg(Color::DarkGray),
+                _ => Style::default().add_modifier(Modifier::DIM),
             };
             out.push(Line::from(Span::styled(
                 format!("    fnec: {status} — {note}"),
@@ -1821,7 +1841,7 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
 
     out.push(Line::from(Span::styled(
         "Note: efficiency and score are model-based estimates for ranking, not lab measurements.",
-        Style::default().fg(Color::DarkGray),
+        Style::default().add_modifier(Modifier::DIM),
     )));
 
     out
@@ -1857,7 +1877,7 @@ fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
             expl.reason
         );
         f.render_widget(
-            Paragraph::new(text).style(Style::default().fg(Color::DarkGray)),
+            Paragraph::new(text).style(Style::default().add_modifier(Modifier::DIM)),
             area,
         );
         return;
@@ -1870,7 +1890,7 @@ fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         state.show_session_save,
         state.show_session_picker,
     );
-    let para = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
+    let para = Paragraph::new(text).style(Style::default().add_modifier(Modifier::DIM));
     f.render_widget(para, area);
 }
 
@@ -1931,13 +1951,13 @@ fn render_info_popup(f: &mut ratatui::Frame, area: Rect) {
     let block = Block::default()
         .title(" About Rusty Wire ")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_style(Style::default().fg(Color::Blue));
 
     let lines = info_popup_lines();
 
     let para = Paragraph::new(lines)
         .block(block)
-        .style(Style::default().fg(Color::White).bg(Color::Black))
+        .style(Style::default().fg(Color::Reset).bg(Color::Black))
         .wrap(Wrap { trim: true });
     f.render_widget(para, popup_area);
 }
@@ -1991,7 +2011,7 @@ fn render_export_preview(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
 
     let para = Paragraph::new(lines)
         .scroll((state.preview_scroll, 0))
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(Color::Reset));
     f.render_widget(para, inner);
 }
 
@@ -2025,11 +2045,11 @@ fn render_session_name_input(f: &mut ratatui::Frame, area: Rect, state: &TuiStat
 
     // Show typed text + a blinking-cursor indicator.
     let input_text = format!("{}▏", state.session_name_input);
-    let input = Paragraph::new(input_text).style(Style::default().fg(Color::White));
+    let input = Paragraph::new(input_text).style(Style::default().fg(Color::Reset));
     f.render_widget(input, rows[1]);
 
     let hint =
-        Paragraph::new("Enter: save   Esc: cancel").style(Style::default().fg(Color::DarkGray));
+        Paragraph::new("Enter: save   Esc: cancel").style(Style::default().add_modifier(Modifier::DIM));
     f.render_widget(hint, rows[2]);
 }
 
@@ -2068,7 +2088,7 @@ fn render_session_picker(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
             };
             let style = if i == state.session_picker_cursor {
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(Color::Blue)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
@@ -2081,7 +2101,7 @@ fn render_session_picker(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     f.render_widget(list, rows[0]);
 
     let hint = Paragraph::new("↑↓/jk: move   Enter: load   d: delete   Esc/q: cancel")
-        .style(Style::default().fg(Color::DarkGray));
+        .style(Style::default().add_modifier(Modifier::DIM));
     f.render_widget(hint, rows[1]);
 }
 
@@ -2094,7 +2114,7 @@ fn render_band_checklist(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let block = Block::default()
         .title(" Custom Band Selection  (Space:toggle  Enter:confirm  Esc/q:cancel) ")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_style(Style::default().fg(Color::Blue));
 
     let inner = block.inner(popup_area);
     f.render_widget(block, popup_area);
@@ -2110,11 +2130,11 @@ fn render_band_checklist(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
                 (
                     "► ",
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(Color::Blue)
                         .add_modifier(Modifier::BOLD),
                 )
             } else {
-                ("  ", Style::default().fg(Color::White))
+                ("  ", Style::default().fg(Color::Reset))
             };
             let line = Line::from(vec![
                 Span::styled(prefix.to_string(), style),
