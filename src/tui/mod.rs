@@ -68,9 +68,9 @@ use crate::band_presets::load_named_presets;
 use crate::bands::ITURegion;
 use crate::calculations::{GroundClass, TransformerRatio};
 use crate::export::{
-    default_advise_output_name, default_output_name, export_advise, export_results, to_advise_csv,
-    to_advise_html, to_advise_json, to_advise_markdown, to_advise_txt, to_advise_yaml, to_csv,
-    to_html, to_json, to_markdown, to_txt, to_yaml,
+    default_advise_output_name, default_output_name, export_advise, export_results,
+    export_results_nec, to_advise_csv, to_advise_html, to_advise_json, to_advise_markdown,
+    to_advise_txt, to_advise_yaml, to_csv, to_html, to_json, to_markdown, to_txt, to_yaml,
 };
 
 // ---------------------------------------------------------------------------
@@ -867,6 +867,8 @@ impl TuiState {
                 ExportFormat::Markdown => {
                     to_advise_markdown(view.assumed_feedpoint_ohm, &view.candidates)
                 }
+                // NEC export has no advise variant; fall back to plain text.
+                ExportFormat::Nec => to_advise_txt(view.assumed_feedpoint_ohm, &view.candidates),
                 ExportFormat::Txt => to_advise_txt(view.assumed_feedpoint_ohm, &view.candidates),
                 ExportFormat::Yaml => to_advise_yaml(view.assumed_feedpoint_ohm, &view.candidates),
             };
@@ -906,6 +908,11 @@ impl TuiState {
                     results.config.units,
                     results.config.wire_min_m,
                     results.config.wire_max_m,
+                ),
+                ExportFormat::Nec => crate::nec_export::to_nec(
+                    &results.calculations,
+                    &results.config,
+                    env!("CARGO_PKG_VERSION"),
                 ),
                 ExportFormat::Txt => to_txt(
                     &results.calculations,
@@ -953,15 +960,19 @@ impl TuiState {
                 self.export_status = Some("Results lost — cannot write.".into());
                 return;
             };
-            export_results(
-                format,
-                filename,
-                &results.calculations,
-                results.recommendation.as_ref(),
-                results.config.units,
-                results.config.wire_min_m,
-                results.config.wire_max_m,
-            )
+            if format == ExportFormat::Nec {
+                export_results_nec(filename, &results.calculations, &results.config)
+            } else {
+                export_results(
+                    format,
+                    filename,
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                )
+            }
         };
         match result {
             Ok(()) => self.export_status = Some(format!("Exported → {filename}")),
@@ -1272,6 +1283,10 @@ impl TuiState {
             }
             KeyCode::Char('H') => {
                 self.try_export(ExportFormat::Html);
+                return;
+            }
+            KeyCode::Char('N') => {
+                self.try_export(ExportFormat::Nec);
                 return;
             }
             KeyCode::Char('s') => {

@@ -6,8 +6,9 @@
 ///
 /// `ExportFormatter` is implemented on `ExportFormat` so callers can dispatch
 /// through the trait without matching on the enum themselves.
-use crate::app::{AdviseCandidate, ExportFormat, UnitSystem};
+use crate::app::{AdviseCandidate, AppConfig, ExportFormat, UnitSystem};
 use crate::calculations::{NonResonantRecommendation, WireCalculation};
+use crate::nec_export;
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -57,6 +58,8 @@ impl ExportFormatter for ExportFormat {
             ExportFormat::Markdown => {
                 to_markdown(calculations, recommendation, units, wire_min_m, wire_max_m)
             }
+            // NEC export requires AppConfig; use export_results_nec() directly.
+            ExportFormat::Nec => String::new(),
             ExportFormat::Txt => {
                 to_txt(calculations, recommendation, units, wire_min_m, wire_max_m)
             }
@@ -72,6 +75,8 @@ impl ExportFormatter for ExportFormat {
             ExportFormat::Html => to_advise_html(assumed_feedpoint_ohm, candidates),
             ExportFormat::Json => to_advise_json(assumed_feedpoint_ohm, candidates),
             ExportFormat::Markdown => to_advise_markdown(assumed_feedpoint_ohm, candidates),
+            // NEC export does not have an advise variant.
+            ExportFormat::Nec => String::new(),
             ExportFormat::Txt => to_advise_txt(assumed_feedpoint_ohm, candidates),
             ExportFormat::Yaml => to_advise_yaml(assumed_feedpoint_ohm, candidates),
         }
@@ -88,6 +93,7 @@ pub fn default_output_name(format: ExportFormat) -> &'static str {
         ExportFormat::Html => "rusty-wire-results.html",
         ExportFormat::Json => "rusty-wire-results.json",
         ExportFormat::Markdown => "rusty-wire-results.md",
+        ExportFormat::Nec => "rusty-wire-results.nec",
         ExportFormat::Txt => "rusty-wire-results.txt",
         ExportFormat::Yaml => "rusty-wire-results.yaml",
     }
@@ -99,6 +105,7 @@ pub fn default_advise_output_name(format: ExportFormat) -> &'static str {
         ExportFormat::Html => "rusty-wire-advise.html",
         ExportFormat::Json => "rusty-wire-advise.json",
         ExportFormat::Markdown => "rusty-wire-advise.md",
+        ExportFormat::Nec => "rusty-wire-advise.nec",
         ExportFormat::Txt => "rusty-wire-advise.txt",
         ExportFormat::Yaml => "rusty-wire-advise.yaml",
     }
@@ -174,6 +181,18 @@ pub fn export_advise(
     candidates: &[AdviseCandidate],
 ) -> io::Result<()> {
     let content = format.format_advise(assumed_feedpoint_ohm, candidates);
+    write_export_file(output, content)
+}
+
+/// Export results as a NEC2 card deck.  Requires the full `AppConfig` for
+/// antenna geometry and ground parameters; one deck per band is emitted.
+pub fn export_results_nec(
+    output: &str,
+    calculations: &[WireCalculation],
+    config: &AppConfig,
+) -> io::Result<()> {
+    let version = env!("CARGO_PKG_VERSION");
+    let content = nec_export::to_nec(calculations, config, version);
     write_export_file(output, content)
 }
 

@@ -179,6 +179,7 @@ pub enum ExportFormat {
     Html,
     Json,
     Markdown,
+    Nec,
     Txt,
     Yaml,
 }
@@ -191,6 +192,7 @@ impl ExportFormat {
             ExportFormat::Html => "html",
             ExportFormat::Json => "json",
             ExportFormat::Markdown => "markdown",
+            ExportFormat::Nec => "nec",
             ExportFormat::Txt => "txt",
             ExportFormat::Yaml => "yaml",
         }
@@ -206,10 +208,11 @@ impl FromStr for ExportFormat {
             "html" | "htm" => Ok(ExportFormat::Html),
             "json" => Ok(ExportFormat::Json),
             "markdown" | "md" => Ok(ExportFormat::Markdown),
+            "nec" => Ok(ExportFormat::Nec),
             "txt" | "text" => Ok(ExportFormat::Txt),
             "yaml" | "yml" => Ok(ExportFormat::Yaml),
             _ => Err(AppError::InvalidExportFormat(format!(
-                "'{s}' (must be 'csv', 'html', 'json', 'markdown', 'txt', or 'yaml')"
+                "'{s}' (must be 'csv', 'html', 'json', 'markdown', 'nec', 'txt', or 'yaml')"
             ))),
         }
     }
