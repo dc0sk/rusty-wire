@@ -77,6 +77,21 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 - Implemented third pass: optional conductor-diameter input (`--conductor-mm 1.0..4.0`) with first-order impedance/length correction.
 - ✅ Implemented fourth pass: NEC-calibrated feedpoint resistance and mismatch/SWR estimates (v2.9.0). `nec_calibrated_dipole_r()` interpolates height/ground anchor points from fnec-rust corpus data (7/10/12 m AGL × poor/average/good). Band display now shows `Est. feedpoint R: XX.X Ω (NEC-calibrated, SWR ≈ N.N:1 into ZZ Ω)`. Transformer optimizer uses calibrated R for all dipole-family gamma and mismatch-loss calculations. **GAP-011 item 3c closed.**
 
+### 6) NEC2 card deck export
+- Add `nec` as an export format (`--export nec` / TUI `N` key)
+- Emit a valid NEC2 `.nec` card deck from the current `AppConfig` + result set:
+  - `CM` comment block (rusty-wire version, antenna type, band)
+  - `GW` wire segment(s) derived from calculated lengths and conductor diameter
+  - `GE` geometry end
+  - `GN` ground card (free-space / finite ground from `--ground` preset with conductivity/permittivity from preset table)
+  - `FR` frequency card (centre of selected band or explicit `--freq`)
+  - `EX` excitation card (voltage source at feed segment)
+  - `RP` radiation pattern request
+  - `EN` end card
+- No NEC2 runtime dependency — output is plain text for use in 4NEC2, EZNEC, or `nec2c`
+- Closes the workflow gap: rusty-wire picks the wire length → user validates in NEC2 without manual card-deck entry
+- New file: `src/nec_export.rs`; hooked into existing `export.rs` dispatch
+
 ### 4) Interactive-mode testability
 - Refactor interactive prompts to accept injected I/O (already partially done)
 - Add automated test coverage for all interactive prompt paths
@@ -112,9 +127,10 @@ If work continues incrementally, a good order is:
 4. first-pass `iced` UI with feature parity
 5. configurable non-resonant search resolution
 6. direct/custom frequency input
-7. transformer recommendation optimization
-8. logging and automation modes
-9. next-generation antenna models
+7. NEC2 card deck export (`--export nec`)
+8. transformer recommendation optimization
+9. logging and automation modes
+10. next-generation antenna models
 
 ## Affected Areas
 
@@ -123,4 +139,5 @@ If work continues incrementally, a good order is:
 - `src/calculations.rs`: optimization and model logic
 - `src/bands.rs`: custom-band support
 - `src/export.rs`: format/schema evolution
+- `src/nec_export.rs`: NEC2 card deck generation
 - `tests/` and `scripts/`: regression coverage
