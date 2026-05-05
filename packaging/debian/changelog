@@ -1,3 +1,11 @@
+rusty-wire (2.20.0-1) unstable; urgency=medium
+
+  * Configurable hybrid section split (--hybrid-split s1,s2,s3): validated ratio propagated through CLI, TUI, session persistence, and per-band display.
+  * TUI: new Hybrid Split config field with four presets cycled with left/right arrows.
+  * Session files gain hybrid_section_split with backward-compatible serde default.
+
+ -- Simon Keimer <dc0sk@example.com>  Mon, 05 May 2026 00:00:00 +0000
+
 rusty-wire (2.19.0-1) unstable; urgency=medium
 
   * Transformer mismatch warning: ResultsDisplayDocument.transformer_mismatch_warning flags configured vs recommended ratio; warning_lines updated automatically.

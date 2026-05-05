@@ -37,6 +37,7 @@ pub enum AppAction {
     SetAntennaHeight(f64),
     SetGroundClass(crate::calculations::GroundClass),
     SetConductorDiameter(f64),
+    SetHybridSectionSplit([f64; 3]),
     // --- Lifecycle ---
     /// Run `run_calculation_checked` against the current config.
     /// On success: replaces `results` and clears `error`.
@@ -170,6 +171,14 @@ pub fn apply_action(state: AppState, action: AppAction) -> AppState {
         AppAction::SetConductorDiameter(diameter_mm) => AppState {
             config: AppConfig {
                 conductor_diameter_mm: diameter_mm,
+                ..state.config
+            },
+            error: None,
+            ..state
+        },
+        AppAction::SetHybridSectionSplit(split) => AppState {
+            config: AppConfig {
+                hybrid_section_split: split,
                 ..state.config
             },
             error: None,

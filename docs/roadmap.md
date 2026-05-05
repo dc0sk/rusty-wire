@@ -62,6 +62,7 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 - ✅ Trap dipole multi-section model with structured guidance (trap freq, leg lengths, component examples) — v2.12.0
 - ✅ Antenna-specific feed recommendations at the app layer — v2.19.0: `TransformerMismatchWarning` in `ResultsDisplayDocument`; TUI shows `⚠` when configured ratio differs from model recommendation
 - ✅ Hybrid multi-section dipole baseline model — implemented: `--antenna hybrid-multi` (CLI + TUI), per-band 40/35/25 section split guidance, app-layer narrative support
+- ✅ Configurable hybrid section split — `--hybrid-split s1,s2,s3`; four TUI presets; session-persistent; dynamic per-band labels
 
 ### 3a) Balun optimizer foundation (prerequisite for advise mode)
 - ✅ App-layer optimizer ranks balun/unun ratios for the selected band set and antenna assumptions
