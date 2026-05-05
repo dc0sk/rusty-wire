@@ -1,3 +1,13 @@
+rusty-wire (2.18.0-1) unstable; urgency=medium
+
+  * NEC2 card deck export (--export nec / TUI N key): CM/GW/GE/GN/FR/EX/RP/EN cards for all antenna models.
+  * Interactive-mode testability: nec format recognised in interactive export prompt; 4 new prompt-path tests.
+  * App-layer API hardening: ResultsDisplayDocument gains transformer_explanation and skipped_band_details fields.
+  * TUI: transformer explanation shown in hints bar when Transformer field is focused.
+  * TUI: N key (NEC export) added to hint text.
+
+ -- Simon Keimer <dc0sk@example.com>  Mon, 05 May 2026 00:00:00 +0000
+
 rusty-wire (2.17.1-1) unstable; urgency=medium
 
   * Advise mode tradeoff notes: per-candidate one-sentence SWR/match/ATU summary.

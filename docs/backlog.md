@@ -18,7 +18,7 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## TUI (2.x, `ratatui`)
 
-- **Band selection refinement**: expand region-specific preset coverage and add a "Custom" preset that opens a band-checklist panel where the user can tick individual bands — similar to a multi-select dialog — replacing the fixed preset table for advanced users.
+- ~~**Band selection refinement**~~: ✅ done — "Custom…" preset opens a band-checklist overlay where the user can tick individual bands; Enter confirms.
 
 ## GUI (3.x, `iced`)
 

@@ -13,6 +13,24 @@ All notable changes to Rusty Wire are documented here.
 
 ---
 
+## [2.18.0] - 2026-05-05
+
+### Added
+- **NEC2 card deck export** (`--export nec` / TUI `N` key): emits a valid NEC2 `.nec` deck for every computed band — CM comment, GW wire geometry, GE, GN (Sommerfeld-Norton ground from `--ground` preset), FR, EX (voltage source), RP (37×72 radiation pattern), EN. Covers all six antenna models. No NEC2 runtime dependency; output is plain text for 4NEC2, EZNEC, or `nec2c`. New file: `src/nec_export.rs`.
+- **`transformer_explanation` and `skipped_band_details` in `ResultsDisplayDocument`**: structured fields carrying `TransformerRatioExplanation` (ratio + one-sentence reason) and `Vec<SkippedBandDetail>` (per-band skip reasons). Reduces ad-hoc calls from TUI/GUI consumers.
+- **TUI transformer hint**: when the Transformer field is focused in the config panel, the hints bar shows the one-sentence explanation for the recommended ratio (e.g. "EFHW antennas present ~2500–3000 Ω; a 1:49 or 1:56 transformer matches to 50 Ω").
+- **TUI hint text** updated to include `N:nec` export key.
+
+### Fixed
+- **Interactive export prompt** did not recognise `nec` as a valid format token — typing `nec` at the interactive export prompt produced "unknown format" and no export. Fixed by adding `nec` to the match arms and updating the prompt hint text.
+
+### Tests
+- 4 new interactive-mode tests: NEC format in interactive export, invalid band returns early, non-resonant wire-window prompts for option 2 and 3.
+- 3 new app-layer tests: `transformer_explanation` content, `skipped_band_details` empty case, `skipped_band_details` populated case.
+- 5 new `nec_export` unit tests: required cards present, frequency card correct, symmetric GW for dipole, multi-band output, ground parameter values.
+
+---
+
 ## [2.17.1] - 2026-04-30
 
 ### Fixed
