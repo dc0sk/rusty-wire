@@ -13,9 +13,14 @@ All notable changes to Rusty Wire are documented here.
 
 ### Added
 - **Hybrid multi-section dipole baseline model**: new `hybrid-multi` antenna mode in app/CLI/TUI. Uses dipole-family feed assumptions with per-side planning splits of 40% / 35% / 25%, shown in per-band output and resonant-compromise guidance.
+- **Configurable hybrid section split** (`--hybrid-split s1,s2,s3`): three-value ratio replaces the hardcoded 40/35/25 default. Validated to be positive and sum to 1.0; propagated through CLI output, equivalent-command echo, session persistence (serde default for older sessions), TUI config field, and per-band display labels. TUI exposes four presets (40/35/25, 45/35/20, 50/30/20, 34/33/33) cycled with ←/→.
 
 ### Changed
 - `AntennaModel` parsing and session persistence now include `hybrid-multi` aliases/tokens.
+- Per-band hybrid section-split label in `band_display_view` is now dynamic (e.g. `Section split (40/35/25)`) rather than hardcoded.
+
+### Tests
+- 2 new unit tests: `parse_hybrid_split` accepts valid ratios; `parse_hybrid_split` rejects values that don't sum to 1.0.
 
 ---
 

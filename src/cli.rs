@@ -13,7 +13,7 @@ use crate::app::{
     validate_config, validate_velocity_sweep, velocity_sweep_display_lines, velocity_sweep_view,
     AntennaModel, AppConfig, AppRequest, AppResults, CalcMode, ExportFormat, UnitSystem,
     DEFAULT_ANTENNA_HEIGHT_M, DEFAULT_BAND_SELECTION, DEFAULT_CONDUCTOR_DIAMETER_MM,
-    DEFAULT_GROUND_CLASS, DEFAULT_ITU_REGION, FEET_TO_METERS,
+    DEFAULT_GROUND_CLASS, DEFAULT_HYBRID_SECTION_SPLIT, DEFAULT_ITU_REGION, FEET_TO_METERS,
 };
 use crate::band_presets::{load_custom_bands, load_preset_selection};
 use crate::bands::{ITURegion, ALL_REGIONS};
@@ -99,6 +99,10 @@ struct Cli {
     /// Conductor diameter in millimeters for first-order length correction
     #[arg(long, default_value_t = DEFAULT_CONDUCTOR_DIAMETER_MM)]
     conductor_mm: f64,
+
+    /// Hybrid multi-section per-side split ratios s1,s2,s3 (must sum to 1.0)
+    #[arg(long, value_delimiter = ',')]
+    hybrid_split: Option<Vec<f64>>,
 
     /// Transformer ratio (default: recommended for the selected mode/antenna)
     #[arg(short, long, value_enum, default_value = "recommended")]
@@ -638,6 +642,16 @@ pub fn run_from_args(args: &[String]) -> bool {
 
     let antenna_model = cli.antenna.map(AntennaModel::from);
     let transformer_ratio = cli.transformer.resolve(mode, antenna_model);
+    let hybrid_section_split = match cli.hybrid_split.as_deref() {
+        None => DEFAULT_HYBRID_SECTION_SPLIT,
+        Some(values) => match parse_hybrid_split(values) {
+            Ok(split) => split,
+            Err(msg) => {
+                eprintln!("Error: {msg}");
+                return false;
+            }
+        },
+    };
 
     if !(0.0..=1.0).contains(&cli.fnec_pass_max_mismatch) {
         eprintln!(
@@ -676,6 +690,7 @@ pub fn run_from_args(args: &[String]) -> bool {
         antenna_height_m,
         ground_class,
         conductor_diameter_mm,
+        hybrid_section_split,
         custom_freq_mhz: cli.freq,
         freq_list_mhz: cli.freq_list.unwrap_or_default(),
         validate_with_fnec: cli.validate_with_fnec,
@@ -1092,6 +1107,17 @@ fn print_resolved_run(
         }
     );
     println!("  Antenna: {}", antenna_summary(config.antenna_model));
+    if matches!(
+        config.antenna_model,
+        Some(AntennaModel::HybridMultiSection)
+    ) {
+        println!(
+            "  Hybrid split: {:.2},{:.2},{:.2}",
+            config.hybrid_section_split[0],
+            config.hybrid_section_split[1],
+            config.hybrid_section_split[2]
+        );
+    }
     println!("  Transformer: {}", config.transformer_ratio.as_label());
     println!("  Velocity factor: {:.2}", config.velocity_factor);
     if let Some(values) = velocity_sweep {
@@ -1177,6 +1203,24 @@ fn antenna_summary(antenna_model: Option<AntennaModel>) -> &'static str {
         Some(AntennaModel::HybridMultiSection) => "hybrid-multi",
         None => "all models",
     }
+}
+
+fn parse_hybrid_split(values: &[f64]) -> Result<[f64; 3], String> {
+    if values.len() != 3 {
+        return Err(format!(
+            "--hybrid-split must provide exactly 3 comma-separated values (got {})",
+            values.len()
+        ));
+    }
+    let split = [values[0], values[1], values[2]];
+    let sum = split[0] + split[1] + split[2];
+    if split.iter().any(|v| *v <= 0.0) || (sum - 1.0).abs() > 1e-6 {
+        return Err(format!(
+            "--hybrid-split values must be positive and sum to 1.0 (got {:.3},{:.3},{:.3}; sum {:.3})",
+            split[0], split[1], split[2], sum
+        ));
+    }
+    Ok(split)
 }
 
 fn units_summary(units: UnitSystem) -> &'static str {
@@ -1791,6 +1835,7 @@ fn calculate_selected_bands_with_defaults(
         antenna_height_m,
         ground_class,
         conductor_diameter_mm,
+        hybrid_section_split: DEFAULT_HYBRID_SECTION_SPLIT,
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
         validate_with_fnec: false,
@@ -1900,6 +1945,7 @@ fn quick_calculation_with_defaults(
         antenna_height_m,
         ground_class,
         conductor_diameter_mm,
+        hybrid_section_split: DEFAULT_HYBRID_SECTION_SPLIT,
         custom_freq_mhz: None,
         freq_list_mhz: vec![],
         validate_with_fnec: false,
@@ -2150,6 +2196,15 @@ fn print_equivalent_cli_call(config: &AppConfig, export_choices: &[(ExportFormat
             AntennaModel::HybridMultiSection => "hybrid-multi",
         };
         cmd.push_str(&format!(" --antenna {}", shell_quote(antenna)));
+        if matches!(antenna_model, AntennaModel::HybridMultiSection) {
+            let split = format!(
+                "{:.2},{:.2},{:.2}",
+                config.hybrid_section_split[0],
+                config.hybrid_section_split[1],
+                config.hybrid_section_split[2]
+            );
+            cmd.push_str(&format!(" --hybrid-split {}", shell_quote(&split)));
+        }
     }
 
     if !export_choices.is_empty() {
@@ -2461,6 +2516,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_hybrid_split_accepts_three_positive_values_that_sum_to_one() {
+        let parsed = parse_hybrid_split(&[0.4, 0.35, 0.25]).expect("valid split");
+        assert_eq!(parsed, [0.4, 0.35, 0.25]);
+    }
+
+    #[test]
+    fn parse_hybrid_split_rejects_invalid_sum() {
+        let err = parse_hybrid_split(&[0.5, 0.3, 0.3]).expect_err("sum should be invalid");
+        assert!(err.contains("sum to 1.0"));
+    }
+
+    #[test]
     fn print_equivalent_cli_call_uses_band_labels() {
         let config = AppConfig {
             band_indices: vec![4, 6, 10],
@@ -2476,6 +2543,7 @@ mod tests {
             antenna_height_m: DEFAULT_ANTENNA_HEIGHT_M,
             ground_class: DEFAULT_GROUND_CLASS,
             conductor_diameter_mm: DEFAULT_CONDUCTOR_DIAMETER_MM,
+            hybrid_section_split: DEFAULT_HYBRID_SECTION_SPLIT,
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
             validate_with_fnec: false,

@@ -62,7 +62,8 @@ use ratatui::Terminal;
 use crate::app::{
     apply_action, band_listing_view, build_advise_candidates, execute_request_checked,
     parse_band_selection, results_display_document, AdviseView, AntennaModel, AppAction, AppConfig,
-    AppRequest, AppState, CalcMode, ExportFormat, UnitSystem, STANDARD_ANTENNA_HEIGHTS_M,
+    AppRequest, AppState, CalcMode, ExportFormat, UnitSystem, DEFAULT_HYBRID_SECTION_SPLIT,
+    STANDARD_ANTENNA_HEIGHTS_M,
 };
 use crate::band_presets::load_named_presets;
 use crate::bands::ITURegion;
@@ -84,6 +85,12 @@ const CONDUCTOR_DIAMETER_PRESETS: &[f64] = &[1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
 const GROUND_CLASS_PRESETS: &[GroundClass] =
     &[GroundClass::Poor, GroundClass::Average, GroundClass::Good];
 const STEP_PRESETS: &[f64] = &[0.01, 0.02, 0.05, 0.10, 0.25, 0.50, 1.00];
+const HYBRID_SPLIT_PRESETS: &[(&str, [f64; 3])] = &[
+    ("40/35/25", [0.40, 0.35, 0.25]),
+    ("45/35/20", [0.45, 0.35, 0.20]),
+    ("50/30/20", [0.50, 0.30, 0.20]),
+    ("34/33/33", [0.34, 0.33, 0.33]),
+];
 const PROJECT_URL: &str = env!("CARGO_PKG_REPOSITORY");
 const TRANSFORMER_RATIOS: &[TransformerRatio] = &[
     TransformerRatio::R1To1,
@@ -169,6 +176,7 @@ impl BandPresetChoice {
 enum ConfigField {
     Mode,
     AntennaModel,
+    HybridSplit,
     ItuRegion,
     Bands,
     CustomFrequencies,
@@ -187,6 +195,7 @@ impl ConfigField {
     const ALL: &'static [Self] = &[
         Self::Mode,
         Self::AntennaModel,
+        Self::HybridSplit,
         Self::ItuRegion,
         Self::Bands,
         Self::CustomFrequencies,
@@ -205,6 +214,7 @@ impl ConfigField {
         match self {
             Self::Mode => "Mode",
             Self::AntennaModel => "Antenna",
+            Self::HybridSplit => "Hybrid Split",
             Self::ItuRegion => "ITU Region",
             Self::Bands => "Bands",
             Self::CustomFrequencies => "Frequencies",
@@ -247,6 +257,8 @@ struct TuiState {
     ground_idx: usize,
     /// Index into `CONDUCTOR_DIAMETER_PRESETS`.
     conductor_idx: usize,
+    /// Index into `HYBRID_SPLIT_PRESETS`.
+    hybrid_split_idx: usize,
     /// Index into `STEP_PRESETS`.
     step_idx: usize,
     /// Index into `FREQUENCY_PRESETS`.
@@ -337,6 +349,15 @@ impl TuiState {
             .iter()
             .position(|&v| (v - app.config.conductor_diameter_mm).abs() < 1e-9)
             .unwrap_or(2); // 2.0 mm
+        let hybrid_split_idx = HYBRID_SPLIT_PRESETS
+            .iter()
+            .position(|(_, split)| *split == app.config.hybrid_section_split)
+            .unwrap_or_else(|| {
+                HYBRID_SPLIT_PRESETS
+                    .iter()
+                    .position(|(_, split)| *split == DEFAULT_HYBRID_SECTION_SPLIT)
+                    .unwrap_or(0)
+            });
         let step_idx = STEP_PRESETS
             .iter()
             .position(|&v| (v - app.config.step_m).abs() < 1e-9)
@@ -355,6 +376,7 @@ impl TuiState {
             height_idx,
             ground_idx,
             conductor_idx,
+            hybrid_split_idx,
             step_idx,
             freq_idx: 0, // "Use bands" (empty list means revert to band selection)
             results_scroll: 0,
@@ -467,6 +489,10 @@ impl TuiState {
                             "Hybrid Multi-Section".into()
                         }
                     },
+                    ConfigField::HybridSplit => {
+                        let label = HYBRID_SPLIT_PRESETS[self.hybrid_split_idx].0;
+                        format!("{label}")
+                    }
                     ConfigField::ItuRegion => match c.itu_region {
                         ITURegion::Region1 => "1 (EU/AF/ME)".into(),
                         ITURegion::Region2 => "2 (Americas)".into(),
@@ -555,6 +581,17 @@ impl TuiState {
                     pos.checked_sub(1).unwrap_or(MODELS.len() - 1)
                 };
                 AppAction::SetAntennaModel(MODELS[next])
+            }
+            ConfigField::HybridSplit => {
+                if forward {
+                    self.hybrid_split_idx = (self.hybrid_split_idx + 1) % HYBRID_SPLIT_PRESETS.len();
+                } else {
+                    self.hybrid_split_idx = self
+                        .hybrid_split_idx
+                        .checked_sub(1)
+                        .unwrap_or(HYBRID_SPLIT_PRESETS.len() - 1);
+                }
+                AppAction::SetHybridSectionSplit(HYBRID_SPLIT_PRESETS[self.hybrid_split_idx].1)
             }
             ConfigField::ItuRegion => {
                 const REGIONS: &[ITURegion] =

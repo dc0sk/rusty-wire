@@ -32,6 +32,10 @@ use crate::app::{AntennaModel, AppConfig, CalcMode, UnitSystem};
 use crate::bands::ITURegion;
 use crate::calculations::{GroundClass, TransformerRatio};
 
+fn default_hybrid_section_split() -> [f64; 3] {
+    crate::app::DEFAULT_HYBRID_SECTION_SPLIT
+}
+
 // ---------------------------------------------------------------------------
 // Serializable snapshot of a full AppConfig
 // ---------------------------------------------------------------------------
@@ -65,6 +69,9 @@ pub struct SessionConfig {
     pub ground_class: String,
     /// Conductor diameter in millimetres.
     pub conductor_diameter_mm: f64,
+    /// Hybrid multi-section per-side split ratios.
+    #[serde(default = "default_hybrid_section_split")]
+    pub hybrid_section_split: [f64; 3],
     /// Whether fnec validation is enabled.
     pub validate_with_fnec: bool,
 }
@@ -110,6 +117,7 @@ impl SessionConfig {
             antenna_height_m: config.antenna_height_m,
             ground_class: config.ground_class.as_label().to_string(),
             conductor_diameter_mm: config.conductor_diameter_mm,
+            hybrid_section_split: config.hybrid_section_split,
             validate_with_fnec: config.validate_with_fnec,
         }
     }
@@ -156,6 +164,7 @@ impl SessionConfig {
             _ => config.ground_class,
         };
         config.conductor_diameter_mm = self.conductor_diameter_mm;
+        config.hybrid_section_split = self.hybrid_section_split;
         config.validate_with_fnec = self.validate_with_fnec;
         config
     }
@@ -304,6 +313,7 @@ mod tests {
             antenna_height_m: 12.0,
             ground_class: GroundClass::Good,
             conductor_diameter_mm: 2.0,
+            hybrid_section_split: [0.40, 0.35, 0.25],
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
             validate_with_fnec: false,
@@ -376,6 +386,7 @@ mod tests {
             antenna_height_m: 10.0,
             ground_class: "average".to_string(),
             conductor_diameter_mm: 2.0,
+            hybrid_section_split: [0.40, 0.35, 0.25],
             validate_with_fnec: false,
         };
         // Should not panic — falls back to defaults.
@@ -411,6 +422,7 @@ mod persistence_tests {
             antenna_height_m: 12.0,
             ground_class: GroundClass::Good,
             conductor_diameter_mm: 2.0,
+            hybrid_section_split: [0.40, 0.35, 0.25],
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
             validate_with_fnec: false,

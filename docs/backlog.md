@@ -32,7 +32,7 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## Antenna Models
 
-- ~~**Hybrid / multi-section models**~~ ✅ baseline done — `hybrid-multi` dipole mode added with per-side 40/35/25 section planning splits in CLI/TUI/app output.
+- ~~**Hybrid / multi-section models**~~ ✅ done — `hybrid-multi` dipole mode with configurable per-side section split (`--hybrid-split s1,s2,s3`); four TUI presets; session-persistent; dynamic per-band split labels in all unit systems.
 - ~~**Balun/unun optimizer engine**~~ ✅ done — `--advise` ranks transformer ratios against selected bands and feed assumptions; `TransformerOptimizerView` / `AdviseView` used by CLI/TUI/GUI.
 
 ## Practical Limits Follow-up

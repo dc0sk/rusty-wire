@@ -15,6 +15,7 @@ pub enum AppError {
     InvalidFrequency(f64),
     InvalidAntennaHeight(f64),
     InvalidConductorDiameter(f64),
+    InvalidHybridSectionSplit([f64; 3]),
     /// A velocity factor in a `--velocity-sweep` list is out of the 0.50–1.00 range.
     InvalidVelocitySweep(f64),
     EmptyBandSelection,
@@ -71,6 +72,14 @@ impl fmt::Display for AppError {
                     "conductor diameter must be between {MIN_CONDUCTOR_DIAMETER_MM:.1} mm and {MAX_CONDUCTOR_DIAMETER_MM:.1} mm (got {diameter_mm:.2} mm)"
                 )
             }
+            AppError::InvalidHybridSectionSplit(split) => {
+                let sum = split[0] + split[1] + split[2];
+                write!(
+                    f,
+                    "hybrid section split must have 3 positive ratios summing to 1.00 (got {:.3},{:.3},{:.3}; sum {:.3})",
+                    split[0], split[1], split[2], sum
+                )
+            }
             AppError::InvalidVelocitySweep(vf) => {
                 write!(
                     f,
@@ -119,6 +128,7 @@ pub const STANDARD_ANTENNA_HEIGHTS_M: [f64; 3] = [7.0, 10.0, 12.0];
 pub const DEFAULT_ANTENNA_HEIGHT_M: f64 = 10.0;
 pub const DEFAULT_GROUND_CLASS: GroundClass = GroundClass::Average;
 pub const DEFAULT_CONDUCTOR_DIAMETER_MM: f64 = CALC_DEFAULT_CONDUCTOR_DIAMETER_MM;
+pub const DEFAULT_HYBRID_SECTION_SPLIT: [f64; 3] = [0.40, 0.35, 0.25];
 
 pub fn recommended_transformer_ratio(
     mode: CalcMode,
@@ -293,6 +303,9 @@ pub struct AppConfig {
     pub antenna_height_m: f64,
     pub ground_class: GroundClass,
     pub conductor_diameter_mm: f64,
+    /// Hybrid multi-section per-side split ratios `[s1, s2, s3]`.
+    /// Must be positive and sum to 1.0.
+    pub hybrid_section_split: [f64; 3],
     /// Direct frequency input in MHz; when set, bypasses band selection entirely.
     pub custom_freq_mhz: Option<f64>,
     /// Multiple explicit frequencies in MHz; when non-empty, bypasses band selection.
@@ -322,6 +335,7 @@ impl Default for AppConfig {
             antenna_height_m: DEFAULT_ANTENNA_HEIGHT_M,
             ground_class: DEFAULT_GROUND_CLASS,
             conductor_diameter_mm: DEFAULT_CONDUCTOR_DIAMETER_MM,
+            hybrid_section_split: DEFAULT_HYBRID_SECTION_SPLIT,
             custom_freq_mhz: None,
             freq_list_mhz: vec![],
             validate_with_fnec: false,
@@ -622,6 +636,7 @@ pub struct ResonantCompromiseDisplayView {
 #[derive(Debug, Clone)]
 pub struct BandDisplayRow {
     pub calc: WireCalculation,
+    pub hybrid_section_split: [f64; 3],
 }
 
 #[derive(Debug, Clone)]
@@ -854,6 +869,12 @@ pub fn validate_config(config: &AppConfig) -> Result<(), AppError> {
         return Err(AppError::InvalidConductorDiameter(
             config.conductor_diameter_mm,
         ));
+    }
+
+    let split = config.hybrid_section_split;
+    let split_sum = split[0] + split[1] + split[2];
+    if split.iter().any(|v| *v <= 0.0) || (split_sum - 1.0).abs() > 1e-6 {
+        return Err(AppError::InvalidHybridSectionSplit(split));
     }
 
     if config.wire_min_m <= 0.0 || config.wire_max_m <= config.wire_min_m {
@@ -1559,7 +1580,7 @@ pub fn resonant_compromise_narrative(results: &AppResults) -> ResonantCompromise
         Some(AntennaModel::HybridMultiSection)
     ) {
         notes.push(
-            "Hybrid multi-section mode: each element side is split into 3 contiguous sections using a 40% / 35% / 25% planning ratio.",
+            "Hybrid multi-section mode: each element side is split into 3 contiguous sections using the configured planning ratio.",
         );
         notes.push(
             "Use these as cut-sheet starting values; trim symmetrically from outer sections during final tuning.",
@@ -2457,7 +2478,10 @@ pub fn band_display_rows(results: &AppResults) -> Vec<BandDisplayRow> {
         .calculations
         .iter()
         .cloned()
-        .map(|calc| BandDisplayRow { calc })
+        .map(|calc| BandDisplayRow {
+            calc,
+            hybrid_section_split: results.config.hybrid_section_split,
+        })
         .collect()
 }
 
@@ -2468,14 +2492,21 @@ pub fn band_display_view(
     transformer_ratio: TransformerRatio,
 ) -> BandDisplayView {
     let c = &row.calc;
+    let split = row.hybrid_section_split;
     let hybrid_leg_m = c.corrected_half_wave_m / 2.0;
     let hybrid_leg_ft = c.corrected_half_wave_ft / 2.0;
-    let hybrid_s1_m = hybrid_leg_m * 0.40;
-    let hybrid_s2_m = hybrid_leg_m * 0.35;
-    let hybrid_s3_m = hybrid_leg_m * 0.25;
-    let hybrid_s1_ft = hybrid_leg_ft * 0.40;
-    let hybrid_s2_ft = hybrid_leg_ft * 0.35;
-    let hybrid_s3_ft = hybrid_leg_ft * 0.25;
+    let hybrid_s1_m = hybrid_leg_m * split[0];
+    let hybrid_s2_m = hybrid_leg_m * split[1];
+    let hybrid_s3_m = hybrid_leg_m * split[2];
+    let hybrid_s1_ft = hybrid_leg_ft * split[0];
+    let hybrid_s2_ft = hybrid_leg_ft * split[1];
+    let hybrid_s3_ft = hybrid_leg_ft * split[2];
+    let split_label = format!(
+        "{:.0}/{:.0}/{:.0}",
+        split[0] * 100.0,
+        split[1] * 100.0,
+        split[2] * 100.0
+    );
     let mut lines = vec![
         format!("  Frequency: {:.3} MHz", c.frequency_mhz),
         format!("  Transformer ratio: {}", c.transformer_ratio_label),
@@ -2552,8 +2583,8 @@ pub fn band_display_view(
                 lines.push(format!("  Hybrid total: {:.2} m", c.corrected_half_wave_m));
                 lines.push(format!("  Per side (feedpoint to tip): {:.2} m", hybrid_leg_m));
                 lines.push(format!(
-                    "  Section split (40/35/25): {:.2} m / {:.2} m / {:.2} m",
-                    hybrid_s1_m, hybrid_s2_m, hybrid_s3_m
+                    "  Section split ({}): {:.2} m / {:.2} m / {:.2} m",
+                    split_label, hybrid_s1_m, hybrid_s2_m, hybrid_s3_m
                 ));
             }
             None => {
@@ -2612,8 +2643,8 @@ pub fn band_display_view(
                 ));
                 lines.push(format!("  Hybrid total: {:.2} m", c.corrected_half_wave_m));
                 lines.push(format!(
-                    "  Section split per side (40/35/25): {:.2} m / {:.2} m / {:.2} m",
-                    hybrid_s1_m, hybrid_s2_m, hybrid_s3_m
+                    "  Section split per side ({}): {:.2} m / {:.2} m / {:.2} m",
+                    split_label, hybrid_s1_m, hybrid_s2_m, hybrid_s3_m
                 ));
             }
         },
@@ -2693,8 +2724,8 @@ pub fn band_display_view(
                     hybrid_leg_ft
                 ));
                 lines.push(format!(
-                    "  Section split (40/35/25): {:.2} ft / {:.2} ft / {:.2} ft",
-                    hybrid_s1_ft, hybrid_s2_ft, hybrid_s3_ft
+                    "  Section split ({}): {:.2} ft / {:.2} ft / {:.2} ft",
+                    split_label, hybrid_s1_ft, hybrid_s2_ft, hybrid_s3_ft
                 ));
             }
             None => {
@@ -2756,8 +2787,8 @@ pub fn band_display_view(
                 ));
                 lines.push(format!("  Hybrid total: {:.2} ft", c.corrected_half_wave_ft));
                 lines.push(format!(
-                    "  Section split per side (40/35/25): {:.2} ft / {:.2} ft / {:.2} ft",
-                    hybrid_s1_ft, hybrid_s2_ft, hybrid_s3_ft
+                    "  Section split per side ({}): {:.2} ft / {:.2} ft / {:.2} ft",
+                    split_label, hybrid_s1_ft, hybrid_s2_ft, hybrid_s3_ft
                 ));
             }
         },
@@ -2855,7 +2886,8 @@ pub fn band_display_view(
                     hybrid_leg_m, hybrid_leg_ft
                 ));
                 lines.push(format!(
-                    "  Section split (40/35/25): {:.2}/{:.2}/{:.2} m ({:.2}/{:.2}/{:.2} ft)",
+                    "  Section split ({}): {:.2}/{:.2}/{:.2} m ({:.2}/{:.2}/{:.2} ft)",
+                    split_label,
                     hybrid_s1_m,
                     hybrid_s2_m,
                     hybrid_s3_m,
@@ -2941,7 +2973,8 @@ pub fn band_display_view(
                     c.corrected_half_wave_m, c.corrected_half_wave_ft
                 ));
                 lines.push(format!(
-                    "  Section split per side (40/35/25): {:.2}/{:.2}/{:.2} m ({:.2}/{:.2}/{:.2} ft)",
+                    "  Section split per side ({}): {:.2}/{:.2}/{:.2} m ({:.2}/{:.2}/{:.2} ft)",
+                    split_label,
                     hybrid_s1_m,
                     hybrid_s2_m,
                     hybrid_s3_m,
