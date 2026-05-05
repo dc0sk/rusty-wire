@@ -2,7 +2,7 @@
 project: rusty-wire
 doc: docs/roadmap.md
 status: living
-last_updated: 2026-04-30
+last_updated: 2026-05-05
 ---
 
 # Roadmap
@@ -61,6 +61,7 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 ### 3) Additional antenna models
 - ✅ Trap dipole multi-section model with structured guidance (trap freq, leg lengths, component examples) — v2.12.0
 - ✅ Antenna-specific feed recommendations at the app layer — v2.19.0: `TransformerMismatchWarning` in `ResultsDisplayDocument`; TUI shows `⚠` when configured ratio differs from model recommendation
+- ✅ Hybrid multi-section dipole baseline model — implemented: `--antenna hybrid-multi` (CLI + TUI), per-band 40/35/25 section split guidance, app-layer narrative support
 
 ### 3a) Balun optimizer foundation (prerequisite for advise mode)
 - ✅ App-layer optimizer ranks balun/unun ratios for the selected band set and antenna assumptions

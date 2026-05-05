@@ -2,7 +2,7 @@
 project: rusty-wire
 doc: docs/backlog.md
 status: living
-last_updated: 2026-04-30
+last_updated: 2026-05-05
 ---
 
 # Backlog
@@ -32,7 +32,7 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## Antenna Models
 
-- Hybrid / multi-section models (future)
+- ~~**Hybrid / multi-section models**~~ ✅ baseline done — `hybrid-multi` dipole mode added with per-side 40/35/25 section planning splits in CLI/TUI/app output.
 - ~~**Balun/unun optimizer engine**~~ ✅ done — `--advise` ranks transformer ratios against selected bands and feed assumptions; `TransformerOptimizerView` / `AdviseView` used by CLI/TUI/GUI.
 
 ## Practical Limits Follow-up

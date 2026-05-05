@@ -2,7 +2,7 @@
 project: rusty-wire
 doc: docs/CHANGELOG.md
 status: living
-last_updated: 2026-04-30
+last_updated: 2026-05-05
 ---
 
 # Changelog
@@ -10,6 +10,12 @@ last_updated: 2026-04-30
 All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
+
+### Added
+- **Hybrid multi-section dipole baseline model**: new `hybrid-multi` antenna mode in app/CLI/TUI. Uses dipole-family feed assumptions with per-side planning splits of 40% / 35% / 25%, shown in per-band output and resonant-compromise guidance.
+
+### Changed
+- `AntennaModel` parsing and session persistence now include `hybrid-multi` aliases/tokens.
 
 ---
 

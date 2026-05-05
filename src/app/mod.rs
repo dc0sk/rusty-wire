@@ -128,6 +128,7 @@ pub fn recommended_transformer_ratio(
         Some(AntennaModel::Dipole)
         | Some(AntennaModel::InvertedVDipole)
         | Some(AntennaModel::TrapDipole)
+        | Some(AntennaModel::HybridMultiSection)
         | Some(AntennaModel::FullWaveLoop) => TransformerRatio::R1To1,
         Some(AntennaModel::EndFedHalfWave) => TransformerRatio::R1To56,
         Some(AntennaModel::OffCenterFedDipole) => TransformerRatio::R1To4,
@@ -248,6 +249,7 @@ pub enum AntennaModel {
     FullWaveLoop,
     OffCenterFedDipole,
     TrapDipole,
+    HybridMultiSection,
 }
 
 impl FromStr for AntennaModel {
@@ -263,8 +265,10 @@ impl FromStr for AntennaModel {
                 Ok(AntennaModel::OffCenterFedDipole)
             }
             "trap-dipole" | "trap" | "trapdipole" => Ok(AntennaModel::TrapDipole),
+            "hybrid" | "hybrid-multi" | "hybrid-multi-section" | "multi-section"
+            | "multi-section-dipole" | "multisection" => Ok(AntennaModel::HybridMultiSection),
             _ => Err(AppError::InvalidAntennaModel(format!(
-                "'{s}' (must be 'dipole', 'inverted-v', 'efhw', 'loop', 'ocfd', or 'trap-dipole')"
+                "'{s}' (must be 'dipole', 'inverted-v', 'efhw', 'loop', 'ocfd', 'trap-dipole', or 'hybrid-multi')"
             ))),
         }
     }
@@ -1101,6 +1105,7 @@ pub fn summarize_results(results: &AppResults) -> RunSummary {
             Some(AntennaModel::FullWaveLoop) => "full-wave loop",
             Some(AntennaModel::OffCenterFedDipole) => "off-center-fed dipole",
             Some(AntennaModel::TrapDipole) => "trap dipole",
+            Some(AntennaModel::HybridMultiSection) => "hybrid multi-section dipole",
         },
         band_count: results.calculations.len(),
         average_min_skip_km: calculate_average_min_distance(&results.calculations),
@@ -1502,6 +1507,9 @@ pub fn resonant_compromise_narrative(results: &AppResults) -> ResonantCompromise
         Some(AntennaModel::TrapDipole) => {
             "Closest combined compromises to resonant points (trap dipole guidance):"
         }
+        Some(AntennaModel::HybridMultiSection) => {
+            "Closest combined compromises to resonant points (hybrid multi-section guidance):"
+        }
         _ => "Closest combined compromises to resonant points:",
     };
 
@@ -1544,6 +1552,17 @@ pub fn resonant_compromise_narrative(results: &AppResults) -> ResonantCompromise
         );
         notes.push(
             "Common pairings: 40m/20m and 80m/40m are the most practical starting configurations for two-trap builds.",
+        );
+    }
+    if matches!(
+        results.config.antenna_model,
+        Some(AntennaModel::HybridMultiSection)
+    ) {
+        notes.push(
+            "Hybrid multi-section mode: each element side is split into 3 contiguous sections using a 40% / 35% / 25% planning ratio.",
+        );
+        notes.push(
+            "Use these as cut-sheet starting values; trim symmetrically from outer sections during final tuning.",
         );
     }
 
@@ -2449,6 +2468,14 @@ pub fn band_display_view(
     transformer_ratio: TransformerRatio,
 ) -> BandDisplayView {
     let c = &row.calc;
+    let hybrid_leg_m = c.corrected_half_wave_m / 2.0;
+    let hybrid_leg_ft = c.corrected_half_wave_ft / 2.0;
+    let hybrid_s1_m = hybrid_leg_m * 0.40;
+    let hybrid_s2_m = hybrid_leg_m * 0.35;
+    let hybrid_s3_m = hybrid_leg_m * 0.25;
+    let hybrid_s1_ft = hybrid_leg_ft * 0.40;
+    let hybrid_s2_ft = hybrid_leg_ft * 0.35;
+    let hybrid_s3_ft = hybrid_leg_ft * 0.25;
     let mut lines = vec![
         format!("  Frequency: {:.3} MHz", c.frequency_mhz),
         format!("  Transformer ratio: {}", c.transformer_ratio_label),
@@ -2521,6 +2548,14 @@ pub fn band_display_view(
                     c.trap_dipole_leg_m
                 ));
             }
+            Some(AntennaModel::HybridMultiSection) => {
+                lines.push(format!("  Hybrid total: {:.2} m", c.corrected_half_wave_m));
+                lines.push(format!("  Per side (feedpoint to tip): {:.2} m", hybrid_leg_m));
+                lines.push(format!(
+                    "  Section split (40/35/25): {:.2} m / {:.2} m / {:.2} m",
+                    hybrid_s1_m, hybrid_s2_m, hybrid_s3_m
+                ));
+            }
             None => {
                 lines.push(format!(
                     "  Half-wave: {:.2} m (base: {:.2} m)",
@@ -2574,6 +2609,11 @@ pub fn band_display_view(
                 lines.push(format!(
                     "  Trap dipole each element: {:.2} m",
                     c.trap_dipole_leg_m
+                ));
+                lines.push(format!("  Hybrid total: {:.2} m", c.corrected_half_wave_m));
+                lines.push(format!(
+                    "  Section split per side (40/35/25): {:.2} m / {:.2} m / {:.2} m",
+                    hybrid_s1_m, hybrid_s2_m, hybrid_s3_m
                 ));
             }
         },
@@ -2646,6 +2686,17 @@ pub fn band_display_view(
                     c.trap_dipole_leg_ft
                 ));
             }
+            Some(AntennaModel::HybridMultiSection) => {
+                lines.push(format!("  Hybrid total: {:.2} ft", c.corrected_half_wave_ft));
+                lines.push(format!(
+                    "  Per side (feedpoint to tip): {:.2} ft",
+                    hybrid_leg_ft
+                ));
+                lines.push(format!(
+                    "  Section split (40/35/25): {:.2} ft / {:.2} ft / {:.2} ft",
+                    hybrid_s1_ft, hybrid_s2_ft, hybrid_s3_ft
+                ));
+            }
             None => {
                 lines.push(format!(
                     "  Half-wave: {:.2} ft (base: {:.2} ft)",
@@ -2702,6 +2753,11 @@ pub fn band_display_view(
                 lines.push(format!(
                     "  Trap dipole each element: {:.2} ft",
                     c.trap_dipole_leg_ft
+                ));
+                lines.push(format!("  Hybrid total: {:.2} ft", c.corrected_half_wave_ft));
+                lines.push(format!(
+                    "  Section split per side (40/35/25): {:.2} ft / {:.2} ft / {:.2} ft",
+                    hybrid_s1_ft, hybrid_s2_ft, hybrid_s3_ft
                 ));
             }
         },
@@ -2789,6 +2845,25 @@ pub fn band_display_view(
                     c.trap_dipole_leg_m, c.trap_dipole_leg_ft
                 ));
             }
+            Some(AntennaModel::HybridMultiSection) => {
+                lines.push(format!(
+                    "  Hybrid total: {:.2} m ({:.2} ft)",
+                    c.corrected_half_wave_m, c.corrected_half_wave_ft
+                ));
+                lines.push(format!(
+                    "  Per side (feedpoint to tip): {:.2} m ({:.2} ft)",
+                    hybrid_leg_m, hybrid_leg_ft
+                ));
+                lines.push(format!(
+                    "  Section split (40/35/25): {:.2}/{:.2}/{:.2} m ({:.2}/{:.2}/{:.2} ft)",
+                    hybrid_s1_m,
+                    hybrid_s2_m,
+                    hybrid_s3_m,
+                    hybrid_s1_ft,
+                    hybrid_s2_ft,
+                    hybrid_s3_ft
+                ));
+            }
             None => {
                 lines.push(format!(
                     "  Half-wave: {:.2} m ({:.2} ft, base: {:.2} m/{:.2} ft)",
@@ -2861,6 +2936,19 @@ pub fn band_display_view(
                     "  Trap dipole each element: {:.2} m ({:.2} ft)",
                     c.trap_dipole_leg_m, c.trap_dipole_leg_ft
                 ));
+                lines.push(format!(
+                    "  Hybrid total: {:.2} m ({:.2} ft)",
+                    c.corrected_half_wave_m, c.corrected_half_wave_ft
+                ));
+                lines.push(format!(
+                    "  Section split per side (40/35/25): {:.2}/{:.2}/{:.2} m ({:.2}/{:.2}/{:.2} ft)",
+                    hybrid_s1_m,
+                    hybrid_s2_m,
+                    hybrid_s3_m,
+                    hybrid_s1_ft,
+                    hybrid_s2_ft,
+                    hybrid_s3_ft
+                ));
             }
         },
     }
@@ -2869,7 +2957,10 @@ pub fn band_display_view(
     // SWR is computed at resonance (X=0) against the transformer output impedance.
     let show_feedpoint = matches!(
         antenna_model,
-        Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) | None
+        Some(AntennaModel::Dipole)
+            | Some(AntennaModel::InvertedVDipole)
+            | Some(AntennaModel::HybridMultiSection)
+            | None
     );
     if show_feedpoint {
         let r = c.dipole_feedpoint_r_ohm;
@@ -2960,7 +3051,9 @@ fn assumed_feedpoint_impedance_ohm(
 ) -> f64 {
     match antenna_model {
         // Use NEC-calibrated height/ground-aware feedpoint resistance for dipole types.
-        Some(AntennaModel::Dipole) | Some(AntennaModel::InvertedVDipole) => {
+        Some(AntennaModel::Dipole)
+        | Some(AntennaModel::InvertedVDipole)
+        | Some(AntennaModel::HybridMultiSection) => {
             crate::calculations::nec_calibrated_dipole_r(antenna_height_m, ground_class)
         }
         Some(AntennaModel::TrapDipole) => 65.0,
@@ -3978,6 +4071,8 @@ mod tests {
             Some(AntennaModel::EndFedHalfWave),
             Some(AntennaModel::FullWaveLoop),
             Some(AntennaModel::OffCenterFedDipole),
+            Some(AntennaModel::TrapDipole),
+            Some(AntennaModel::HybridMultiSection),
             None,
         ];
         for model in &models {
@@ -4255,6 +4350,39 @@ mod app_error_tests {
             transformer_ratio_explanation(CalcMode::Resonant, Some(AntennaModel::EndFedHalfWave));
         assert_eq!(expl.ratio, TransformerRatio::R1To56);
         assert!(expl.reason.contains("49") || expl.reason.contains("56"));
+    }
+
+    #[test]
+    fn transformer_ratio_explanation_hybrid_multi_section_returns_1to1() {
+        let expl = transformer_ratio_explanation(
+            CalcMode::Resonant,
+            Some(AntennaModel::HybridMultiSection),
+        );
+        assert_eq!(expl.ratio, TransformerRatio::R1To1);
+        assert!(expl.reason.contains("1:1"));
+    }
+
+    #[test]
+    fn band_display_view_hybrid_multi_section_shows_split_lines() {
+        let config = AppConfig {
+            antenna_model: Some(AntennaModel::HybridMultiSection),
+            band_indices: vec![5],
+            ..AppConfig::default()
+        };
+        let results = run_calculation(config);
+        let row = band_display_rows(&results)
+            .into_iter()
+            .next()
+            .expect("expected one row");
+        let view = band_display_view(
+            &row,
+            UnitSystem::Metric,
+            Some(AntennaModel::HybridMultiSection),
+            results.config.transformer_ratio,
+        );
+        let joined = view.lines.join("\n");
+        assert!(joined.contains("Hybrid total:"));
+        assert!(joined.contains("Section split (40/35/25):"));
     }
 
     #[test]
