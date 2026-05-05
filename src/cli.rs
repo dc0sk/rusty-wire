@@ -1958,7 +1958,7 @@ fn interactive_export_prompt(
 ) -> Vec<(ExportFormat, String)> {
     prompt(
         output,
-        "Export results? (none, or comma-separated formats e.g. csv,html,json,markdown,txt,yaml): ",
+        "Export results? (none, or comma-separated formats e.g. csv,html,json,markdown,nec,txt,yaml): ",
     );
 
     let fmt_raw = read_line(input, "failed to read export format")
@@ -1996,6 +1996,11 @@ fn interactive_export_prompt(
                 "markdown" | "md" => {
                     if !out.contains(&ExportFormat::Markdown) {
                         out.push(ExportFormat::Markdown);
+                    }
+                }
+                "nec" => {
+                    if !out.contains(&ExportFormat::Nec) {
+                        out.push(ExportFormat::Nec);
                     }
                 }
                 "txt" | "text" => {
@@ -2975,5 +2980,70 @@ mod tests {
         assert_eq!(exports.len(), 2);
         assert_eq!(exports[0].0, ExportFormat::Csv);
         assert_eq!(exports[1].0, ExportFormat::Json);
+    }
+
+    #[test]
+    fn interactive_export_prompt_accepts_nec_format() {
+        let out_path = format!("rusty-wire-export-test-{}-nec.nec", std::process::id());
+        let input_bytes = format!("nec\n{}\n", out_path);
+        let mut input = Cursor::new(input_bytes.into_bytes());
+        let mut output = Vec::new();
+        let results = sample_results_for_export_tests();
+
+        let exports = interactive_export_prompt(&mut input, &mut output, &results);
+
+        // nec is recognised and the file path is returned
+        assert_eq!(exports.len(), 1);
+        assert_eq!(exports[0].0, ExportFormat::Nec);
+        assert_eq!(exports[0].1, out_path);
+        let _ = fs::remove_file(&out_path);
+    }
+
+    #[test]
+    fn run_interactive_with_io_option_2_invalid_band_returns_early() {
+        // Default region → option 2 → invalid band name → menu shown again → exit
+        let mut input = Cursor::new(b"\n2\nnotaband\n6\n".to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Invalid input. Use band names/ranges like 40m,20m,10m-15m."));
+        // Should not have reached the export prompt
+        assert!(!rendered.contains("Export results?"));
+    }
+
+    #[test]
+    fn run_interactive_with_io_option_2_non_resonant_mode_asks_wire_window() {
+        // Default region → option 2 → 20m band → non-resonant mode → all other defaults → no export → exit
+        // Input sequence: region=1(\n), option=2, bands=20m, mode=2(non-resonant),
+        //   model=\n, vf=\n, height=\n, ground=\n, conductor=\n, transformer=\n,
+        //   wire_min=9\n, wire_max=27\n, units=\n, export=none, exit=6
+        let input_bytes =
+            b"\n2\n20m\n2\n\n\n\n\n\n\n9\n27\n\nnone\n6\n";
+        let mut input = Cursor::new(input_bytes.to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Wire min length"));
+        assert!(rendered.contains("Wire max length"));
+        assert!(rendered.contains("Export results?"));
+    }
+
+    #[test]
+    fn run_interactive_with_io_option_3_non_resonant_mode_asks_wire_window() {
+        // Quick calc → non-resonant → wire window prompts should appear
+        let input_bytes = b"\n3\n20m\n2\n\n\n\n\n\n\n9\n27\n\nnone\n6\n";
+        let mut input = Cursor::new(input_bytes.to_vec());
+        let mut output = Vec::new();
+
+        run_interactive_with_io(&mut input, &mut output);
+
+        let rendered = String::from_utf8(output).expect("interactive output should be utf-8");
+        assert!(rendered.contains("Wire min length"));
+        assert!(rendered.contains("Wire max length"));
+        assert!(rendered.contains("Export results?"));
     }
 }
