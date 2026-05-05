@@ -10,6 +10,7 @@ pub mod calculations;
 pub(crate) mod cli;
 pub(crate) mod export;
 pub(crate) mod fnec_validation;
+pub(crate) mod nec_export;
 pub mod prefs;
 pub mod sessions;
 pub mod tui;

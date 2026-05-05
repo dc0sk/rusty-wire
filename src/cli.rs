@@ -22,7 +22,7 @@ use crate::calculations::{
     MIN_CONDUCTOR_DIAMETER_MM,
 };
 use crate::export::{default_advise_output_name, export_advise};
-use crate::export::{default_output_name, export_results, validate_export_path};
+use crate::export::{default_output_name, export_results, export_results_nec, validate_export_path};
 use crate::fnec_validation::{DEFAULT_FNEC_PASS_MAX_MISMATCH, DEFAULT_FNEC_REJECT_MIN_MISMATCH};
 use clap::{CommandFactory, FromArgMatches, Parser};
 use std::io::{self, BufRead, Write};
@@ -791,15 +791,19 @@ pub fn run_from_args(args: &[String]) -> bool {
             }
             default_output_name(fmt).to_string()
         };
-        if let Err(err) = export_results(
-            fmt,
-            &output,
-            &results.calculations,
-            export_recommendation,
-            results.config.units,
-            results.config.wire_min_m,
-            results.config.wire_max_m,
-        ) {
+        if let Err(err) = if fmt == ExportFormat::Nec {
+            export_results_nec(&output, &results.calculations, &results.config)
+        } else {
+            export_results(
+                fmt,
+                &output,
+                &results.calculations,
+                export_recommendation,
+                results.config.units,
+                results.config.wire_min_m,
+                results.config.wire_max_m,
+            )
+        } {
             eprintln!("Failed to export {output}: {err}");
             return false;
         }
@@ -2048,15 +2052,19 @@ fn interactive_export_prompt(
             default_output_name(fmt).to_string()
         };
 
-        match export_results(
-            fmt,
-            &output_path,
-            &results.calculations,
-            export_recommendation,
-            results.config.units,
-            results.config.wire_min_m,
-            results.config.wire_max_m,
-        ) {
+        match if fmt == ExportFormat::Nec {
+            export_results_nec(&output_path, &results.calculations, &results.config)
+        } else {
+            export_results(
+                fmt,
+                &output_path,
+                &results.calculations,
+                export_recommendation,
+                results.config.units,
+                results.config.wire_min_m,
+                results.config.wire_max_m,
+            )
+        } {
             Ok(()) => writeln!(output, "Exported results to {output_path}")
                 .expect("failed to write export success message"),
             Err(err) => writeln!(output, "Failed to export {output_path}: {err}")
