@@ -458,6 +458,12 @@ pub struct ResultsDisplayDocument {
     pub summary_lines: Vec<String>,
     pub sections: Vec<ResultsTextSectionView>,
     pub warning_lines: Vec<String>,
+    /// Structured explanation for the transformer ratio in use — suitable for
+    /// TUI tooltip text, GUI labels, or verbose CLI output.
+    pub transformer_explanation: TransformerRatioExplanation,
+    /// Structured list of bands excluded from this run, with per-band reasons.
+    /// Mirrors the text in `warning_lines` but gives consumers structured access.
+    pub skipped_band_details: Vec<SkippedBandDetail>,
 }
 
 /// One example L/C component pair satisfying a trap's resonant condition.
@@ -1206,6 +1212,7 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
         });
     }
 
+    let skipped = skipped_band_details(results);
     ResultsDisplayDocument {
         overview_heading: overview.heading,
         overview_header_lines: overview.header_lines,
@@ -1213,6 +1220,11 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
         summary_lines: overview.summary_lines,
         sections,
         warning_lines: skipped_band_warning(results).into_iter().collect(),
+        transformer_explanation: transformer_ratio_explanation(
+            results.config.mode,
+            results.config.antenna_model,
+        ),
+        skipped_band_details: skipped,
     }
 }
 
@@ -3878,6 +3890,48 @@ mod tests {
         assert!(!doc.overview_heading.is_empty());
         assert!(!doc.band_views.is_empty());
         assert!(!doc.sections.is_empty());
+    }
+
+    #[test]
+    fn results_display_document_transformer_explanation_matches_config() {
+        // EFHW should carry a 1:49/1:56 reason in the explanation
+        let mut config = AppConfig::default();
+        config.antenna_model = Some(AntennaModel::EndFedHalfWave);
+        let results = run_calculation(config);
+        let doc = results_display_document(&results);
+
+        assert!(doc.transformer_explanation.ratio == TransformerRatio::R1To56
+            || doc.transformer_explanation.ratio == TransformerRatio::R1To49,
+            "EFHW explanation should recommend a high step-up ratio");
+        assert!(!doc.transformer_explanation.reason.is_empty());
+        // Reason text should mention EFHW context
+        assert!(doc.transformer_explanation.reason.contains("EFHW")
+            || doc.transformer_explanation.reason.contains("2500")
+            || doc.transformer_explanation.reason.contains("transformer"));
+    }
+
+    #[test]
+    fn results_display_document_skipped_band_details_empty_when_none_skipped() {
+        let results = run_calculation(AppConfig::default());
+        let doc = results_display_document(&results);
+
+        assert!(doc.skipped_band_details.is_empty());
+        assert!(doc.warning_lines.is_empty());
+    }
+
+    #[test]
+    fn results_display_document_skipped_band_details_populated_when_bands_skipped() {
+        let mut config = AppConfig::default();
+        // Band index 999 does not exist in any region — will be skipped
+        config.band_indices = vec![1, 999];
+        let results = run_calculation(config);
+        let doc = results_display_document(&results);
+
+        assert!(!doc.skipped_band_details.is_empty());
+        assert!(doc.skipped_band_details.iter().any(|d| d.band_index == 999));
+        assert!(!doc.skipped_band_details[0].reason.is_empty());
+        // warning_lines and skipped_band_details should agree on count
+        assert_eq!(doc.warning_lines.len(), 1); // one combined warning
     }
 
     #[test]
