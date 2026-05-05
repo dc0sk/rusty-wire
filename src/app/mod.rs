@@ -464,6 +464,9 @@ pub struct ResultsDisplayDocument {
     /// Structured list of bands excluded from this run, with per-band reasons.
     /// Mirrors the text in `warning_lines` but gives consumers structured access.
     pub skipped_band_details: Vec<SkippedBandDetail>,
+    /// Present when the configured transformer ratio differs from the model recommendation.
+    /// Also mirrored in `warning_lines` for text-based consumers.
+    pub transformer_mismatch_warning: Option<TransformerMismatchWarning>,
 }
 
 /// One example L/C component pair satisfying a trap's resonant condition.
@@ -663,6 +666,27 @@ pub struct SkippedBandDetail {
     pub band_index: usize,
     /// Human-readable reason the band was skipped.
     pub reason: &'static str,
+}
+
+/// Warning issued when the user-configured transformer ratio differs from the
+/// antenna-model recommendation produced by `transformer_ratio_explanation`.
+#[derive(Debug, Clone)]
+pub struct TransformerMismatchWarning {
+    /// The ratio the user has configured.
+    pub configured: TransformerRatio,
+    /// The ratio recommended for the active antenna model and mode.
+    pub recommended: TransformerRatio,
+}
+
+impl TransformerMismatchWarning {
+    /// One-sentence human-readable description of the mismatch.
+    pub fn message(&self) -> String {
+        format!(
+            "Transformer set to {} but {} is recommended for this antenna model.",
+            self.configured.as_label(),
+            self.recommended.as_label(),
+        )
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1213,18 +1237,30 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
     }
 
     let skipped = skipped_band_details(results);
+    let transformer_expl =
+        transformer_ratio_explanation(results.config.mode, results.config.antenna_model);
+    let mismatch = if results.config.transformer_ratio != transformer_expl.ratio {
+        Some(TransformerMismatchWarning {
+            configured: results.config.transformer_ratio,
+            recommended: transformer_expl.ratio,
+        })
+    } else {
+        None
+    };
+    let mut warning_lines: Vec<String> = skipped_band_warning(results).into_iter().collect();
+    if let Some(ref mw) = mismatch {
+        warning_lines.push(mw.message());
+    }
     ResultsDisplayDocument {
         overview_heading: overview.heading,
         overview_header_lines: overview.header_lines,
         band_views,
         summary_lines: overview.summary_lines,
         sections,
-        warning_lines: skipped_band_warning(results).into_iter().collect(),
-        transformer_explanation: transformer_ratio_explanation(
-            results.config.mode,
-            results.config.antenna_model,
-        ),
+        warning_lines,
+        transformer_explanation: transformer_expl,
         skipped_band_details: skipped,
+        transformer_mismatch_warning: mismatch,
     }
 }
 
@@ -4346,5 +4382,57 @@ mod app_error_tests {
         };
         let results = run_calculation(config);
         assert!(skipped_band_details(&results).is_empty());
+    }
+
+    #[test]
+    fn transformer_mismatch_warning_present_when_ratio_differs_from_recommendation() {
+        // EFHW recommends 1:49; configure 1:1 to trigger the warning.
+        let config = AppConfig {
+            antenna_model: Some(AntennaModel::EndFedHalfWave),
+            transformer_ratio: TransformerRatio::R1To1,
+            band_indices: vec![5],
+            ..AppConfig::default()
+        };
+        let results = run_calculation(config);
+        let doc = results_display_document(&results);
+        let mismatch = doc.transformer_mismatch_warning.as_ref().expect("should be Some");
+        assert_eq!(mismatch.configured, TransformerRatio::R1To1);
+        assert_eq!(mismatch.recommended, TransformerRatio::R1To56);
+        let msg = mismatch.message();
+        assert!(msg.contains("1:1"), "message should mention configured ratio");
+        assert!(msg.contains("1:56"), "message should mention recommended ratio");
+    }
+
+    #[test]
+    fn transformer_mismatch_warning_absent_when_ratio_matches_recommendation() {
+        // Dipole recommends 1:1; configure 1:1 → no warning.
+        let config = AppConfig {
+            antenna_model: Some(AntennaModel::Dipole),
+            transformer_ratio: TransformerRatio::R1To1,
+            band_indices: vec![5],
+            ..AppConfig::default()
+        };
+        let results = run_calculation(config);
+        let doc = results_display_document(&results);
+        assert!(doc.transformer_mismatch_warning.is_none());
+    }
+
+    #[test]
+    fn transformer_mismatch_warning_added_to_warning_lines() {
+        let config = AppConfig {
+            antenna_model: Some(AntennaModel::OffCenterFedDipole),
+            transformer_ratio: TransformerRatio::R1To9,
+            band_indices: vec![5],
+            ..AppConfig::default()
+        };
+        let results = run_calculation(config);
+        let doc = results_display_document(&results);
+        assert!(doc.transformer_mismatch_warning.is_some());
+        // The mismatch message must also appear in warning_lines.
+        let has_warning = doc
+            .warning_lines
+            .iter()
+            .any(|l| l.contains("1:9") && l.contains("1:4"));
+        assert!(has_warning, "warning_lines should contain mismatch text");
     }
 }
