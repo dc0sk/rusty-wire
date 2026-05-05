@@ -13,6 +13,25 @@ All notable changes to Rusty Wire are documented here.
 
 ---
 
+## [2.19.0] - 2026-05-05
+
+### Added
+- **Transformer mismatch warning**: `ResultsDisplayDocument` gains `transformer_mismatch_warning: Option<TransformerMismatchWarning>` — populated when the configured ratio differs from the antenna-model recommendation. `TransformerMismatchWarning.message()` returns a one-sentence human-readable description. Mismatch is also appended to `warning_lines` for text-based consumers (CLI, exports). Closes roadmap item 3 open sub-item.
+- **TUI mismatch indicator**: config panel shows `⚠ ` prefix on the Transformer field when it mismatches the model recommendation — visible without running `advise`.
+
+### Changed
+- **TUI colour palette** — improved contrast for light-mode terminals:
+  - `Color::Cyan` → `Color::Blue` for all focused borders, titles, and section headings.
+  - `Color::Yellow + BOLD` cursor/selection → `Color::Blue + BOLD`.
+  - `Color::White` body text → `Color::Reset` (inherits terminal fg: black on light, white on dark).
+  - `Color::DarkGray` hint/dim text → `Modifier::DIM` (scales with terminal theme on both light and dark).
+  - Warning/error/success colours (`Yellow`, `Red`, `Green`) unchanged.
+
+### Tests
+- 3 new unit tests: mismatch warning present, absent, and propagated to `warning_lines`.
+
+---
+
 ## [2.18.0] - 2026-05-05
 
 ### Added

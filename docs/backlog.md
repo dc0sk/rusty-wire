@@ -14,7 +14,7 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## CLI / Analysis
 
-- Persistent user preferences file (default units, region, mode)
+- ~~**Persistent user preferences file**~~ ✅ done — `~/.config/rusty-wire/config.toml`; saved by `--save-prefs` (CLI) or `s` key (TUI); supports region, mode, velocity-factor, height, ground-class, conductor-diameter, units.
 
 ## TUI (2.x, `ratatui`)
 
@@ -32,19 +32,19 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 ## Antenna Models
 
-- Hybrid / multi-section models
-- Balun/unun optimizer engine: score candidate transformer ratios against selected bands and feed assumptions; this should be implemented before `advise` mode
+- Hybrid / multi-section models (future)
+- ~~**Balun/unun optimizer engine**~~ ✅ done — `--advise` ranks transformer ratios against selected bands and feed assumptions; `TransformerOptimizerView` / `AdviseView` used by CLI/TUI/GUI.
 
 ## Practical Limits Follow-up
 
-- Extend height realism beyond current 7/10/12 m presets:
-  - Ground-class selector (poor/average/good) and optional soil conductivity/permittivity input
-  - Conductor-diameter input for end-effect/feedpoint approximation refinement
-  - Calibration matrix against NEC sweeps for representative bands and heights
+- ~~**Extend height realism**~~ ✅ done — standard height presets (7/10/12 m) with height-aware skip-distance scaling.
+- ~~**Ground-class selector**~~ ✅ done — `--ground poor|average|good` with first-order skip-distance scaling.
+- ~~**Conductor-diameter input**~~ ✅ done — `--conductor-mm 1.0..4.0` with first-order impedance/length correction.
+- ~~**NEC calibration matrix**~~ ✅ done (v2.9.0) — `nec_calibrated_dipole_r()` interpolates NEC corpus data (7/10/12 m AGL × poor/average/good).
 
 ## Infrastructure
 
-- `bands.toml` / `bands.json` for user-defined band presets
+- ~~**`bands.toml` / `bands.json`**~~ ✅ done (v2.16.0) — user-defined band presets loaded from `bands.toml`.
 - Multi-window or detachable analysis panes (GUI only)
 
 ## Maintenance / Project Review (post-v2.14.0)
