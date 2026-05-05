@@ -303,6 +303,10 @@ struct TuiState {
     session_picker_items: Vec<String>,
     /// Cursor row in the session picker.
     session_picker_cursor: usize,
+    /// Whether the custom hybrid-split text-input overlay is open.
+    show_hybrid_split_input: bool,
+    /// Text being typed in the hybrid-split input overlay (e.g. "0.4,0.35,0.25").
+    hybrid_split_input: String,
 }
 
 impl TuiState {
@@ -399,6 +403,8 @@ impl TuiState {
             show_session_picker: false,
             session_picker_items: Vec::new(),
             session_picker_cursor: 0,
+            show_hybrid_split_input: false,
+            hybrid_split_input: String::new(),
         }
     }
 
@@ -490,8 +496,17 @@ impl TuiState {
                         }
                     },
                     ConfigField::HybridSplit => {
-                        let label = HYBRID_SPLIT_PRESETS[self.hybrid_split_idx].0;
-                        format!("{label}")
+                        if self.hybrid_split_idx < HYBRID_SPLIT_PRESETS.len() {
+                            HYBRID_SPLIT_PRESETS[self.hybrid_split_idx].0.to_string()
+                        } else {
+                            let s = c.hybrid_section_split;
+                            format!(
+                                "Custom {:.0}/{:.0}/{:.0}",
+                                s[0] * 100.0,
+                                s[1] * 100.0,
+                                s[2] * 100.0
+                            )
+                        }
                     }
                     ConfigField::ItuRegion => match c.itu_region {
                         ITURegion::Region1 => "1 (EU/AF/ME)".into(),
@@ -588,6 +603,7 @@ impl TuiState {
                 } else {
                     self.hybrid_split_idx = self
                         .hybrid_split_idx
+                        .min(HYBRID_SPLIT_PRESETS.len().saturating_sub(1))
                         .checked_sub(1)
                         .unwrap_or(HYBRID_SPLIT_PRESETS.len() - 1);
                 }
@@ -1090,6 +1106,11 @@ impl TuiState {
             self.conductor_idx = idx;
         }
         self.custom_band_indices = config.band_indices.clone();
+        // Sync hybrid split index: match preset or mark as custom
+        self.hybrid_split_idx = HYBRID_SPLIT_PRESETS
+            .iter()
+            .position(|(_, split)| *split == config.hybrid_section_split)
+            .unwrap_or(HYBRID_SPLIT_PRESETS.len()); // len == "custom"
         if let Some(idx) = STEP_PRESETS
             .iter()
             .position(|&v| (v - config.step_m).abs() < 1e-9)
@@ -1128,6 +1149,53 @@ impl TuiState {
                 }
                 KeyCode::PageDown => {
                     self.preview_scroll = self.preview_scroll.saturating_add(20);
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        // Hybrid split custom-entry overlay.
+        if self.show_hybrid_split_input {
+            match key.code {
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quit = true;
+                }
+                KeyCode::Esc => {
+                    self.show_hybrid_split_input = false;
+                    self.hybrid_split_input.clear();
+                }
+                KeyCode::Enter => {
+                    let raw = self.hybrid_split_input.trim().to_string();
+                    let parts: Vec<f64> = raw
+                        .split(',')
+                        .filter_map(|s| s.trim().parse::<f64>().ok())
+                        .collect();
+                    if parts.len() == 3 {
+                        let split = [parts[0], parts[1], parts[2]];
+                        let sum = split.iter().sum::<f64>();
+                        if split.iter().all(|v| *v > 0.0) && (sum - 1.0).abs() <= 1e-4 {
+                            // Mark idx as out-of-presets sentinel (len == "custom")
+                            self.hybrid_split_idx = HYBRID_SPLIT_PRESETS.len();
+                            self.dispatch(AppAction::SetHybridSectionSplit(split));
+                            self.show_hybrid_split_input = false;
+                            self.hybrid_split_input.clear();
+                        } else {
+                            self.export_status = Some(format!(
+                                "Split values must be positive and sum to 1.0 (sum={:.4})",
+                                sum
+                            ));
+                        }
+                    } else {
+                        self.export_status =
+                            Some("Enter exactly 3 comma-separated values, e.g. 0.4,0.35,0.25".into());
+                    }
+                }
+                KeyCode::Backspace => {
+                    self.hybrid_split_input.pop();
+                }
+                KeyCode::Char(c) if !c.is_control() => {
+                    self.hybrid_split_input.push(c);
                 }
                 _ => {}
             }
@@ -1372,6 +1440,11 @@ impl TuiState {
                     && self.current_band_preset().is_custom()
                 {
                     self.open_band_checklist();
+                } else if self.focus == Focus::Config
+                    && self.current_field() == ConfigField::HybridSplit
+                {
+                    self.show_hybrid_split_input = true;
+                    self.hybrid_split_input.clear();
                 } else {
                     self.run_calculation();
                 }
@@ -1496,6 +1569,10 @@ fn render(f: &mut ratatui::Frame, state: &TuiState) {
 
     if state.show_session_picker {
         render_session_picker(f, area, state);
+    }
+
+    if state.show_hybrid_split_input {
+        render_hybrid_split_input(f, area, state);
     }
 }
 
@@ -2095,6 +2172,47 @@ fn render_session_name_input(f: &mut ratatui::Frame, area: Rect, state: &TuiStat
 }
 
 // ── Session picker overlay ──────────────────────────────────────────────────
+
+// ── Hybrid split custom-entry overlay ──────────────────────────────────────
+
+fn render_hybrid_split_input(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
+    let popup_area = centered_rect(60, 24, area);
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title(" Custom Hybrid Split ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(1), // label
+            Constraint::Length(1), // input field
+            Constraint::Length(1), // example
+            Constraint::Length(1), // hint
+        ])
+        .split(inner);
+
+    let label = Paragraph::new("Section ratios s1,s2,s3 (must sum to 1.0):");
+    f.render_widget(label, rows[0]);
+
+    let input_text = format!("{}▏", state.hybrid_split_input);
+    let input = Paragraph::new(input_text).style(Style::default().fg(Color::Reset));
+    f.render_widget(input, rows[1]);
+
+    let example = Paragraph::new("e.g.  0.4,0.35,0.25  or  0.5,0.3,0.2")
+        .style(Style::default().add_modifier(Modifier::DIM));
+    f.render_widget(example, rows[2]);
+
+    let hint = Paragraph::new("Enter: apply   Esc: cancel")
+        .style(Style::default().add_modifier(Modifier::DIM));
+    f.render_widget(hint, rows[3]);
+}
 
 fn render_session_picker(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let popup_area = centered_rect(72, 80, area);
