@@ -2687,7 +2687,7 @@ mod tests {
         assert!(rendered.contains("Enter velocity factor (0.5-1.0) [0.85]: "));
         assert!(rendered.contains("Antenna height in meters (7/10/12) [12]: "));
         assert!(rendered.contains("Ground class (poor/average/good) [good]: "));
-        assert!(rendered.contains("Conductor diameter in mm (1.0-4.0) [3.5]: "));
+        assert!(rendered.contains("Conductor diameter in mm (0.5-4.0) [3.5]: "));
         assert!(rendered.contains("Enter transformer ratio (e.g. 1:9, recommended) [1:49]: "));
         assert!(rendered.contains("Wire min length in meters (Enter for 9.0): "));
         assert!(rendered.contains("Wire max length in meters (Enter for 27.0): "));

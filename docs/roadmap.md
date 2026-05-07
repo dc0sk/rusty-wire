@@ -76,7 +76,7 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 ### 3c) Practical-limits mitigation (height/ground/conductor realism)
 - Implemented first pass: standardized antenna-height presets (7 m, 10 m, 12 m) with height-aware skip-distance scaling.
 - Implemented second pass: ground-class presets (poor/average/good) with additional skip-distance scaling.
-- Implemented third pass: optional conductor-diameter input (`--conductor-mm 1.0..4.0`) with first-order impedance/length correction.
+- Implemented third pass: optional conductor-diameter input (`--conductor-mm 0.5..4.0`) with first-order impedance/length correction.
 - ✅ Implemented fourth pass: NEC-calibrated feedpoint resistance and mismatch/SWR estimates (v2.9.0). `nec_calibrated_dipole_r()` interpolates height/ground anchor points from fnec-rust corpus data (7/10/12 m AGL × poor/average/good). Band display now shows `Est. feedpoint R: XX.X Ω (NEC-calibrated, SWR ≈ N.N:1 into ZZ Ω)`. Transformer optimizer uses calibrated R for all dipole-family gamma and mismatch-loss calculations. **GAP-011 item 3c closed.**
 
 ### 6) NEC2 card deck export

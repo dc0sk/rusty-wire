@@ -126,7 +126,7 @@ or HTML.
 :   Ground class for skip-distance scaling (default: **average**).
 
 **\-\-conductor-mm** *VALUE*
-:   Conductor diameter in millimetres, range 1.0–4.0 (default: **2.0**).
+:   Conductor diameter in millimetres, range 0.5–4.0 (default: **2.0**).
     Applies a first-order length correction.
 
 ## Advise Mode

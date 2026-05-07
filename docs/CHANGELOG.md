@@ -13,6 +13,19 @@ All notable changes to Rusty Wire are documented here.
 
 ---
 
+## [2.22.0] - 2026-05-07
+
+### Fixed
+- **Conductor diameter validation mismatch**: app-layer validation now accepts values down to `0.5` mm, matching TUI presets and preventing false `InvalidConductorDiameter` failures for thin wires.
+
+### Changed
+- Updated conductor-diameter ranges in CLI/docs/man from `1.0..4.0` to `0.5..4.0`.
+
+### Tests
+- Full test suite passes after lowering `MIN_CONDUCTOR_DIAMETER_MM` to `0.5`.
+
+---
+
 ## [2.21.0] - 2026-05-07
 
 ### Added

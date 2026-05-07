@@ -39,7 +39,7 @@ Move an item to `docs/roadmap.md` once it is confirmed.
 
 - ~~**Extend height realism**~~ ✅ done — standard height presets (7/10/12 m) with height-aware skip-distance scaling.
 - ~~**Ground-class selector**~~ ✅ done — `--ground poor|average|good` with first-order skip-distance scaling.
-- ~~**Conductor-diameter input**~~ ✅ done — `--conductor-mm 1.0..4.0` with first-order impedance/length correction.
+- ~~**Conductor-diameter input**~~ ✅ done — `--conductor-mm 0.5..4.0` with first-order impedance/length correction.
 - ~~**NEC calibration matrix**~~ ✅ done (v2.9.0) — `nec_calibrated_dipole_r()` interpolates NEC corpus data (7/10/12 m AGL × poor/average/good).
 
 ## Infrastructure
