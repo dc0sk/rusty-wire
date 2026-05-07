@@ -1,6 +1,6 @@
 # Rusty Wire
 
-![Version](https://img.shields.io/badge/version-2.21.0-blue)
+![Version](https://img.shields.io/badge/version-2.22.0-blue)
 ![License](https://img.shields.io/badge/license-GPL--2.0--or--later-green)
 ![Rust edition](https://img.shields.io/badge/rust-2021-orange)
 
@@ -19,7 +19,7 @@ amateur and shortwave bands. It covers six antenna models, recommends transforme
 automatically, and fits comfortably into shell scripts as well as interactive
 planning sessions.
 
-**2.19.0: transformer mismatch warnings, TUI light-mode contrast, antenna-specific feed recommendations · 3.x roadmap: desktop GUI (`iced`)**
+**2.22.0: thin-wire validation fix (`--conductor-mm 0.5..4.0`), unified TUI export popup, model-aware config fields · 3.x roadmap: desktop GUI (`iced`)**
 
 ---
 
@@ -69,7 +69,7 @@ equal-tie support.
   height-aware skip-distance estimates.
 - `--ground poor|average|good` — select ground-class model used for
   skip-distance scaling (default: `average`).
-- `--conductor-mm <1.0..4.0>` — set conductor diameter in millimeters for
+- `--conductor-mm <0.5..4.0>` — set conductor diameter in millimeters for
   first-order impedance/length correction (default: `2.0`).
 - `--step <meters>` — control non-resonant search resolution (default 0.05 m).
 - `--velocity <value>` — velocity factor from 0.50 to 1.00 (default 0.95).
@@ -138,7 +138,7 @@ rusty-wire --tui
 - **Real-time configuration**: Adjust band presets, antenna models, mode, velocity factor, height, and ground class
 - **Live recalculation**: Results update as you modify settings (with debounce for non-resonant search)
 - **Band selection**: Cycle through named presets or open a checklist to pick custom bands
-- **Export formats**: Press `e`/`E`/`m`/`t`/`y`/`H` to export results as CSV/JSON/Markdown/plain text/YAML/HTML; an export-preview overlay shows the output before writing.
+- **Export formats**: Press `e` to open a checklist popup, toggle multiple formats, and export in one action (Markdown and NEC preselected by default).
 - **Collapsible result panels**: `[`/`]` to move the band cursor, `Space` to collapse/expand the highlighted band.
 - **Saved sessions**: press `S` to save the current `AppConfig` under a name; `O` opens a picker to load (`Enter`) or delete (`d`) a session. Stored in `~/.config/rusty-wire/sessions.toml`.
 - **Visual highlighting**: recommended transformer ratio is shown in green/bold; bands skipped by the user are shown in yellow.
@@ -155,13 +155,9 @@ rusty-wire --tui
 | `↓` / `j` | Select next config field |
 | `←` / `h` | Decrease field value |
 | `→` / `l` | Increase field value |
-| `r` / `Enter` | Run calculation |
-| `e` | Export CSV (preview first) |
-| `E` | Export JSON (preview first) |
-| `m` | Export Markdown (preview first) |
-| `t` | Export plain text (preview first) |
-| `y` | Export YAML (preview first) |
-| `H` | Export HTML (preview first) |
+| `r` | Run calculation |
+| `Enter` | Run calculation (or open field-specific overlays where applicable) |
+| `e` | Open export format checklist popup |
 | `[` / `]` | Move band cursor in the results panel |
 | `Space` | Collapse / expand the highlighted band |
 | `s` | Save preferences |
@@ -169,6 +165,7 @@ rusty-wire --tui
 | `O` | Open the saved-session picker (Enter: load, `d`: delete) |
 | `a` | Toggle advise panel |
 | `i` / `?` | Toggle project info |
+| `u` | Check for new GitHub releases (while info popup is open) |
 | `Tab` | Toggle focus (config ↔ results) |
 | `PgUp` / `PgDn` | Scroll results |
 | `q` / `Esc` | Quit (closes overlays first) |

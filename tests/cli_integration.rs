@@ -94,7 +94,7 @@ fn invalid_ground_shows_clap_error() {
 #[test]
 fn invalid_conductor_mm_shows_validation_error() {
     let output = binary()
-        .args(["--bands", "40m", "--conductor-mm", "0.5"])
+        .args(["--bands", "40m", "--conductor-mm", "0.4"])
         .output()
         .expect("failed to run rusty-wire");
     let stderr = String::from_utf8_lossy(&output.stderr);

@@ -43,11 +43,11 @@ The next release focuses on **output format stability** and **testing infrastruc
 ### New Features
 
 - **Advise mode** (`--advise`): ranked wire + balun/unun candidates with efficiency estimates and tradeoff notes
-- **TUI exports**: press `e`/`E`/`m`/`t` to save results in CSV/JSON/Markdown/TXT format directly from the TUI
+- **TUI exports**: press `e` to open the export checklist popup and export selected formats in one action
 - **Platform info**: `--info` and TUI About popup now show OS and CPU architecture
 - **Persistent config**: `~/.config/rusty-wire/config.toml` saves and restores session preferences
 - **Custom band presets**: load named band sets from TOML; use in CLI (`--bands-preset <name>`) and TUI (cycle with ←/→)
-- **Conductor-diameter model**: `--conductor-mm 1.0..4.0` corrects wire lengths for different wire gauges
+- **Conductor-diameter model**: `--conductor-mm 0.5..4.0` corrects wire lengths for different wire gauges
 - **Advise validation** (optional): `--validate-with-fnec` cross-checks candidates with fnec-rust if available
 - **NEC calibration workflow**: new scripts and reference data to fit conductor-correction constants
 

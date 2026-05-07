@@ -40,7 +40,7 @@ pub struct UserPrefs {
     pub antenna_height_m: Option<f64>,
     /// Ground class: `"poor"`, `"average"`, or `"good"`.
     pub ground_class: Option<String>,
-    /// Conductor diameter in millimetres (1.0–4.0).
+    /// Conductor diameter in millimetres (0.5–4.0).
     pub conductor_diameter_mm: Option<f64>,
     /// Display units: `"metric"`, `"imperial"`, or `"both"`.
     pub units: Option<String>,
