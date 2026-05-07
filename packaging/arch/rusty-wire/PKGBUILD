@@ -10,7 +10,7 @@ depends=()
 makedepends=('cargo' 'rust')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 # Run `makepkg -g` after downloading the source to fill in the correct checksum:
-sha256sums=('11197275e5f3784297dfb7e980e3a8a167f8b4793767ed4048e96e84f6b501cb')
+sha256sums=('07e7fe71bd0ab5da36167f9e1ec7fe13a9a9a4efd634ee0b94948d53ed411df9')
 
 prepare() {
     cd "$pkgname-$pkgver"
