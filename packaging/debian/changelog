@@ -1,3 +1,11 @@
+rusty-wire (2.21.0-1) unstable; urgency=medium
+
+  * TUI: config panel hides antenna-model-specific fields that are not relevant to the selected model.
+  * TUI: export workflow moved to an export-format checklist popup on 'e'; Markdown and NEC default selected.
+  * TUI: info dialog can manually check GitHub releases; conductor diameter presets expanded to 0.5-4.0 mm in 0.1 mm steps with mm² labels.
+
+ -- Simon Keimer <dc0sk@example.com>  Wed, 07 May 2026 00:00:00 +0000
+
 rusty-wire (2.20.0-1) unstable; urgency=medium
 
   * Configurable hybrid section split (--hybrid-split s1,s2,s3): validated ratio propagated through CLI, TUI, session persistence, and per-band display.

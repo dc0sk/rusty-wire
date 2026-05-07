@@ -28,13 +28,11 @@
 //! | `←` / `h` | Decrease selected field value |
 //! | `→` / `l` | Increase selected field value |
 //! | `r` / `Enter` | Run calculation |
-//! | `e` | Export results as CSV (`rusty-wire-results.csv`) |
-//! | `E` | Export results as JSON (`rusty-wire-results.json`) |
-//! | `m` | Export results as Markdown (`rusty-wire-results.md`) |
-//! | `t` | Export results as plain text (`rusty-wire-results.txt`) |
+//! | `e` | Open export format checklist popup |
 //! | `s` | Save current settings as persistent preferences (`~/.config/rusty-wire/config.toml`) |
 //! | `a` | Toggle balun/unun advise panel |
 //! | `i` / `?` | Toggle project info popup |
+//! | `u` | Check for new GitHub releases (while info popup is open) |
 //! | `Tab` | Toggle focus between config and results panels |
 //! | `q` / `Esc` | Quit |
 //! | `Ctrl-C` | Quit |
@@ -45,6 +43,7 @@ use std::fs;
 use std::io::{self, Stdout};
 use std::panic;
 use std::path::Path;
+use std::process::Command;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::execute;
@@ -81,7 +80,14 @@ use crate::export::{
 const VF_PRESETS: &[f64] = &[0.50, 0.60, 0.66, 0.70, 0.80, 0.85, 0.90, 0.95, 0.97, 1.00];
 const WIRE_MIN_PRESETS: &[f64] = &[5.0, 8.0, 10.0, 12.0, 15.0, 20.0];
 const WIRE_MAX_PRESETS: &[f64] = &[20.0, 25.0, 30.0, 35.0, 40.0, 50.0, 60.0, 80.0, 100.0];
-const CONDUCTOR_DIAMETER_PRESETS: &[f64] = &[1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
+const CONDUCTOR_DIAMETER_PRESETS: &[f64] = &[
+    0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+    1.1, 1.2, 1.3, 1.4, 1.5, 1.6,
+    1.7, 1.8, 1.9, 2.0, 2.1, 2.2,
+    2.3, 2.4, 2.5, 2.6, 2.7, 2.8,
+    2.9, 3.0, 3.1, 3.2, 3.3, 3.4,
+    3.5, 3.6, 3.7, 3.8, 3.9, 4.0,
+];
 const GROUND_CLASS_PRESETS: &[GroundClass] =
     &[GroundClass::Poor, GroundClass::Average, GroundClass::Good];
 const STEP_PRESETS: &[f64] = &[0.01, 0.02, 0.05, 0.10, 0.25, 0.50, 1.00];
@@ -90,6 +96,15 @@ const HYBRID_SPLIT_PRESETS: &[(&str, [f64; 3])] = &[
     ("45/35/20", [0.45, 0.35, 0.20]),
     ("50/30/20", [0.50, 0.30, 0.20]),
     ("34/33/33", [0.34, 0.33, 0.33]),
+];
+const EXPORT_FORMATS: &[ExportFormat] = &[
+    ExportFormat::Markdown,
+    ExportFormat::Nec,
+    ExportFormat::Csv,
+    ExportFormat::Json,
+    ExportFormat::Yaml,
+    ExportFormat::Txt,
+    ExportFormat::Html,
 ];
 const PROJECT_URL: &str = env!("CARGO_PKG_REPOSITORY");
 const TRANSFORMER_RATIOS: &[TransformerRatio] = &[
@@ -287,6 +302,12 @@ struct TuiState {
     pending_recalc: Option<std::time::Instant>,
     /// Active export preview: (format, is_advise, content).
     export_preview: Option<(ExportFormat, bool, String)>,
+    /// Whether the export format checklist popup is open.
+    show_export_menu: bool,
+    /// Cursor row in the export format checklist.
+    export_menu_cursor: usize,
+    /// Checked export formats, parallel to `EXPORT_FORMATS`.
+    export_menu_checked: Vec<bool>,
     /// Vertical scroll offset for the export preview overlay.
     preview_scroll: u16,
     /// Set of band titles whose detail lines are collapsed in the results panel.
@@ -352,7 +373,7 @@ impl TuiState {
         let conductor_idx = CONDUCTOR_DIAMETER_PRESETS
             .iter()
             .position(|&v| (v - app.config.conductor_diameter_mm).abs() < 1e-9)
-            .unwrap_or(2); // 2.0 mm
+            .unwrap_or(15); // 2.0 mm
         let hybrid_split_idx = HYBRID_SPLIT_PRESETS
             .iter()
             .position(|(_, split)| *split == app.config.hybrid_section_split)
@@ -395,6 +416,17 @@ impl TuiState {
             export_status: preset_status,
             pending_recalc: None,
             export_preview: None,
+            show_export_menu: false,
+            export_menu_cursor: 0,
+            export_menu_checked: vec![
+                true,  // Markdown
+                true,  // NEC
+                false, // CSV
+                false, // JSON
+                false, // YAML
+                false, // TXT
+                false, // HTML
+            ],
             preview_scroll: 0,
             collapsed_bands: std::collections::HashSet::new(),
             results_band_cursor: 0,
@@ -413,7 +445,38 @@ impl TuiState {
     }
 
     fn current_field(&self) -> ConfigField {
-        ConfigField::ALL[self.field_idx]
+        let visible = self.visible_fields();
+        visible
+            .get(self.field_idx)
+            .copied()
+            .unwrap_or(ConfigField::Mode)
+    }
+
+    fn visible_fields(&self) -> Vec<ConfigField> {
+        ConfigField::ALL
+            .iter()
+            .copied()
+            .filter(|f| self.is_field_visible(*f))
+            .collect()
+    }
+
+    fn is_field_visible(&self, field: ConfigField) -> bool {
+        match field {
+            ConfigField::HybridSplit => matches!(
+                self.app.config.antenna_model,
+                Some(AntennaModel::HybridMultiSection)
+            ),
+            _ => true,
+        }
+    }
+
+    fn normalize_field_index(&mut self) {
+        let visible_count = self.visible_fields().len();
+        if visible_count == 0 {
+            self.field_idx = 0;
+        } else if self.field_idx >= visible_count {
+            self.field_idx = visible_count - 1;
+        }
     }
 
     fn refresh_band_presets_for_region(&mut self) {
@@ -474,7 +537,7 @@ impl TuiState {
     /// Return (label, value, is_selected) for every config field.
     fn all_field_values(&self) -> Vec<(String, String, bool)> {
         let c = &self.app.config;
-        ConfigField::ALL
+        self.visible_fields()
             .iter()
             .enumerate()
             .map(|(i, &field)| {
@@ -491,9 +554,7 @@ impl TuiState {
                         Some(AntennaModel::FullWaveLoop) => "Loop".into(),
                         Some(AntennaModel::OffCenterFedDipole) => "OCFD".into(),
                         Some(AntennaModel::TrapDipole) => "Trap Dipole".into(),
-                        Some(AntennaModel::HybridMultiSection) => {
-                            "Hybrid Multi-Section".into()
-                        }
+                        Some(AntennaModel::HybridMultiSection) => "Hybrid Multi-Section".into(),
                     },
                     ConfigField::HybridSplit => {
                         if self.hybrid_split_idx < HYBRID_SPLIT_PRESETS.len() {
@@ -515,7 +576,6 @@ impl TuiState {
                     },
                     ConfigField::Bands => {
                         if self.current_band_preset().is_custom() {
-                            // Custom sentinel
                             if self.custom_band_indices.is_empty() {
                                 "Custom…".into()
                             } else {
@@ -535,12 +595,8 @@ impl TuiState {
                         UnitSystem::Imperial => "Imperial (ft)".into(),
                         UnitSystem::Both => "Both".into(),
                     },
-                    ConfigField::WireMin => {
-                        format!("{:.1} m", WIRE_MIN_PRESETS[self.wire_min_idx])
-                    }
-                    ConfigField::WireMax => {
-                        format!("{:.1} m", WIRE_MAX_PRESETS[self.wire_max_idx])
-                    }
+                    ConfigField::WireMin => format!("{:.1} m", WIRE_MIN_PRESETS[self.wire_min_idx]),
+                    ConfigField::WireMax => format!("{:.1} m", WIRE_MAX_PRESETS[self.wire_max_idx]),
                     ConfigField::AntennaHeight => {
                         format!("{:.0} m", STANDARD_ANTENNA_HEIGHTS_M[self.height_idx])
                     }
@@ -550,11 +606,13 @@ impl TuiState {
                         GroundClass::Good => "Good".into(),
                     },
                     ConfigField::ConductorDiameter => {
-                        format!("{:.1} mm", CONDUCTOR_DIAMETER_PRESETS[self.conductor_idx])
+                        let d = CONDUCTOR_DIAMETER_PRESETS[self.conductor_idx];
+                        let area = std::f64::consts::PI * (d * 0.5) * (d * 0.5);
+                        format!("{d:.1} mm ({area:.2} mm²)")
                     }
                     ConfigField::StepSize => {
                         let s = STEP_PRESETS[self.step_idx];
-                        format!("{:.2} m", s)
+                        format!("{s:.2} m")
                     }
                 };
                 let selected = i == self.field_idx && self.focus == Focus::Config;
@@ -780,6 +838,7 @@ impl TuiState {
         };
 
         self.app = apply_action(self.app.clone(), action);
+        self.normalize_field_index();
         self.show_advise_panel = false;
         self.advise_view = None;
 
@@ -908,9 +967,49 @@ impl TuiState {
         }
     }
 
+    fn export_single_format(&mut self, format: ExportFormat) -> Result<String, String> {
+        if self.show_advise_panel {
+            let Some(ref view) = self.advise_view else {
+                return Err("No advise results — run advise first (a).".into());
+            };
+            // Advise mode has no NEC export; map NEC to plain text.
+            let write_format = if format == ExportFormat::Nec {
+                ExportFormat::Txt
+            } else {
+                format
+            };
+            let filename = default_advise_output_name(write_format);
+            export_advise(write_format, filename, view.assumed_feedpoint_ohm, &view.candidates)
+                .map_err(|e| e.to_string())?;
+            Ok(filename.to_string())
+        } else {
+            let Some(ref results) = self.app.results else {
+                return Err("No results to export — run a calculation first (r).".into());
+            };
+            let filename = default_output_name(format);
+            if format == ExportFormat::Nec {
+                export_results_nec(filename, &results.calculations, &results.config)
+                    .map_err(|e| e.to_string())?;
+            } else {
+                export_results(
+                    format,
+                    filename,
+                    &results.calculations,
+                    results.recommendation.as_ref(),
+                    results.config.units,
+                    results.config.wire_min_m,
+                    results.config.wire_max_m,
+                )
+                .map_err(|e| e.to_string())?;
+            }
+            Ok(filename.to_string())
+        }
+    }
+
     /// Build a preview string for the given format and open the preview overlay.
     /// When `show_advise_panel` is active and an advise view exists, previews the
     /// advise export; otherwise previews results.
+    #[allow(dead_code)]
     fn try_export(&mut self, format: ExportFormat) {
         if self.show_advise_panel {
             let Some(ref view) = self.advise_view else {
@@ -1125,6 +1224,58 @@ impl TuiState {
         }
         // Clear any previous export status on the next keypress.
         self.export_status = None;
+        self.normalize_field_index();
+
+        // Export format checklist popup intercepts keys.
+        if self.show_export_menu {
+            match key.code {
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quit = true;
+                }
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    self.show_export_menu = false;
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.export_menu_cursor = self.export_menu_cursor.saturating_sub(1);
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.export_menu_cursor =
+                        (self.export_menu_cursor + 1).min(EXPORT_FORMATS.len() - 1);
+                }
+                KeyCode::Char(' ') => {
+                    if let Some(v) = self.export_menu_checked.get_mut(self.export_menu_cursor) {
+                        *v = !*v;
+                    }
+                }
+                KeyCode::Enter => {
+                    if self.export_menu_checked.iter().all(|v| !*v) {
+                        self.export_status = Some("No export formats selected.".into());
+                        return;
+                    }
+                    let mut exported_files = Vec::new();
+                    for (idx, format) in EXPORT_FORMATS.iter().copied().enumerate() {
+                        if !self.export_menu_checked[idx] {
+                            continue;
+                        }
+                        match self.export_single_format(format) {
+                            Ok(filename) => exported_files.push(filename),
+                            Err(err) => {
+                                self.export_status = Some(format!("Export failed: {err}"));
+                                return;
+                            }
+                        }
+                    }
+                    self.show_export_menu = false;
+                    self.export_status = Some(format!(
+                        "Exported {} file(s): {}",
+                        exported_files.len(),
+                        exported_files.join(", ")
+                    ));
+                }
+                _ => {}
+            }
+            return;
+        }
 
         // Export preview overlay intercepts all keys.
         if self.export_preview.is_some() {
@@ -1366,36 +1517,26 @@ impl TuiState {
                 self.show_info_popup = !self.show_info_popup;
                 return;
             }
+            KeyCode::Char('u') if self.show_info_popup => {
+                self.export_status = Some(check_for_new_release());
+                return;
+            }
             KeyCode::Char('r') => {
                 self.run_calculation();
                 return;
             }
             KeyCode::Char('e') => {
-                self.try_export(ExportFormat::Csv);
-                return;
-            }
-            KeyCode::Char('E') => {
-                self.try_export(ExportFormat::Json);
-                return;
-            }
-            KeyCode::Char('m') => {
-                self.try_export(ExportFormat::Markdown);
-                return;
-            }
-            KeyCode::Char('t') => {
-                self.try_export(ExportFormat::Txt);
-                return;
-            }
-            KeyCode::Char('y') => {
-                self.try_export(ExportFormat::Yaml);
-                return;
-            }
-            KeyCode::Char('H') => {
-                self.try_export(ExportFormat::Html);
-                return;
-            }
-            KeyCode::Char('N') => {
-                self.try_export(ExportFormat::Nec);
+                self.show_export_menu = true;
+                self.export_menu_cursor = 0;
+                self.export_menu_checked = vec![
+                    true,  // Markdown
+                    true,  // NEC
+                    false, // CSV
+                    false, // JSON
+                    false, // YAML
+                    false, // TXT
+                    false, // HTML
+                ];
                 return;
             }
             KeyCode::Char('s') => {
@@ -1468,13 +1609,19 @@ impl TuiState {
         match self.focus {
             Focus::Config => match key.code {
                 KeyCode::Down | KeyCode::Char('j') => {
-                    self.field_idx = (self.field_idx + 1) % ConfigField::ALL.len();
+                    let visible_count = self.visible_fields().len();
+                    if visible_count > 0 {
+                        self.field_idx = (self.field_idx + 1) % visible_count;
+                    }
                 }
                 KeyCode::Up | KeyCode::Char('k') => {
-                    self.field_idx = self
-                        .field_idx
-                        .checked_sub(1)
-                        .unwrap_or(ConfigField::ALL.len() - 1);
+                    let visible_count = self.visible_fields().len();
+                    if visible_count > 0 {
+                        self.field_idx = self
+                            .field_idx
+                            .checked_sub(1)
+                            .unwrap_or(visible_count - 1);
+                    }
                 }
                 KeyCode::Right | KeyCode::Char('l') => {
                     let action = self.compute_action(true);
@@ -1555,6 +1702,10 @@ fn render(f: &mut ratatui::Frame, state: &TuiState) {
         render_info_popup(f, area);
     }
 
+    if state.show_export_menu {
+        render_export_menu(f, area, state);
+    }
+
     if state.show_band_checklist {
         render_band_checklist(f, area, state);
     }
@@ -1628,13 +1779,15 @@ fn render_config_panel(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
         .map(|r| r.skipped_band_indices.len())
         .unwrap_or(0);
 
+    let visible_fields = state.visible_fields();
     let items: Vec<ListItem> = state
         .all_field_values()
         .into_iter()
         .enumerate()
         .map(|(i, (label, value, selected))| {
-            let is_transformer_field = ConfigField::ALL[i] == ConfigField::TransformerRatio;
-            let is_bands_field = ConfigField::ALL[i] == ConfigField::Bands;
+            let field = visible_fields.get(i).copied().unwrap_or(ConfigField::Mode);
+            let is_transformer_field = field == ConfigField::TransformerRatio;
+            let is_bands_field = field == ConfigField::Bands;
 
             // Annotate the Bands value when some bands were skipped.
             let display_value = if is_bands_field && skipped_count > 0 {
@@ -1981,9 +2134,11 @@ fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     if state.focus == Focus::Config
         && state.current_field() == ConfigField::TransformerRatio
         && !state.show_band_checklist
+        && !state.show_export_menu
         && state.export_preview.is_none()
         && !state.show_session_save
         && !state.show_session_picker
+        && !state.show_hybrid_split_input
     {
         let expl = crate::app::transformer_ratio_explanation(
             state.app.config.mode,
@@ -2004,9 +2159,11 @@ fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let text = hint_text(
         state.focus,
         state.show_band_checklist,
+        state.show_export_menu,
         state.export_preview.is_some(),
         state.show_session_save,
         state.show_session_picker,
+        state.show_info_popup,
     );
     let para = Paragraph::new(text).style(Style::default().add_modifier(Modifier::DIM));
     f.render_widget(para, area);
@@ -2015,15 +2172,23 @@ fn render_hints(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
 fn hint_text(
     focus: Focus,
     show_band_checklist: bool,
+    show_export_menu: bool,
     show_preview: bool,
     show_session_save: bool,
     show_session_picker: bool,
+    show_info_popup: bool,
 ) -> &'static str {
     if show_session_save {
         return " Type a name  Enter:save  Esc:cancel";
     }
     if show_session_picker {
         return " ↑↓/jk:move  Enter:load  d:delete  Esc/q:cancel";
+    }
+    if show_info_popup {
+        return " u:check releases  i/?/Esc:close";
+    }
+    if show_export_menu {
+        return " ↑↓/jk:move  Space:toggle  Enter:export selected  Esc/q:cancel";
     }
     if show_preview {
         return " ↑↓/jk:scroll  PgUp/Dn:page  Enter:write  Esc/q:cancel";
@@ -2034,10 +2199,10 @@ fn hint_text(
 
     match focus {
         Focus::Config => {
-            " ↑↓/jk:select  ←→/hl:change  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  N:nec  s:prefs  S:save-session  O:sessions  i:info  Tab:→results  q:quit"
+            " ↑↓/jk:select  ←→/hl:change  Enter:run/edit  r:run  a:advise  e:export menu  s:prefs  S:save-session  O:sessions  i:info  Tab:→results  q:quit"
         }
         Focus::Results => {
-            " ↑↓/jk:scroll  PgUp/Dn:page  [/]:band  Space:collapse  r:run  a:advise  e:csv  E:json  m:md  t:txt  y:yaml  H:html  N:nec  S:save-session  O:sessions  Tab:→config  q:quit"
+            " ↑↓/jk:scroll  PgUp/Dn:page  [/]:band  Space:collapse  r:run  a:advise  e:export menu  S:save-session  O:sessions  Tab:→config  q:quit"
         }
     }
 }
@@ -2080,6 +2245,56 @@ fn render_info_popup(f: &mut ratatui::Frame, area: Rect) {
     f.render_widget(para, popup_area);
 }
 
+fn render_export_menu(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
+    let popup_area = centered_rect(56, 54, area);
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title(" Export Formats ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
+        .split(inner);
+
+    let items: Vec<ListItem> = EXPORT_FORMATS
+        .iter()
+        .enumerate()
+        .map(|(i, format)| {
+            let checked = state.export_menu_checked.get(i).copied().unwrap_or(false);
+            let selected = i == state.export_menu_cursor;
+            let marker = if checked { "[x]" } else { "[ ]" };
+            let prefix = if selected { "► " } else { "  " };
+            let style = if selected {
+                Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Reset)
+            };
+            let line = Line::from(vec![Span::styled(
+                format!("{prefix}{marker} {}", format.as_str()),
+                style,
+            )]);
+            ListItem::new(line)
+        })
+        .collect();
+
+    f.render_widget(List::new(items), rows[0]);
+    f.render_widget(
+        Paragraph::new("Default: markdown + nec")
+            .style(Style::default().add_modifier(Modifier::DIM)),
+        rows[1],
+    );
+}
+
 fn info_popup_lines() -> Vec<Line<'static>> {
     vec![
         Line::from(format!("Version: {}", env!("CARGO_PKG_VERSION"))),
@@ -2093,10 +2308,72 @@ fn info_popup_lines() -> Vec<Line<'static>> {
         )),
         Line::from(""),
         Line::from(Span::styled(
-            "Press i, ?, or Esc to close.",
+            "Press u to check releases; i, ?, or Esc to close.",
             Style::default().fg(Color::DarkGray),
         )),
     ]
+}
+
+fn parse_version_triplet(version: &str) -> Option<(u32, u32, u32)> {
+    let v = version.trim().trim_start_matches('v');
+    let mut parts = v.split('.');
+    let major = parts.next()?.parse::<u32>().ok()?;
+    let minor = parts.next()?.parse::<u32>().ok()?;
+    let patch = parts.next()?.parse::<u32>().ok()?;
+    Some((major, minor, patch))
+}
+
+fn check_for_new_release() -> String {
+    let current = env!("CARGO_PKG_VERSION");
+    let current_triplet = match parse_version_triplet(current) {
+        Some(v) => v,
+        None => return format!("Current version '{current}' is not semver-like."),
+    };
+
+    let repo_git = if PROJECT_URL.ends_with(".git") {
+        PROJECT_URL.to_string()
+    } else {
+        format!("{PROJECT_URL}.git")
+    };
+
+    let output = match Command::new("git")
+        .arg("ls-remote")
+        .arg("--tags")
+        .arg("--refs")
+        .arg(&repo_git)
+        .output()
+    {
+        Ok(out) => out,
+        Err(err) => return format!("Release check failed: could not run git ({err})."),
+    };
+
+    if !output.status.success() {
+        return "Release check failed: git ls-remote did not complete successfully.".into();
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut newest: Option<((u32, u32, u32), String)> = None;
+    for line in stdout.lines() {
+        if let Some(tag_ref) = line.split_whitespace().nth(1) {
+            let tag = tag_ref.trim_start_matches("refs/tags/");
+            if let Some(ver) = parse_version_triplet(tag) {
+                match &newest {
+                    Some((best, _)) if ver <= *best => {}
+                    _ => newest = Some((ver, tag.to_string())),
+                }
+            }
+        }
+    }
+
+    let Some((latest_triplet, latest_tag)) = newest else {
+        return "Release check failed: no semver tags found on remote.".into();
+    };
+
+    if latest_triplet > current_triplet {
+        format!("New release available: {latest_tag} (current: v{current}).")
+    } else {
+        format!("Up to date: v{current} (latest: {latest_tag}).")
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2690,20 +2967,25 @@ mod tests {
         }
     }
 
+    fn set_visible_field_idx(state: &mut TuiState, field: ConfigField) {
+        state.field_idx = state
+            .visible_fields()
+            .iter()
+            .position(|f| *f == field)
+            .expect("requested visible field should exist");
+    }
+
     #[test]
     fn hint_text_for_config_focus_matches_documented_keybindings() {
-        let text = hint_text(Focus::Config, false, false, false, false);
-        assert!(text.contains("e:csv"));
-        assert!(text.contains("E:json"));
-        assert!(text.contains("m:md"));
-        assert!(text.contains("t:txt"));
+        let text = hint_text(Focus::Config, false, false, false, false, false, false);
+        assert!(text.contains("e:export menu"));
         assert!(text.contains("i:info"));
         assert!(text.contains("Tab:→results"));
     }
 
     #[test]
     fn hint_text_for_results_focus_mentions_scroll_and_tab_back() {
-        let text = hint_text(Focus::Results, false, false, false, false);
+        let text = hint_text(Focus::Results, false, false, false, false, false, false);
 
         assert!(text.contains("a:advise"));
         assert!(text.contains("↑↓/jk:scroll"));
@@ -2713,7 +2995,7 @@ mod tests {
 
     #[test]
     fn hint_text_for_band_checklist_matches_overlay_controls() {
-        let text = hint_text(Focus::Config, true, false, false, false);
+        let text = hint_text(Focus::Config, true, false, false, false, false, false);
 
         assert!(text.contains("Space:toggle"));
         assert!(text.contains("Enter:confirm"));
@@ -2734,7 +3016,7 @@ mod tests {
         assert!(lines.iter().any(|line| line.starts_with("Platform:")));
         assert!(lines
             .iter()
-            .any(|line| line.contains("Press i, ?, or Esc to close.")));
+            .any(|line| line.contains("Press u to check releases; i, ?, or Esc to close.")));
     }
 
     #[test]
@@ -2769,7 +3051,7 @@ mod tests {
         state.handle_key(press(KeyCode::Down));
         assert_eq!(state.field_idx, 1);
 
-        state.field_idx = ConfigField::ALL.len() - 1;
+        state.field_idx = state.visible_fields().len() - 1;
         state.handle_key(press(KeyCode::Down));
         assert_eq!(state.field_idx, 0);
     }
@@ -2780,7 +3062,7 @@ mod tests {
 
         state.handle_key(press(KeyCode::Up));
 
-        assert_eq!(state.field_idx, ConfigField::ALL.len() - 1);
+        assert_eq!(state.field_idx, state.visible_fields().len() - 1);
     }
 
     #[test]
@@ -2817,10 +3099,7 @@ mod tests {
     fn enter_on_custom_bands_opens_checklist_instead_of_running() {
         let mut state = TuiState::new(None);
         state.focus = Focus::Config;
-        state.field_idx = ConfigField::ALL
-            .iter()
-            .position(|field| *field == ConfigField::Bands)
-            .expect("Bands field should exist");
+        set_visible_field_idx(&mut state, ConfigField::Bands);
         state.band_preset_idx = state.band_presets.len() - 1;
         state.results_scroll = 7;
 
@@ -2834,10 +3113,7 @@ mod tests {
     fn enter_on_non_custom_field_runs_calculation_and_resets_scroll() {
         let mut state = TuiState::new(None);
         state.focus = Focus::Config;
-        state.field_idx = ConfigField::ALL
-            .iter()
-            .position(|field| *field == ConfigField::Mode)
-            .expect("Mode field should exist");
+        set_visible_field_idx(&mut state, ConfigField::Mode);
         state.results_scroll = 9;
 
         state.handle_key(press(KeyCode::Enter));
@@ -2851,10 +3127,7 @@ mod tests {
     fn enter_in_results_focus_runs_calculation_even_if_custom_bands_selected() {
         let mut state = TuiState::new(None);
         state.focus = Focus::Results;
-        state.field_idx = ConfigField::ALL
-            .iter()
-            .position(|field| *field == ConfigField::Bands)
-            .expect("Bands field should exist");
+        set_visible_field_idx(&mut state, ConfigField::Bands);
         state.band_preset_idx = state.band_presets.len() - 1;
         state.results_scroll = 6;
 
@@ -3090,10 +3363,7 @@ mod tests {
     #[test]
     fn band_preset_cycle_to_named_preset_returns_parsed_band_indices() {
         let mut state = TuiState::new(None);
-        state.field_idx = ConfigField::ALL
-            .iter()
-            .position(|field| *field == ConfigField::Bands)
-            .expect("Bands field should exist");
+        set_visible_field_idx(&mut state, ConfigField::Bands);
 
         let action = state.compute_action(true);
 
@@ -3155,10 +3425,7 @@ mod tests {
     #[test]
     fn band_preset_cycle_to_custom_reuses_last_confirmed_custom_indices() {
         let mut state = TuiState::new(None);
-        state.field_idx = ConfigField::ALL
-            .iter()
-            .position(|field| *field == ConfigField::Bands)
-            .expect("Bands field should exist");
+        set_visible_field_idx(&mut state, ConfigField::Bands);
         state.band_preset_idx = state.band_presets.len() - 2;
         state.custom_band_indices = vec![4, 6, 8];
 
@@ -3174,10 +3441,7 @@ mod tests {
     #[test]
     fn frequency_preset_cycle_forward_sets_single_frequency_list() {
         let mut state = TuiState::new(None);
-        state.field_idx = ConfigField::ALL
-            .iter()
-            .position(|field| *field == ConfigField::CustomFrequencies)
-            .expect("CustomFrequencies field should exist");
+        set_visible_field_idx(&mut state, ConfigField::CustomFrequencies);
 
         let action = state.compute_action(true);
 
@@ -3193,10 +3457,7 @@ mod tests {
     #[test]
     fn frequency_preset_cycle_backward_wraps_to_last_multi_frequency_set() {
         let mut state = TuiState::new(None);
-        state.field_idx = ConfigField::ALL
-            .iter()
-            .position(|field| *field == ConfigField::CustomFrequencies)
-            .expect("CustomFrequencies field should exist");
+        set_visible_field_idx(&mut state, ConfigField::CustomFrequencies);
 
         let action = state.compute_action(false);
 
@@ -3212,10 +3473,7 @@ mod tests {
     #[test]
     fn frequency_preset_use_bands_returns_empty_frequency_list() {
         let mut state = TuiState::new(None);
-        state.field_idx = ConfigField::ALL
-            .iter()
-            .position(|field| *field == ConfigField::CustomFrequencies)
-            .expect("CustomFrequencies field should exist");
+        set_visible_field_idx(&mut state, ConfigField::CustomFrequencies);
         state.freq_idx = 1;
 
         let action = state.compute_action(false);

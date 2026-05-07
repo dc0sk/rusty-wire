@@ -2,7 +2,7 @@
 project: rusty-wire
 doc: docs/CHANGELOG.md
 status: living
-last_updated: 2026-05-05
+last_updated: 2026-05-07
 ---
 
 # Changelog
@@ -11,16 +11,26 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+---
+
+## [2.21.0] - 2026-05-07
+
 ### Added
 - **Hybrid multi-section dipole baseline model**: new `hybrid-multi` antenna mode in app/CLI/TUI. Uses dipole-family feed assumptions with per-side planning splits of 40% / 35% / 25%, shown in per-band output and resonant-compromise guidance.
 - **Configurable hybrid section split** (`--hybrid-split s1,s2,s3`): three-value ratio replaces the hardcoded 40/35/25 default. Validated to be positive and sum to 1.0; propagated through CLI output, equivalent-command echo, session persistence (serde default for older sessions), TUI config field, and per-band display labels. TUI exposes four presets (40/35/25, 45/35/20, 50/30/20, 34/33/33) cycled with ←/→.
+- **TUI custom hybrid split entry**: pressing Enter on the `Hybrid Split` field opens a text-input overlay for any valid `s1,s2,s3` ratio beyond the named presets.
+- **TUI export format popup**: `e` now opens a checkbox list of export formats; Markdown and NEC are preselected by default and the popup closes after successful export.
+- **TUI release check in info dialog**: the info popup now supports a manual `u` action to check GitHub tags for newer releases.
 
 ### Changed
 - `AntennaModel` parsing and session persistence now include `hybrid-multi` aliases/tokens.
 - Per-band hybrid section-split label in `band_display_view` is now dynamic (e.g. `Section split (40/35/25)`) rather than hardcoded.
+- **TUI configuration panel** hides antenna-model-specific fields that are not relevant to the current model.
+- **Conductor diameter presets** now span 0.5 mm through 4.0 mm in 0.1 mm increments, and the UI shows cross-sectional area in `mm²` alongside diameter.
 
 ### Tests
 - 2 new unit tests: `parse_hybrid_split` accepts valid ratios; `parse_hybrid_split` rejects values that don't sum to 1.0.
+- Full test suite passes after TUI event/render updates.
 
 ---
 
