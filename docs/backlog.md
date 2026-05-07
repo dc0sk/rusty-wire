@@ -2,7 +2,7 @@
 project: rusty-wire
 doc: docs/backlog.md
 status: living
-last_updated: 2026-05-05
+last_updated: 2026-05-07
 ---
 
 # Backlog
