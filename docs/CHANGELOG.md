@@ -2,7 +2,7 @@
 project: rusty-wire
 doc: docs/CHANGELOG.md
 status: living
-last_updated: 2026-05-07
+last_updated: 2026-05-25
 ---
 
 # Changelog
@@ -10,6 +10,14 @@ last_updated: 2026-05-07
 All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
+
+---
+
+## [2.22.2] - 2026-05-25
+
+### Fixed
+- **Windows release MSI for x86_64**: corrected WiX x64 authoring (`Package Platform="x64"`, 64-bit components, and `ProgramFiles64Folder`) so the Release Packaging workflow produces the Windows installer artifact successfully.
+- **Documentation CI parser collision**: removed body-level bare `---` separators in `docs/project-blueprint.md` that could be misread as additional frontmatter blocks by validation scripts.
 
 ---
 

@@ -1229,7 +1229,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "rusty-wire"
-version = "2.22.1"
+version = "2.22.2"
 dependencies = [
  "clap",
  "crossterm 0.28.1",
