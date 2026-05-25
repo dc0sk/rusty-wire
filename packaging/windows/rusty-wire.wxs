@@ -25,6 +25,7 @@
     <Package InstallerVersion="200"
              Compressed="yes"
              InstallScope="perMachine"
+             Platform="x64"
              Description="rusty-wire - antenna modelling and band planning tool"
              Manufacturer="dc0sk" />
 
@@ -42,14 +43,14 @@
     <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
 
       <!-- Main executable -->
-      <Component Id="MainExecutable" Guid="*">
+      <Component Id="MainExecutable" Guid="*" Win64="yes">
         <File Id="rusty_wire_exe"
               Source="$(var.BinaryPath)"
               KeyPath="yes" />
       </Component>
 
       <!-- Plain-text manual -->
-      <Component Id="Manual" Guid="*">
+      <Component Id="Manual" Guid="*" Win64="yes">
         <File Id="rusty_wire_manual"
               Source="$(var.ManualPath)"
               Name="rusty-wire.1.txt"
@@ -57,7 +58,7 @@
       </Component>
 
       <!-- PATH entry (system-wide) -->
-      <Component Id="PathEntry" Guid="7D4B9E2A-F130-4C85-B6D3-8A5E021F3C47">
+      <Component Id="PathEntry" Guid="7D4B9E2A-F130-4C85-B6D3-8A5E021F3C47" Win64="yes">
         <RegistryValue Root="HKLM"
                        Key="Software\rusty-wire"
                        Name="InstallDir"
