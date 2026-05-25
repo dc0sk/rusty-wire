@@ -11,6 +11,9 @@ All notable changes to Rusty Wire are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Windows AMD64 MSI release artifact**: release workflow now publishes `rusty-wire-<version>-amd64-windows.msi` in addition to `rusty-wire-<version>-x86_64-windows.msi` (same 64-bit installer, dual naming for compatibility).
+
 ---
 
 ## [2.22.0] - 2026-05-07
