@@ -2,7 +2,7 @@
 project: rusty-wire
 doc: docs/releasenotes.md
 status: living
-last_updated: 2026-04-30
+last_updated: 2026-05-25
 ---
 
 # Release Notes
@@ -23,6 +23,21 @@ The next release focuses on **output format stability** and **testing infrastruc
 - NEC reference sweeps deferred (GAP-011)
 
 **Estimated Q3 2026.**
+
+---
+
+## [2.22.2] — May 25, 2026
+
+**Windows MSI Packaging Fix Release**
+
+### Highlights
+
+- Restores Windows installer artifact generation for x86_64 release tags by fixing WiX 64-bit component authoring.
+- Includes documentation-validation hardening to avoid frontmatter parser collisions in the project blueprint document.
+
+### Breaking Changes
+
+- None.
 
 ---
 
