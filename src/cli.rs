@@ -22,7 +22,9 @@ use crate::calculations::{
     MIN_CONDUCTOR_DIAMETER_MM,
 };
 use crate::export::{default_advise_output_name, export_advise};
-use crate::export::{default_output_name, export_results, export_results_nec, validate_export_path};
+use crate::export::{
+    default_output_name, export_results, export_results_nec, validate_export_path,
+};
 use crate::fnec_validation::{DEFAULT_FNEC_PASS_MAX_MISMATCH, DEFAULT_FNEC_REJECT_MIN_MISMATCH};
 use clap::{CommandFactory, FromArgMatches, Parser};
 use std::io::{self, BufRead, Write};
@@ -1107,10 +1109,7 @@ fn print_resolved_run(
         }
     );
     println!("  Antenna: {}", antenna_summary(config.antenna_model));
-    if matches!(
-        config.antenna_model,
-        Some(AntennaModel::HybridMultiSection)
-    ) {
+    if matches!(config.antenna_model, Some(AntennaModel::HybridMultiSection)) {
         println!(
             "  Hybrid split: {:.2},{:.2},{:.2}",
             config.hybrid_section_split[0],
@@ -1373,9 +1372,7 @@ fn prompt_antenna_model_with_default(
         Some(AntennaModel::InvertedVDipole) => "Select antenna model (d/e/l/v/o/t/h) [v]: ",
         Some(AntennaModel::OffCenterFedDipole) => "Select antenna model (d/e/l/v/o/t/h) [o]: ",
         Some(AntennaModel::TrapDipole) => "Select antenna model (d/e/l/v/o/t/h) [t]: ",
-        Some(AntennaModel::HybridMultiSection) => {
-            "Select antenna model (d/e/l/v/o/t/h) [h]: "
-        }
+        Some(AntennaModel::HybridMultiSection) => "Select antenna model (d/e/l/v/o/t/h) [h]: ",
         _ => "Select antenna model (d/e/l/v/o/t/h) [d]: ",
     };
     prompt(output, prompt_str);
@@ -3099,8 +3096,7 @@ mod tests {
         // Input sequence: region=1(\n), option=2, bands=20m, mode=2(non-resonant),
         //   model=\n, vf=\n, height=\n, ground=\n, conductor=\n, transformer=\n,
         //   wire_min=9\n, wire_max=27\n, units=\n, export=none, exit=6
-        let input_bytes =
-            b"\n2\n20m\n2\n\n\n\n\n\n\n9\n27\n\nnone\n6\n";
+        let input_bytes = b"\n2\n20m\n2\n\n\n\n\n\n\n9\n27\n\nnone\n6\n";
         let mut input = Cursor::new(input_bytes.to_vec());
         let mut output = Vec::new();
 
