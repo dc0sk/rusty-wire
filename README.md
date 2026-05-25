@@ -100,7 +100,7 @@ Download the latest release from the [GitHub Releases page](https://github.com/d
 | Linux (Debian/Ubuntu) | `rusty-wire_<ver>_amd64.deb` / `_arm64.deb` | `sudo dpkg -i rusty-wire_*.deb` |
 | macOS x86\_64 | `rusty-wire-<ver>-x86_64-macos.pkg` | Double-click or `sudo installer -pkg ... -target /` |
 | macOS aarch64 | `rusty-wire-<ver>-aarch64-macos.pkg` | Apple Silicon |
-| Windows x86\_64 / AMD64 | `rusty-wire-<ver>-x86_64-windows.msi` / `rusty-wire-<ver>-amd64-windows.msi` | Double-click — installs to `Program Files` and adds to PATH |
+| Windows x86\_64 | `rusty-wire-<ver>-x86_64-windows.msi` | Double-click — installs to `Program Files` and adds to PATH |
 
 The macOS `.pkg` and Linux `.deb` installers include the man page (`man rusty-wire` works after install).
 

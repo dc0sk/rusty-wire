@@ -61,6 +61,5 @@ cargo test
 - Verify workflow-generated assets are attached to the GitHub release:
   - Linux tarballs: `rusty-wire-<version>-x86_64-linux.tar.gz`, `rusty-wire-<version>-aarch64-linux.tar.gz`
   - macOS bundles: `rusty-wire-<version>-x86_64-macos.tar.gz`, `rusty-wire-<version>-aarch64-macos.tar.gz`
-  - Windows MSI: `rusty-wire-<version>-x86_64-windows.msi`, `rusty-wire-<version>-amd64-windows.msi`
   - Debian packages: `target/debian/*.deb` uploads for both release architectures
 - Publish GitHub release notes from `docs/CHANGELOG.md` highlights.

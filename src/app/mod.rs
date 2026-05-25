@@ -2581,10 +2581,7 @@ pub fn band_display_view(
             }
             Some(AntennaModel::HybridMultiSection) => {
                 lines.push(format!("  Hybrid total: {:.2} m", c.corrected_half_wave_m));
-                lines.push(format!(
-                    "  Per side (feedpoint to tip): {:.2} m",
-                    hybrid_leg_m
-                ));
+                lines.push(format!("  Per side (feedpoint to tip): {:.2} m", hybrid_leg_m));
                 lines.push(format!(
                     "  Section split ({}): {:.2} m / {:.2} m / {:.2} m",
                     split_label, hybrid_s1_m, hybrid_s2_m, hybrid_s3_m
@@ -2721,10 +2718,7 @@ pub fn band_display_view(
                 ));
             }
             Some(AntennaModel::HybridMultiSection) => {
-                lines.push(format!(
-                    "  Hybrid total: {:.2} ft",
-                    c.corrected_half_wave_ft
-                ));
+                lines.push(format!("  Hybrid total: {:.2} ft", c.corrected_half_wave_ft));
                 lines.push(format!(
                     "  Per side (feedpoint to tip): {:.2} ft",
                     hybrid_leg_ft
@@ -2791,10 +2785,7 @@ pub fn band_display_view(
                     "  Trap dipole each element: {:.2} ft",
                     c.trap_dipole_leg_ft
                 ));
-                lines.push(format!(
-                    "  Hybrid total: {:.2} ft",
-                    c.corrected_half_wave_ft
-                ));
+                lines.push(format!("  Hybrid total: {:.2} ft", c.corrected_half_wave_ft));
                 lines.push(format!(
                     "  Section split per side ({}): {:.2} ft / {:.2} ft / {:.2} ft",
                     split_label, hybrid_s1_ft, hybrid_s2_ft, hybrid_s3_ft
@@ -4071,18 +4062,14 @@ mod tests {
         let results = run_calculation(config);
         let doc = results_display_document(&results);
 
-        assert!(
-            doc.transformer_explanation.ratio == TransformerRatio::R1To56
-                || doc.transformer_explanation.ratio == TransformerRatio::R1To49,
-            "EFHW explanation should recommend a high step-up ratio"
-        );
+        assert!(doc.transformer_explanation.ratio == TransformerRatio::R1To56
+            || doc.transformer_explanation.ratio == TransformerRatio::R1To49,
+            "EFHW explanation should recommend a high step-up ratio");
         assert!(!doc.transformer_explanation.reason.is_empty());
         // Reason text should mention EFHW context
-        assert!(
-            doc.transformer_explanation.reason.contains("EFHW")
-                || doc.transformer_explanation.reason.contains("2500")
-                || doc.transformer_explanation.reason.contains("transformer")
-        );
+        assert!(doc.transformer_explanation.reason.contains("EFHW")
+            || doc.transformer_explanation.reason.contains("2500")
+            || doc.transformer_explanation.reason.contains("transformer"));
     }
 
     #[test]
@@ -4569,21 +4556,12 @@ mod app_error_tests {
         };
         let results = run_calculation(config);
         let doc = results_display_document(&results);
-        let mismatch = doc
-            .transformer_mismatch_warning
-            .as_ref()
-            .expect("should be Some");
+        let mismatch = doc.transformer_mismatch_warning.as_ref().expect("should be Some");
         assert_eq!(mismatch.configured, TransformerRatio::R1To1);
         assert_eq!(mismatch.recommended, TransformerRatio::R1To56);
         let msg = mismatch.message();
-        assert!(
-            msg.contains("1:1"),
-            "message should mention configured ratio"
-        );
-        assert!(
-            msg.contains("1:56"),
-            "message should mention recommended ratio"
-        );
+        assert!(msg.contains("1:1"), "message should mention configured ratio");
+        assert!(msg.contains("1:56"), "message should mention recommended ratio");
     }
 
     #[test]

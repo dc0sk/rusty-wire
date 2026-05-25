@@ -234,8 +234,7 @@ jobs:
           $version    = "${{ needs.create-release.outputs.version }}"
           $binaryPath = "target\release\rusty-wire.exe"
           $manualPath = "target\man\rusty-wire.1.txt"
-          $msiX8664   = "rusty-wire-${version}-x86_64-windows.msi"
-          $msiAmd64   = "rusty-wire-${version}-amd64-windows.msi"
+          $msiName    = "rusty-wire-${version}-x86_64-windows.msi"
           $wixBin     = "${env:WIX}bin"
 
           & "${wixBin}\candle.exe" `
@@ -247,18 +246,13 @@ jobs:
 
           & "${wixBin}\light.exe" `
             rusty-wire.wixobj `
-            -o "${msiX8664}"
-
-          # amd64 is an alias of x86_64 on Windows; publish both names for compatibility
-          Copy-Item -Path "${msiX8664}" -Destination "${msiAmd64}" -Force
+            -o "${msiName}"
 
       - name: Upload MSI to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: |
-            rusty-wire-${{ needs.create-release.outputs.version }}-x86_64-windows.msi
-            rusty-wire-${{ needs.create-release.outputs.version }}-amd64-windows.msi
+          files: "rusty-wire-${{ needs.create-release.outputs.version }}-x86_64-windows.msi"
 
   # ── 2. Build and upload a Debian package for each target arch ───────────────
   release-deb:

@@ -1,7 +1,7 @@
 ---
 project: rusty-wire
 doc: docs/nec-requirements.md
-status: deprecated
+status: deferred
 last_updated: 2026-04-30
 ---
 

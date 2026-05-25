@@ -81,8 +81,12 @@ const VF_PRESETS: &[f64] = &[0.50, 0.60, 0.66, 0.70, 0.80, 0.85, 0.90, 0.95, 0.9
 const WIRE_MIN_PRESETS: &[f64] = &[5.0, 8.0, 10.0, 12.0, 15.0, 20.0];
 const WIRE_MAX_PRESETS: &[f64] = &[20.0, 25.0, 30.0, 35.0, 40.0, 50.0, 60.0, 80.0, 100.0];
 const CONDUCTOR_DIAMETER_PRESETS: &[f64] = &[
-    0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3,
-    2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.0,
+    0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+    1.1, 1.2, 1.3, 1.4, 1.5, 1.6,
+    1.7, 1.8, 1.9, 2.0, 2.1, 2.2,
+    2.3, 2.4, 2.5, 2.6, 2.7, 2.8,
+    2.9, 3.0, 3.1, 3.2, 3.3, 3.4,
+    3.5, 3.6, 3.7, 3.8, 3.9, 4.0,
 ];
 const GROUND_CLASS_PRESETS: &[GroundClass] =
     &[GroundClass::Poor, GroundClass::Average, GroundClass::Good];
@@ -653,8 +657,7 @@ impl TuiState {
             }
             ConfigField::HybridSplit => {
                 if forward {
-                    self.hybrid_split_idx =
-                        (self.hybrid_split_idx + 1) % HYBRID_SPLIT_PRESETS.len();
+                    self.hybrid_split_idx = (self.hybrid_split_idx + 1) % HYBRID_SPLIT_PRESETS.len();
                 } else {
                     self.hybrid_split_idx = self
                         .hybrid_split_idx
@@ -976,13 +979,8 @@ impl TuiState {
                 format
             };
             let filename = default_advise_output_name(write_format);
-            export_advise(
-                write_format,
-                filename,
-                view.assumed_feedpoint_ohm,
-                &view.candidates,
-            )
-            .map_err(|e| e.to_string())?;
+            export_advise(write_format, filename, view.assumed_feedpoint_ohm, &view.candidates)
+                .map_err(|e| e.to_string())?;
             Ok(filename.to_string())
         } else {
             let Some(ref results) = self.app.results else {
@@ -1340,9 +1338,8 @@ impl TuiState {
                             ));
                         }
                     } else {
-                        self.export_status = Some(
-                            "Enter exactly 3 comma-separated values, e.g. 0.4,0.35,0.25".into(),
-                        );
+                        self.export_status =
+                            Some("Enter exactly 3 comma-separated values, e.g. 0.4,0.35,0.25".into());
                     }
                 }
                 KeyCode::Backspace => {
@@ -1620,7 +1617,10 @@ impl TuiState {
                 KeyCode::Up | KeyCode::Char('k') => {
                     let visible_count = self.visible_fields().len();
                     if visible_count > 0 {
-                        self.field_idx = self.field_idx.checked_sub(1).unwrap_or(visible_count - 1);
+                        self.field_idx = self
+                            .field_idx
+                            .checked_sub(1)
+                            .unwrap_or(visible_count - 1);
                     }
                 }
                 KeyCode::Right | KeyCode::Char('l') => {
@@ -2260,7 +2260,10 @@ fn render_export_menu(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
-        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ])
         .split(inner);
 
     let items: Vec<ListItem> = EXPORT_FORMATS
@@ -2272,9 +2275,7 @@ fn render_export_menu(f: &mut ratatui::Frame, area: Rect, state: &TuiState) {
             let marker = if checked { "[x]" } else { "[ ]" };
             let prefix = if selected { "► " } else { "  " };
             let style = if selected {
-                Style::default()
-                    .fg(Color::Blue)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::Reset)
             };
@@ -2442,8 +2443,8 @@ fn render_session_name_input(f: &mut ratatui::Frame, area: Rect, state: &TuiStat
     let input = Paragraph::new(input_text).style(Style::default().fg(Color::Reset));
     f.render_widget(input, rows[1]);
 
-    let hint = Paragraph::new("Enter: save   Esc: cancel")
-        .style(Style::default().add_modifier(Modifier::DIM));
+    let hint =
+        Paragraph::new("Enter: save   Esc: cancel").style(Style::default().add_modifier(Modifier::DIM));
     f.render_widget(hint, rows[2]);
 }
 

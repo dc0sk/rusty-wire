@@ -94,15 +94,24 @@ fn deck_for_band(config: &AppConfig, calc: &WireCalculation, version: &str) -> S
     // GN – ground card
     let (sigma, epsr) = ground_params(config.ground_class);
     // type 2 = finite ground (Sommerfeld-Norton, most accurate in NEC2)
-    out.push_str(&format!("GN  2  0  0  0  {:8.4}  {:8.6}\n", epsr, sigma));
+    out.push_str(&format!(
+        "GN  2  0  0  0  {:8.4}  {:8.6}\n",
+        epsr, sigma
+    ));
 
     // EX – excitation: voltage source at feed segment
-    let feed_seg = if center_fed { segs.div_ceil(2) } else { 1 };
+    let feed_seg = if center_fed { (segs + 1) / 2 } else { 1 };
     // EX 0 = voltage source; tag=1, segment=feed_seg, real=1 V, imag=0
-    out.push_str(&format!("EX  0  1 {:3}  0  1.0  0.0\n", feed_seg));
+    out.push_str(&format!(
+        "EX  0  1 {:3}  0  1.0  0.0\n",
+        feed_seg
+    ));
 
     // FR – frequency card (single frequency)
-    out.push_str(&format!("FR  0  1  0  0  {:10.6}  0.0\n", freq_mhz));
+    out.push_str(&format!(
+        "FR  0  1  0  0  {:10.6}  0.0\n",
+        freq_mhz
+    ));
 
     // RP – radiation pattern: azimuth sweep at 10° elevation, 1° step
     // RP 0 = normal mode; 37 theta × 72 phi points at 5° increments
@@ -116,7 +125,11 @@ fn deck_for_band(config: &AppConfig, calc: &WireCalculation, version: &str) -> S
 
 /// Generate a full NEC2 export string: one deck per band, separated by a
 /// comment banner.  `version` should be `env!("CARGO_PKG_VERSION")`.
-pub fn to_nec(calculations: &[WireCalculation], config: &AppConfig, version: &str) -> String {
+pub fn to_nec(
+    calculations: &[WireCalculation],
+    config: &AppConfig,
+    version: &str,
+) -> String {
     // Warn about models where NEC2 deck is approximate
     let mut decks = String::new();
     for calc in calculations {
@@ -241,7 +254,10 @@ mod tests {
     #[test]
     fn nec_multi_band_output() {
         let config = base_config();
-        let calcs = vec![mock_calc("40m", 7.1, 20.18), mock_calc("20m", 14.2, 10.09)];
+        let calcs = vec![
+            mock_calc("40m", 7.1, 20.18),
+            mock_calc("20m", 14.2, 10.09),
+        ];
         let out = to_nec(&calcs, &config, "2.17.1");
         assert_eq!(out.matches("EN\n").count(), 2, "expected two EN cards");
     }
