@@ -9,7 +9,7 @@ last_updated: 2026-04-30
 
 A project-agnostic guide for establishing well-structured, documentation-first software projects with sophisticated requirements engineering, phased roadmap planning, tolerance-enforced testing, and disciplined AI-assisted development workflows.
 
----
+***
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ A project-agnostic guide for establishing well-structured, documentation-first s
 14. [Contract Rules for AI Agents](#14-contract-rules-for-ai-agents)
 15. [Efficient Prompting Guide for Users](#15-efficient-prompting-guide-for-users)
 
----
+***
 
 ## 1. Principles
 
@@ -47,7 +47,7 @@ These principles are invariants. Every section of this guide flows from them.
 
 **No tolerance creep.** When a behavioral contract is relaxed, that change is treated as a breaking change, documented explicitly, and reviewed deliberately. Tolerance loosening is never a silent fix for a failing test.
 
----
+***
 
 ## 2. Project Structure
 
@@ -77,7 +77,7 @@ project-root/
 - **Golden fixtures are version-controlled.** Test inputs and reference outputs live in the repository, not in external storage.
 - **Secrets are never committed.** Environment-specific configuration uses gitignored env files with a tracked `.example` counterpart.
 
----
+***
 
 ## 3. Documentation Architecture
 
@@ -86,12 +86,12 @@ project-root/
 Every document in `docs/` carries YAML frontmatter:
 
 ```yaml
----
+---  # opening marker
 project: <project-name>
 doc: docs/<filename>.md
 status: living | completed | deprecated
 last_updated: YYYY-MM-DD
----
+---  # closing marker
 ```
 
 - `status: living` — actively maintained; expected to change.
@@ -132,7 +132,7 @@ Optional but recommended:
 - **Version-bump check**: if `version` in project manifest changed, verify changelog and releasenotes were also modified.
 - **Last-updated stamping**: auto-stamp on PR for changed docs (does not block merge; informational).
 
----
+***
 
 ## 4. Requirements Engineering
 
@@ -218,7 +218,7 @@ Maintain a cross-reference between requirements and their tests. The canonical f
 
 Every covered row must have a test that would fail if the requirement were violated. Every uncovered row must have an open gap entry.
 
----
+***
 
 ## 5. Roadmap Planning
 
@@ -286,7 +286,7 @@ Express timelines as quarters (Q1 2027), not as specific dates, unless a hard ex
 
 Review and update projected phases at each phase completion milestone, not continuously.
 
----
+***
 
 ## 6. Backlog Management
 
@@ -314,7 +314,7 @@ The backlog is a flat, running list of work items. It is not a project managemen
 3. Backlog items do not carry due dates. Delivery order is determined by the roadmap phase.
 4. The backlog is not the source of truth for scope — `docs/requirements.md` is. The backlog operationalizes requirements into discrete work items.
 
----
+***
 
 ## 7. Versioning Scheme
 
@@ -360,7 +360,7 @@ When incrementing the version:
 
 Define and document the minimum version of the language runtime, compiler, or interpreter required to build and use the project. Dropping this version is a breaking change.
 
----
+***
 
 ## 8. Target Definitions & Compatibility Contracts
 
@@ -399,7 +399,7 @@ For each external baseline against which parity is claimed:
 - Define the authoritative source for reference outputs (which version of which tool generated the golden values).
 - Track divergences as parity gaps (§5.4).
 
----
+***
 
 ## 9. Testing Concept
 
@@ -496,7 +496,7 @@ For any component that accepts external input (parsers, decoders, format readers
 - Fuzz results are not CI-gated by default but are run in a nightly or scheduled pipeline.
 - No test is silenced with `#[ignore]`, `skip`, or equivalent without an open gap entry in `docs/backlog.md`.
 
----
+***
 
 ## 10. Git Hooks
 
@@ -548,7 +548,7 @@ set -euo pipefail
 - Never bypass hooks with `--no-verify` unless a documented emergency procedure explicitly permits it.
 - If a hook is unreliable (flaky network, environment-specific), fix the hook; do not bypass it.
 
----
+***
 
 ## 11. CI/CD Workflows
 
@@ -580,7 +580,7 @@ These CI workflows gate every PR to main:
 - Workflow files are reviewed in PRs like code; do not modify CI configuration without review.
 - Every workflow step that can fail produces an artifact (log file, report CSV, diff) that is uploaded for postmortem.
 
----
+***
 
 ## 12. Release & Packaging
 
@@ -645,7 +645,7 @@ Tagging a release triggers:
 - Breaking changes are prefixed `**Breaking**:`.
 - Entries reference requirement IDs where applicable: `(FR-003)`.
 
----
+***
 
 ## 13. Development Workflow
 
@@ -691,7 +691,7 @@ The subject line must complete the sentence "If applied, this commit will …".
 - PRs that only touch `docs/` are valid and encouraged for keeping documentation current.
 - Reviewers check documentation consistency, not just code correctness.
 
----
+***
 
 ## 14. Contract Rules for AI Agents
 
@@ -768,7 +768,7 @@ An AI agent creates commits that:
 
 An AI agent does not push to remote, create PRs, or open issues unless explicitly instructed.
 
----
+***
 
 ## 15. Efficient Prompting Guide for Users
 
@@ -869,6 +869,6 @@ The agent follows §14 conservatively by default. It will not:
 
 If you want any of these, say so explicitly. The agent will confirm before acting.
 
----
+***
 
 *This document is a living blueprint. Update it when you discover patterns that improve project quality or when a section proves insufficient for actual project needs. The goal is not process for its own sake — every rule here exists because its absence creates measurable quality problems.*
