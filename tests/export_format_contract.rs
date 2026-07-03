@@ -447,14 +447,26 @@ fn json_export_numeric_precision() {
         "frequency should be numeric value"
     );
 
-    // Check for typical wire length patterns with 2 decimal places
-    let has_typical_length_format = content.contains(".00,")
-        || content.contains(".25,")
-        || content.contains(".50,")
-        || content.contains(".75,");
-    assert!(
-        has_typical_length_format,
-        "should have numeric wire lengths with decimal precision"
+    // Verify a wire-length field specifically (not just any number) is formatted
+    // to exactly 2 decimal places, e.g. "half_wave_m": 20.09.
+    let field = "\"half_wave_m\":";
+    let start = content
+        .find(field)
+        .expect("json should contain a half_wave_m field")
+        + field.len();
+    let value_tok = content[start..]
+        .trim_start()
+        .split([',', '\n', '}'])
+        .next()
+        .expect("half_wave_m should have a value")
+        .trim();
+    let decimals = value_tok
+        .split_once('.')
+        .map(|(_, frac)| frac.len())
+        .unwrap_or(0);
+    assert_eq!(
+        decimals, 2,
+        "half_wave_m ({value_tok}) should be formatted to exactly 2 decimal places"
     );
 }
 

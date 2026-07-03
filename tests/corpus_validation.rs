@@ -172,10 +172,10 @@ fn corpus_resonant_dipole_40m_nec() {
     let nec_z_im = -69.28_f64; // Imaginary part (Ω) — capacitive; see notes in nec-requirements.md
 
     // Sanity checks on rusty-wire's resonant dipole length
-    // At 7.1 MHz: λ/2 ≈ 21.1 m; with velocity factor ~0.95 → ~20.1 m
+    // At 7.1 MHz: free-space λ/2 ≈ 21.1 m; the 468/f bare-wire rule ≈ 20.09 m
     assert!(
-        (19.0..=21.5).contains(&rw_dipole_len),
-        "resonant dipole length {rw_dipole_len} m should be near 20 m (λ/2 at 7.1 MHz)"
+        (19.5..=20.6).contains(&rw_dipole_len),
+        "resonant dipole length {rw_dipole_len} m should be near 20.1 m (468/f at 7.1 MHz)"
     );
 
     // Monotonicity check: dipole length increases with decreasing frequency
@@ -253,11 +253,11 @@ fn corpus_nec_dipole_10m_good_ground() {
         .and_then(|s| s.parse().ok())
         .expect("failed to parse dipole length");
 
-    // NEC reference: dipole at 10m AGL, good soil — same wire length (20.07 m) as free-space
+    // NEC reference: dipole at 10m AGL, good soil — same wire length (~20.07 m) as free-space
     // case; ground effects change impedance but not the recommended cut length.
-    // rusty-wire length should remain near λ/2 × 0.95 ≈ 20.1 m
-    check_tolerance(rw_len, 19.09, 0.02, 0.5)
-        .expect("dipole length should be within 2% of 19.09 m (λ/2 at 7.1 MHz, 2mm wire)");
+    // rusty-wire (bare wire, VF=1.0) = 468/f ≈ 20.09 m, matching the corpus decks.
+    check_tolerance(rw_len, 20.09, 0.02, 0.5)
+        .expect("dipole length should be within 2% of 20.09 m (468/f at 7.1 MHz, 2mm bare wire)");
 
     println!("Corpus case NEC dipole-10m-ground-good:");
     println!("  rusty-wire length = {rw_len:.2} m");
@@ -306,7 +306,7 @@ fn corpus_nec_dipole_7m_good_ground() {
         .and_then(|s| s.parse().ok())
         .expect("failed to parse dipole length");
 
-    check_tolerance(rw_len, 19.09, 0.02, 0.5)
+    check_tolerance(rw_len, 20.09, 0.02, 0.5)
         .expect("dipole length at 7m AGL should still be within 2% of resonant length");
 
     println!("Corpus case NEC dipole-7m-ground-good:");
@@ -356,7 +356,7 @@ fn corpus_nec_dipole_12m_good_ground() {
         .and_then(|s| s.parse().ok())
         .expect("failed to parse dipole length");
 
-    check_tolerance(rw_len, 19.09, 0.02, 0.5)
+    check_tolerance(rw_len, 20.09, 0.02, 0.5)
         .expect("dipole length at 12m AGL should be within 2% of resonant length");
 
     println!("Corpus case NEC dipole-12m-ground-good:");
@@ -408,8 +408,8 @@ fn corpus_nec_efhw_40m() {
         .and_then(|s| s.parse().ok())
         .expect("failed to parse EFHW length");
 
-    // NEC deck uses 20.07m (λ/2 × 0.95 VF). rusty-wire recommends ~19.99m (slightly
-    // different VF coefficient). Tolerance: ±2% relative or ±0.5m absolute.
+    // NEC deck uses ~20.07m; rusty-wire (bare wire, 468/f) recommends ~20.09m for the
+    // EFHW half-wave element. Tolerance: keep a wide sanity band around 20 m.
     assert!(
         (18.0..=22.0).contains(&rw_len),
         "EFHW length {rw_len:.2} m should be near 20 m (λ/2 at 7.1 MHz)"
@@ -837,7 +837,7 @@ fn corpus_non_resonant_multi_band_40m_20m() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Extract half-wave lengths from the two band sections.
-    // Pattern: "  Half-wave: 19.54 m (base: ...)"
+    // Pattern: "  Half-wave: 20.64 m (base: 20.09 m)"  (displayed = non-resonant nudge)
     let half_wave_lengths: Vec<f64> = stdout
         .lines()
         .filter(|l| l.trim_start().starts_with("Half-wave:"))
@@ -881,15 +881,15 @@ fn corpus_non_resonant_multi_band_40m_20m() {
          got 40m={hw_40m:.2} m, 20m={hw_20m:.2} m"
     );
 
-    // Tolerance checks against expected model values
-    check_tolerance(hw_40m, 19.54, 0.03, 0.20)
+    // Tolerance checks against expected model values (bare wire, VF=1.0)
+    check_tolerance(hw_40m, 20.64, 0.03, 0.20)
         .expect("40m half-wave tolerance breach (GAP-010, non-resonant multi-band)");
-    check_tolerance(hw_20m, 9.79, 0.03, 0.20)
+    check_tolerance(hw_20m, 10.34, 0.03, 0.20)
         .expect("20m half-wave tolerance breach (GAP-010, non-resonant multi-band)");
 
     println!("Corpus case PASSED (non-resonant 40m+20m multi-band)");
-    println!("  40m half-wave = {hw_40m:.2} m  (ref 19.54 m)");
-    println!("  20m half-wave = {hw_20m:.2} m  (ref  9.79 m)");
+    println!("  40m half-wave = {hw_40m:.2} m  (ref 20.64 m)");
+    println!("  20m half-wave = {hw_20m:.2} m  (ref 10.34 m)");
     println!("  ratio         = {ratio:.3}  (expected ≈ 2.0)");
 }
 

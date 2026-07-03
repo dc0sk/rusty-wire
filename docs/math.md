@@ -23,6 +23,17 @@ $$
 
 with $f$ in Hz and $c \approx 299{,}792{,}458\ \mathrm{m/s}$.
 
+**Velocity-factor convention (important).** The metric coefficients below are the
+classic imperial handbook rules (468/936/234/1005 ft) expressed in meters. These
+rules *already include* the ~0.95 bare-wire end-effect shortening relative to the
+free-space half/quarter/full wavelength — e.g. $142.65/f \approx 0.9516 \cdot (c/2f)$.
+Therefore $VF$ here is **not** the end-effect factor; it is an *additional*
+multiplier for insulated wire and defaults to **$VF = 1.0$ (bare wire)**. Typical
+insulated wire uses $VF \approx 0.90\text{–}0.95$. Do **not** set $VF = 0.95$ for
+bare wire — that double-counts the end effect and yields lengths ~5 % short
+(a 40 m dipole would come out ~19.1 m and resonate above the band). At $VF = 1.0$,
+$142.65/7.1 \approx 20.1$ m, matching the NEC reference decks in `corpus/`.
+
 Practical ham formulas (with $f_{\mathrm{MHz}}$ in MHz, lengths in meters):
 
 $$
@@ -112,8 +123,13 @@ $$
 Rusty Wire currently applies a bounded logarithmic correction for non-1:1 transformer selections:
 
 $$
-r = \max\left(0.01,\frac{Z_t}{Z_{\mathrm{ref}}}\right),\quad Z_{\mathrm{ref}}=73\ \Omega
+r = \max\left(0.01,\frac{Z_t}{Z_{\mathrm{ref}}}\right)
 $$
+
+where $Z_{\mathrm{ref}}$ is the **NEC-calibrated** nominal feedpoint resistance for
+the current height/ground (`nec_calibrated_dipole_r`, ~45–77 Ω), *not* a fixed
+73 Ω. At the default 1:1 ratio this correction is a no-op, so it does not affect
+default resonant lengths.
 
 $$
 C = \mathrm{clamp}\left(1 + 0.03\log_{10}(r),\ 0.85,\ 1.15\right)
@@ -247,6 +263,20 @@ The template calibration CSV in [nec_conductor_reference.csv](nec-calibration.md
 For mission-critical designs, use Rusty Wire results as initial conditions and validate with NEC simulation and on-air/instrument measurements.
 
 For the practical calibration workflow (data format and fitting script), see [nec-calibration.md](nec-calibration.md).
+
+## 10) Trap Dipole Wire Budget (Estimate Only)
+
+The trap-dipole total is a coarse whole-wire *budget* estimate:
+
+$$
+L_{\mathrm{trap},\mathrm{m}} = \frac{137.16}{f_{\mathrm{MHz}}}\,VF \quad(\equiv 450/f\ \mathrm{ft}),\qquad L_{\mathrm{leg}} = \frac{L_{\mathrm{trap}}}{2}
+$$
+
+The $450/f$ rule is a rule-of-thumb starting point, **not** a cut length. A real
+trap dipole's element lengths depend on the trap inductance/capacitance and the
+specific band pair, which this lightweight model does not solve. Treat the output
+as an initial wire estimate and finalise element lengths against the trap
+manufacturer's data or a NEC model.
 
 ## References
 

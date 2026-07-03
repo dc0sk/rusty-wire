@@ -34,7 +34,7 @@ planning sessions.
 | End-fed half-wave | `efhw` | Total EFHW wire length |
 | Full-wave loop | `loop` | Circumference and square-side estimate |
 | Off-center-fed dipole | `ocfd` | 33/67 and 20/80 leg splits, optimised feedpoint |
-| Trap dipole | `trap-dipole` | Trap total/per-element plus build guidance notes |
+| Trap dipole | `trap-dipole` | Trap total/per-element **wire-budget estimate** plus build guidance notes |
 
 Omit `--antenna` to show all six models at once.
 
@@ -72,7 +72,9 @@ equal-tie support.
 - `--conductor-mm <0.5..4.0>` — set conductor diameter in millimeters for
   first-order impedance/length correction (default: `2.0`).
 - `--step <meters>` — control non-resonant search resolution (default 0.05 m).
-- `--velocity <value>` — velocity factor from 0.50 to 1.00 (default 0.95).
+- `--velocity <value>` — velocity factor from 0.50 to 1.00 (default `1.0`, bare
+  wire). The length rules already include the ~0.95 bare-wire end effect, so this
+  is an *additional* multiplier for insulated wire (typ. 0.90–0.95).
 - `--transformer recommended|1:1|1:4|1:9|1:49|1:56|...` — auto-resolved per
   mode and antenna model by default.
 - `--units m|ft|both` — metric, imperial, or both systems in one run.
