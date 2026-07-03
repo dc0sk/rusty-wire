@@ -139,20 +139,23 @@ fn generate_dipole_nec_deck(
     // Calculate segment count: aim for ~lambda/20 segments
     let wavelength_m = 299.792458 / frequency_mhz;
     let min_segments = ((length_m / wavelength_m) * 20.0).ceil() as i32;
-    let segment_count = min_segments.clamp(21, 100); // Clamp between 21 and 100
+    let mut segment_count = min_segments.clamp(21, 99); // Clamp between 21 and 99
+    if segment_count % 2 == 0 {
+        // Force an odd count so the feed at (n/2)+1 sits on the exact center segment.
+        segment_count += 1;
+    }
 
     let half_length = length_m / 2.0;
     let wire_radius = wire_radius_mm / 1000.0; // Convert mm to meters
 
     // GW card: wire geometry
     // Format: GW tag nseg x1 y1 z1 x2 y2 z2 rad
-    // Position dipole horizontally at given height, centered at origin
+    // Horizontal dipole along the X axis at height z = height_m, centered at x = 0
+    // (matches the corpus/*.nec decks and nec_export.rs). Free-space model below,
+    // so the z offset is translation-invariant and does not change the result.
     let gw_card = format!(
-        "GW 1 {} 0 0 {:.4} 0 0 {:.4} {:.6}",
-        segment_count,
-        height_m - half_length,
-        height_m + half_length,
-        wire_radius
+        "GW 1 {} {:.4} 0 {:.4} {:.4} 0 {:.4} {:.6}",
+        segment_count, -half_length, height_m, half_length, height_m, wire_radius
     );
 
     // GE: geometry end
@@ -289,8 +292,10 @@ fn extract_impedance_imag(output: &str) -> Option<f64> {
 /// Calculate mismatch factor between calculated and expected impedance.
 /// Range 0.0 (perfect match) to 1.0 (worst match).
 fn calculate_mismatch_factor(z_real: f64, z_imag: f64) -> f64 {
-    // Typical dipole feedpoint impedance is ~70 ohms + reactance
-    let target_real = 70.0;
+    // Target the model's own free-space half-wave feedpoint resistance
+    // (62.94 Ω from the fnec-rust corpus, see corpus/reference-results.json),
+    // not the textbook 73/70 Ω, so the cross-check compares like with like.
+    let target_real = 62.94;
     let delta_real = (z_real - target_real).abs();
     let delta_imag = z_imag.abs();
 

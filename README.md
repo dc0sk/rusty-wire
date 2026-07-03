@@ -34,7 +34,7 @@ planning sessions.
 | End-fed half-wave | `efhw` | Total EFHW wire length |
 | Full-wave loop | `loop` | Circumference and square-side estimate |
 | Off-center-fed dipole | `ocfd` | 33/67 and 20/80 leg splits, optimised feedpoint |
-| Trap dipole | `trap-dipole` | Trap total/per-element plus build guidance notes |
+| Trap dipole | `trap-dipole` | Trap total/per-element **wire-budget estimate** plus build guidance notes |
 
 Omit `--antenna` to show all six models at once.
 

@@ -447,14 +447,19 @@ fn json_export_numeric_precision() {
         "frequency should be numeric value"
     );
 
-    // Check for typical wire length patterns with 2 decimal places
-    let has_typical_length_format = content.contains(".00,")
-        || content.contains(".25,")
-        || content.contains(".50,")
-        || content.contains(".75,");
+    // Check for wire length values formatted to exactly 2 decimal places, e.g.
+    // "half_wave_m": 20.09. Scan for a '.' followed by exactly two ASCII digits
+    // (robust to the specific length values, which depend on band/VF).
+    let bytes = content.as_bytes();
+    let has_two_decimal_value = bytes.iter().enumerate().any(|(i, &b)| {
+        b == b'.'
+            && bytes.get(i + 1).is_some_and(u8::is_ascii_digit)
+            && bytes.get(i + 2).is_some_and(u8::is_ascii_digit)
+            && bytes.get(i + 3).is_none_or(|c| !c.is_ascii_digit())
+    });
     assert!(
-        has_typical_length_format,
-        "should have numeric wire lengths with decimal precision"
+        has_two_decimal_value,
+        "should have numeric wire lengths formatted to 2 decimal places"
     );
 }
 

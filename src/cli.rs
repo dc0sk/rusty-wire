@@ -86,8 +86,11 @@ struct Cli {
     #[arg(long)]
     bands_config: Option<String>,
 
-    /// Velocity factor (0.50-1.00)
-    #[arg(short, long, default_value_t = 0.95)]
+    /// Velocity factor (0.50-1.00). Default 1.0 = bare wire. The base length
+    /// coefficients (468/f etc.) already include the ~0.95 end-effect shortening
+    /// for bare wire, so this factor is an *additional* multiplier for insulated
+    /// wire (typ. 0.90-0.95) and must not double-count the end effect.
+    #[arg(short, long, default_value_t = 1.0)]
     velocity: f64,
 
     /// Antenna height in meters (standard presets: 7, 10, 12)
@@ -1406,17 +1409,17 @@ fn prompt_velocity_factor_with_default(
 ) -> f64 {
     let prompt_str = match default {
         Some(v) => format!("Enter velocity factor (0.5-1.0) [{v:.2}]: "),
-        None => "Enter velocity factor (0.5-1.0) [0.95]: ".to_string(),
+        None => "Enter velocity factor (0.5-1.0) [1.00]: ".to_string(),
     };
     prompt(output, &prompt_str);
     let line = read_line(input, "failed to read velocity factor");
     let trimmed = line.trim();
     if trimmed.is_empty() {
-        return default.unwrap_or(0.95);
+        return default.unwrap_or(1.0);
     }
     match trimmed.parse::<f64>() {
         Ok(v) if (0.5..=1.0).contains(&v) => v,
-        _ => default.unwrap_or(0.95),
+        _ => default.unwrap_or(1.0),
     }
 }
 

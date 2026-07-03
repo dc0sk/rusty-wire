@@ -229,7 +229,7 @@ RF physics and optimization. I/O-free.
 - OCFD 33/67 split
 - trap dipole total and per-leg (`trap_dipole_total_m`, `trap_dipole_leg_m`, `trap_dipole_total_ft`, `trap_dipole_leg_ft`)
 
-Trap dipole formula: `total_ft = (450.0 / freq_mhz) * velocity_factor`, then converted to metric; `leg = total / 2`.
+Trap dipole formula: `total_ft = (450.0 / freq_mhz) * velocity_factor`, then converted to metric; `leg = total / 2`. This `450/f` value is a coarse wire-budget *estimate*, not a cut length (see docs/math.md §10).
 
 **Transformer ratios available:** 1:1 | 1:2 | 1:4 | 1:5 | 1:6 | 1:9 | 1:16 | 1:49 | 1:56 | 1:64
 

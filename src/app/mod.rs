@@ -323,7 +323,10 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             band_indices: DEFAULT_BAND_SELECTION.to_vec(),
-            velocity_factor: 0.95,
+            // 1.0 = bare wire; the length coefficients already include the
+            // ~0.95 bare-wire end effect, so VF is an additional insulated-wire
+            // multiplier only (see docs/math.md §1).
+            velocity_factor: 1.0,
             mode: CalcMode::Resonant,
             wire_min_m: DEFAULT_NON_RESONANT_CONFIG.min_len_m,
             wire_max_m: DEFAULT_NON_RESONANT_CONFIG.max_len_m,
@@ -3219,7 +3222,7 @@ mod tests {
         let config = AppConfig::default();
 
         assert_eq!(config.mode, CalcMode::Resonant);
-        assert_eq!(config.velocity_factor, 0.95);
+        assert_eq!(config.velocity_factor, 1.0);
         assert_eq!(config.itu_region, ITURegion::Region1);
         assert_eq!(config.transformer_ratio, TransformerRatio::R1To1);
         assert_eq!(config.antenna_model, None);

@@ -281,12 +281,21 @@ impl fmt::Display for WireCalculation {
     }
 }
 
-const METERS_TO_FEET: f64 = 3.28084;
-const HALF_WAVE_COEFF_M: f64 = 142.646_544_192;
-const FULL_WAVE_COEFF_M: f64 = 285.293_088_384;
-const QUARTER_WAVE_COEFF_M: f64 = 71.323_272_096;
-const FULL_LOOP_COEFF_M: f64 = 306.324_462_672;
-const TRAP_DIPOLE_COEFF_M: f64 = 137.16;
+// 1 foot = 0.3048 m exactly; keep the metre→foot factor as the exact reciprocal
+// so metric and imperial outputs stay perfectly consistent.
+const METERS_TO_FEET: f64 = 1.0 / 0.3048;
+// Metric forms of the classic imperial handbook rules (468/936/234/1005 ft).
+// These ALREADY embed the ~0.95 bare-wire end-effect shortening, so the caller's
+// velocity_factor is an additional insulated-wire multiplier only (default 1.0).
+// See docs/math.md §1.
+const HALF_WAVE_COEFF_M: f64 = 142.646_544_192; // 468/f ft
+const FULL_WAVE_COEFF_M: f64 = 285.293_088_384; // 936/f ft
+const QUARTER_WAVE_COEFF_M: f64 = 71.323_272_096; // 234/f ft
+const FULL_LOOP_COEFF_M: f64 = 306.324_462_672; // 1005/f ft (loop: ~2% longer than λ)
+                                                // 450/f ft: a rough whole-wire *budget* estimate for a two-band trap dipole.
+                                                // Real trap-dipole element lengths depend on the trap L/C and band pair; treat
+                                                // this as a starting estimate, not a cut length. See docs/math.md §10.
+const TRAP_DIPOLE_COEFF_M: f64 = 137.16; // 450/f ft
 
 /// Calculate resonant dipole wire lengths for a given frequency
 ///
@@ -468,7 +477,15 @@ pub fn calculate_for_band_with_environment(
 /// for a half-wave dipole at the given height and ground, derived from fnec-rust
 /// Hallén solver corpus sweeps (corpus/reference-results.json, v2.9.0).
 ///
-/// Reference data (7.1 MHz, 2 mm wire, 51 segments, 0.95 VF cut):
+/// CAVEAT: the anchor data is measured only at 7.1 MHz (40 m), and interpolation
+/// is on height in *metres*. Radiation resistance actually tracks height in
+/// wavelengths, so 10 m AGL is ~0.24 λ at 40 m but ~0.96 λ at 10 m — these values
+/// are trustworthy near the 40 m band and are a coarse approximation elsewhere.
+/// The model also reports only R (the corpus reactance is not applied). A
+/// height-in-λ reparameterisation is tracked as future work once multi-frequency
+/// NEC sweep data is committed.
+///
+/// Reference data (7.1 MHz, 2 mm wire, 51 segments, bare-wire ~0.95 end-effect cut):
 ///   free space:          R ≈  62.94 Ω
 ///   7 m AGL, good:       R ≈  73.03 Ω
 ///   10 m AGL, poor:      R ≈  56.38 Ω
@@ -616,7 +633,9 @@ pub fn calculate_non_resonant_optima(
     let mut best_clearance_m = -1.0_f64;
     let mut len = min_len_m;
 
-    while len <= max_len_m {
+    // +1e-9 guards against float accumulation dropping the final candidate,
+    // matching the sibling window/compromise sampling loops.
+    while len <= max_len_m + 1e-9 {
         let nearest = resonance_points_m
             .iter()
             .map(|r| (len - r).abs())
@@ -1076,6 +1095,76 @@ mod tests {
         assert!(result.quarter_wave_m < result.half_wave_m);
     }
 
+    /// Build a bare HF band at a given center frequency for absolute-length checks.
+    fn band_at(name: &'static str, center_mhz: f64) -> Band {
+        Band {
+            name,
+            band_type: crate::bands::BandType::HF,
+            freq_low_mhz: center_mhz - 0.1,
+            freq_high_mhz: center_mhz + 0.1,
+            freq_center_mhz: center_mhz,
+            typical_skip_km: (150.0, 800.0),
+            regions: &[crate::bands::ITURegion::Region1],
+        }
+    }
+
+    /// Absolute regression guard: at the default bare-wire VF = 1.0 the core
+    /// lengths must match the classic handbook rules (468/936/234/1005 over f).
+    /// Relative tests alone let the double-counted-VF regression slip through
+    /// (a 40 m dipole was coming out 19.09 m instead of ~20.09 m); these pin the
+    /// absolute values so a constant/VF regression fails loudly.
+    #[test]
+    fn resonant_lengths_match_handbook_absolute_values() {
+        // 40 m band at 7.1 MHz, bare wire (VF = 1.0), 1:1, default 2 mm conductor.
+        let b40 = band_at("40m", 7.1);
+        let r40 = calculate_for_band_with_velocity(
+            &b40,
+            1.0,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        // 468/7.1 ft ≈ 20.09 m — matches the corpus NEC decks (±10.035 m legs).
+        assert!(
+            (r40.half_wave_m - 20.091).abs() < 0.20,
+            "40 m half-wave = {:.3} m, expected ≈ 20.09 m (468/f)",
+            r40.half_wave_m
+        );
+        assert!(
+            (r40.quarter_wave_m - 10.046).abs() < 0.10,
+            "40 m quarter-wave = {:.3} m, expected ≈ 10.05 m (234/f)",
+            r40.quarter_wave_m
+        );
+        assert!(
+            (r40.full_wave_loop_circumference_m - 43.144).abs() < 0.40,
+            "40 m loop = {:.3} m, expected ≈ 43.14 m (1005/f)",
+            r40.full_wave_loop_circumference_m
+        );
+
+        // 20 m band at 14.175 MHz.
+        let b20 = band_at("20m", 14.175);
+        let r20 = calculate_for_band_with_velocity(
+            &b20,
+            1.0,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        assert!(
+            (r20.half_wave_m - 10.063).abs() < 0.10,
+            "20 m half-wave = {:.3} m, expected ≈ 10.06 m (468/f)",
+            r20.half_wave_m
+        );
+
+        // Guard against the double-counted end effect returning: bare-wire VF 1.0
+        // must NOT reproduce the old ~19.09 m short length.
+        assert!(
+            r40.half_wave_m > 19.6,
+            "40 m half-wave {:.3} m looks like a double-counted VF regression",
+            r40.half_wave_m
+        );
+    }
+
     #[test]
     fn calculate_for_band_velocity_factor_effect() {
         let band = sample_band();
@@ -1161,7 +1250,7 @@ mod tests {
             GroundClass::Average,
         );
 
-        let m_to_ft = 3.28084;
+        let m_to_ft = 1.0 / 0.3048; // matches METERS_TO_FEET (exact reciprocal)
         assert!((result.half_wave_ft - result.half_wave_m * m_to_ft).abs() < 0.01);
         assert!((result.full_wave_ft - result.full_wave_m * m_to_ft).abs() < 0.01);
     }
@@ -1176,7 +1265,7 @@ mod tests {
             10.0,
             GroundClass::Average,
         );
-        let m_to_ft = 3.28084;
+        let m_to_ft = 1.0 / 0.3048; // matches METERS_TO_FEET (exact reciprocal)
 
         assert!((result.end_fed_half_wave_m - result.corrected_half_wave_m).abs() < 1e-9);
         assert!((result.end_fed_half_wave_ft - result.corrected_half_wave_ft).abs() < 1e-9);
