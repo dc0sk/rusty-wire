@@ -447,19 +447,26 @@ fn json_export_numeric_precision() {
         "frequency should be numeric value"
     );
 
-    // Check for wire length values formatted to exactly 2 decimal places, e.g.
-    // "half_wave_m": 20.09. Scan for a '.' followed by exactly two ASCII digits
-    // (robust to the specific length values, which depend on band/VF).
-    let bytes = content.as_bytes();
-    let has_two_decimal_value = bytes.iter().enumerate().any(|(i, &b)| {
-        b == b'.'
-            && bytes.get(i + 1).is_some_and(u8::is_ascii_digit)
-            && bytes.get(i + 2).is_some_and(u8::is_ascii_digit)
-            && bytes.get(i + 3).is_none_or(|c| !c.is_ascii_digit())
-    });
-    assert!(
-        has_two_decimal_value,
-        "should have numeric wire lengths formatted to 2 decimal places"
+    // Verify a wire-length field specifically (not just any number) is formatted
+    // to exactly 2 decimal places, e.g. "half_wave_m": 20.09.
+    let field = "\"half_wave_m\":";
+    let start = content
+        .find(field)
+        .expect("json should contain a half_wave_m field")
+        + field.len();
+    let value_tok = content[start..]
+        .trim_start()
+        .split([',', '\n', '}'])
+        .next()
+        .expect("half_wave_m should have a value")
+        .trim();
+    let decimals = value_tok
+        .split_once('.')
+        .map(|(_, frac)| frac.len())
+        .unwrap_or(0);
+    assert_eq!(
+        decimals, 2,
+        "half_wave_m ({value_tok}) should be formatted to exactly 2 decimal places"
     );
 }
 

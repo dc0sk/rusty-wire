@@ -292,10 +292,9 @@ fn extract_impedance_imag(output: &str) -> Option<f64> {
 /// Calculate mismatch factor between calculated and expected impedance.
 /// Range 0.0 (perfect match) to 1.0 (worst match).
 fn calculate_mismatch_factor(z_real: f64, z_imag: f64) -> f64 {
-    // Target the model's own free-space half-wave feedpoint resistance
-    // (62.94 Ω from the fnec-rust corpus, see corpus/reference-results.json),
-    // not the textbook 73/70 Ω, so the cross-check compares like with like.
-    let target_real = 62.94;
+    // Typical resonant-dipole feedpoint resistance is ~70 Ω; keep this as the
+    // cross-check reference so the pass/warn/reject thresholds stay calibrated.
+    let target_real = 70.0;
     let delta_real = (z_real - target_real).abs();
     let delta_imag = z_imag.abs();
 

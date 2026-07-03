@@ -58,7 +58,7 @@ struct Cli {
     region       -- CliITURegion (default: 1)
     mode         -- CliCalcMode (resonant | non-resonant)
     bands        -- Option<String> (e.g. "40m,20m,10m-15m")
-    velocity     -- f64 (default 0.95)
+    velocity     -- f64 (default 1.0 = bare wire; see docs/math.md §1)
     transformer  -- CliTransformerSelection (recommended | 1:1 | 1:9 | ...)
     antenna      -- Option<CliAntennaModel>
     wire_min/max -- Option<f64> meters or feet

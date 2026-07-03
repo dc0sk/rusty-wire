@@ -1250,7 +1250,7 @@ mod tests {
             GroundClass::Average,
         );
 
-        let m_to_ft = 1.0 / 0.3048; // matches METERS_TO_FEET (exact reciprocal)
+        let m_to_ft = METERS_TO_FEET;
         assert!((result.half_wave_ft - result.half_wave_m * m_to_ft).abs() < 0.01);
         assert!((result.full_wave_ft - result.full_wave_m * m_to_ft).abs() < 0.01);
     }
@@ -1265,7 +1265,7 @@ mod tests {
             10.0,
             GroundClass::Average,
         );
-        let m_to_ft = 1.0 / 0.3048; // matches METERS_TO_FEET (exact reciprocal)
+        let m_to_ft = METERS_TO_FEET;
 
         assert!((result.end_fed_half_wave_m - result.corrected_half_wave_m).abs() < 1e-9);
         assert!((result.end_fed_half_wave_ft - result.corrected_half_wave_ft).abs() < 1e-9);
