@@ -1974,6 +1974,11 @@ fn format_band_resonant_points(
         return "none".to_string();
     }
 
+    // NOTE: keep the `resonant_points_in_window` CSV/text value format stable
+    // (`{h}x={len}m`) — it is a documented v1 export-contract field parsed by
+    // downstream tools. The high-Z/low-Z class is derivable from the harmonic
+    // parity here, is a first-class field in the JSON export, and is shown tagged
+    // in the human-readable results view.
     points
         .into_iter()
         .map(|(harmonic, len_m)| match units {
@@ -1998,16 +2003,21 @@ fn format_band_resonant_points_json(
 
     let items = points
         .into_iter()
-        .map(|(harmonic, len_m)| match units {
-            UnitSystem::Metric => format!("{{\"harmonic\": {harmonic}, \"length_m\": {len_m:.2}}}"),
-            UnitSystem::Imperial => format!(
-                "{{\"harmonic\": {harmonic}, \"length_ft\": {:.2}}}",
-                len_m / 0.3048
-            ),
-            UnitSystem::Both => format!(
-                "{{\"harmonic\": {harmonic}, \"length_m\": {len_m:.2}, \"length_ft\": {:.2}}}",
-                len_m / 0.3048
-            ),
+        .map(|(harmonic, len_m)| {
+            let z = crate::calculations::ImpedanceClass::from_harmonic(harmonic).as_label();
+            match units {
+                UnitSystem::Metric => format!(
+                    "{{\"harmonic\": {harmonic}, \"length_m\": {len_m:.2}, \"impedance_class\": \"{z}\"}}"
+                ),
+                UnitSystem::Imperial => format!(
+                    "{{\"harmonic\": {harmonic}, \"length_ft\": {:.2}, \"impedance_class\": \"{z}\"}}",
+                    len_m / 0.3048
+                ),
+                UnitSystem::Both => format!(
+                    "{{\"harmonic\": {harmonic}, \"length_m\": {len_m:.2}, \"length_ft\": {:.2}, \"impedance_class\": \"{z}\"}}",
+                    len_m / 0.3048
+                ),
+            }
         })
         .collect::<Vec<String>>()
         .join(", ");

@@ -261,6 +261,14 @@ fn csv_export_data_row_format_and_precision() {
             length_str
         );
     }
+
+    // Contract guard: the resonant_points_in_window value keeps its stable
+    // `{h}x={len}{unit}` form and must NOT carry the human-facing impedance-class
+    // tag (that lives in the JSON export field and the on-screen view only).
+    assert!(
+        !content.contains("(low-Z)") && !content.contains("(high-Z)"),
+        "CSV resonant_points_in_window must not embed the impedance-class tag:\n{content}"
+    );
 }
 
 #[test]

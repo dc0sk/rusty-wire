@@ -230,12 +230,12 @@ fn generate_tradeoff_note(
     if swr_at_target < 1.15 {
         if min_resonance_clearance_pct >= 15.0 {
             return format!(
-                "Best match: SWR ≈ {:.1}:1 into {:.0} Ω, wide resonance clearance ({:.0}%).",
+                "Best match: SWR ≈ {:.1}:1 into {:.0} Ω, wide high-Z clearance ({:.0}%).",
                 swr_at_target, target_z, min_resonance_clearance_pct
             );
         }
         return format!(
-            "Best match: SWR ≈ {:.1}:1 into {:.0} Ω; check resonance clearance ({:.0}%).",
+            "Best match: SWR ≈ {:.1}:1 into {:.0} Ω; check high-Z clearance ({:.0}%).",
             swr_at_target, target_z, min_resonance_clearance_pct
         );
     }
