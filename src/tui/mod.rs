@@ -2037,6 +2037,14 @@ fn render_advise_lines(view: &AdviseView) -> Vec<Line<'static>> {
     }
 
     out.push(Line::from(""));
+    out.push(Line::from(Span::styled(
+        "Recommended wire length is the same for every ratio (resonance is a",
+        Style::default().fg(Color::DarkGray),
+    )));
+    out.push(Line::from(Span::styled(
+        "property of the wire, not the feed); ratios differ in matching efficiency.",
+        Style::default().fg(Color::DarkGray),
+    )));
 
     for (idx, candidate) in view.candidates.iter().enumerate() {
         let title_style = match candidate.validation_status {

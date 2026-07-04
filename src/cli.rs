@@ -908,6 +908,8 @@ fn print_advise_candidates(
     }
 
     println!("Ranked combinations (wire length + balun/unun ratio):");
+    println!("(The recommended wire length is the same for every ratio - resonance is a");
+    println!(" property of the wire, not the feed; ratios differ in matching efficiency.)");
     println!();
 
     for (idx, candidate) in view.candidates.iter().enumerate() {
