@@ -156,13 +156,26 @@ additionally considers resonances within 1 m *outside* the search window so a
 candidate near an edge still gets an honest clearance; the display, export and
 compromise optimizer list only strictly in-window resonances.)
 
+Each harmonic $h$ has an **impedance class** set by its parity, because the feed
+sees a current maximum at odd multiples and a voltage maximum at even ones:
+
+- **low-Z** ($h$ odd: $\lambda/4, 3\lambda/4, \dots$) — current-fed, ~35–50 Ω,
+  near 50 Ω and easy for a tuner or even a direct feed;
+- **high-Z** ($h$ even $=$ half-wave multiples $\lambda/2, \lambda, \dots$) —
+  voltage-fed, hundreds to thousands of ohms, genuinely hard to match.
+
+The non-resonant optimizer avoids only the **high-Z** set — the lengths a tuner
+struggles with — while the desirable low-Z lengths are left available:
+
 $$
-R = \{h\,L_{1/4,i}^{\ast}\mid i\in\text{bands},\ h\in\mathbb{N}\}
+R = \{h\,L_{1/4,i}^{\ast}\mid i\in\text{bands},\ h\in\mathbb{N},\ h\ \text{even}\}
 $$
 
-The optimizer avoids **all** quarter-wave harmonics (the wire's resonant lengths
-on each band), keeping the chosen length in the moderate-reactance region between
-resonances where a tuner has the easiest match.
+The on-screen and exported resonant-points lists show **every** resonance tagged
+`low-Z`/`high-Z`, so the recommended length (which may sit near a low-Z point) is
+always reconcilable against the listed points. To keep near-edge clearance
+honest, the optimizer's avoid-set for each band is padded by one half-wave so the
+nearest high-Z point just outside the window is still counted.
 
 For candidate wire length $\ell$ in the configured search window:
 

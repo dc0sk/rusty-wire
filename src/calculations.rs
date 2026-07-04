@@ -769,11 +769,9 @@ pub fn calculate_non_resonant_window_optima(
         .collect()
 }
 
-/// Window padding (m) used when the non-resonant optimizer builds its avoid-set,
-/// so a candidate near a window edge still "sees" a resonance just outside the
-/// window and its clearance stays honest. The display/export/compromise callers
-/// use a ~0 pad because they only list/target in-window resonances.
-const NON_RESONANT_EDGE_PAD_M: f64 = 1.0;
+/// Padding (m) for the display/export/compromise callers, which list or target
+/// only strictly in-window resonances. (The non-resonant optimizer pads by one
+/// half-wave per band instead — see `build_non_resonant_resonance_points`.)
 pub(crate) const IN_WINDOW_PAD_M: f64 = 1e-9;
 
 /// A band's resonant wire lengths (quarter-wave harmonics `n·λ/4`) that fall in
@@ -784,6 +782,42 @@ pub(crate) const IN_WINDOW_PAD_M: f64 = 1e-9;
 /// non-resonant avoid-set, the resonant-compromise optimizer, the on-screen
 /// resonant-points list and the exports — goes through this single function so the
 /// resonance geometry can never drift between them.
+/// Impedance class of a resonance point, from the quarter-wave harmonic number.
+///
+/// A wire is resonant (X ≈ 0) at every quarter-wave multiple. The feedpoint sees
+/// a current maximum at **odd** multiples (λ/4, 3λ/4, …) → low impedance
+/// (~35–50 Ω, near 50 Ω and easy for a tuner), and a voltage maximum at **even**
+/// multiples (= half-wave multiples λ/2, λ, …) → high impedance (hundreds to
+/// thousands of Ω, the lengths that are genuinely hard to match).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImpedanceClass {
+    /// Odd quarter-wave multiple — current-fed, low impedance (easy match).
+    Low,
+    /// Even quarter-wave multiple (half-wave multiple) — voltage-fed, high impedance.
+    High,
+}
+
+impl ImpedanceClass {
+    pub fn from_harmonic(harmonic: u32) -> Self {
+        if harmonic.is_multiple_of(2) {
+            ImpedanceClass::High
+        } else {
+            ImpedanceClass::Low
+        }
+    }
+
+    pub fn as_label(self) -> &'static str {
+        match self {
+            ImpedanceClass::Low => "low-Z",
+            ImpedanceClass::High => "high-Z",
+        }
+    }
+
+    pub fn is_high(self) -> bool {
+        matches!(self, ImpedanceClass::High)
+    }
+}
+
 pub(crate) fn band_resonant_points_m(
     resonant_quarter_wave_m: f64,
     min_len_m: f64,
@@ -815,13 +849,18 @@ fn build_non_resonant_resonance_points(
 ) -> Vec<f64> {
     let mut resonance_points_m = Vec::new();
     for c in calculations {
-        for (_, len_m) in band_resonant_points_m(
-            c.resonant_quarter_wave_m,
-            min_len_m,
-            max_len_m,
-            NON_RESONANT_EDGE_PAD_M,
-        ) {
-            resonance_points_m.push(len_m);
+        // Avoid only the HIGH-impedance resonances (even quarter-wave harmonics =
+        // half-wave multiples); the odd-harmonic low-Z lengths (~35-50 Ω) are easy
+        // to match and need not be avoided. Pad by one half-wave (2 x quarter-wave)
+        // so the nearest high-Z point just outside each window edge is always
+        // included, keeping near-edge candidates' clearance honest.
+        let pad_m = 2.0 * c.resonant_quarter_wave_m;
+        for (harmonic, len_m) in
+            band_resonant_points_m(c.resonant_quarter_wave_m, min_len_m, max_len_m, pad_m)
+        {
+            if ImpedanceClass::from_harmonic(harmonic).is_high() {
+                resonance_points_m.push(len_m);
+            }
         }
     }
     resonance_points_m
@@ -1642,6 +1681,62 @@ mod tests {
         let s1 = optimize_ocfd_split_for_length(&c_1to1, 20.0).map(|r| r.short_ratio);
         let s2 = optimize_ocfd_split_for_length(&c_1to49, 20.0).map(|r| r.short_ratio);
         assert_eq!(s1, s2, "OCFD split depends on transformer ratio");
+    }
+
+    #[test]
+    fn impedance_class_follows_harmonic_parity() {
+        assert_eq!(ImpedanceClass::from_harmonic(1), ImpedanceClass::Low);
+        assert_eq!(ImpedanceClass::from_harmonic(2), ImpedanceClass::High);
+        assert_eq!(ImpedanceClass::from_harmonic(3), ImpedanceClass::Low);
+        assert_eq!(ImpedanceClass::from_harmonic(4), ImpedanceClass::High);
+        assert!(ImpedanceClass::High.is_high());
+        assert!(!ImpedanceClass::Low.is_high());
+        assert_eq!(ImpedanceClass::Low.as_label(), "low-Z");
+        assert_eq!(ImpedanceClass::High.as_label(), "high-Z");
+    }
+
+    #[test]
+    fn non_resonant_avoids_only_high_z_resonances() {
+        // 40 m: resonant quarter-wave ~10.05 m. In an 8-35 m window the high-Z
+        // (half-wave) resonances are 2x (~20.1 m) and 4x (~40 m, just outside);
+        // the low-Z odd multiples 1x (~10.05 m) and 3x (~30.2 m) must NOT be avoided.
+        let band = band_at("40m", 7.1);
+        let calc = calculate_for_band_with_velocity(
+            &band,
+            1.0,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+        );
+        let q = calc.resonant_quarter_wave_m;
+        let avoid = build_non_resonant_resonance_points(std::slice::from_ref(&calc), 8.0, 35.0);
+
+        assert!(
+            avoid.iter().any(|p| (p - 2.0 * q).abs() < 1e-6),
+            "high-Z half-wave (2x) should be in the avoid-set"
+        );
+        assert!(
+            !avoid.iter().any(|p| (p - q).abs() < 1e-6),
+            "low-Z 1x (current-fed, easy match) must not be avoided"
+        );
+        assert!(
+            !avoid.iter().any(|p| (p - 3.0 * q).abs() < 1e-6),
+            "low-Z 3x (current-fed, easy match) must not be avoided"
+        );
+        // Every avoided point is an even (half-wave) multiple of the quarter-wave.
+        for p in &avoid {
+            let n = (p / q).round() as u32;
+            assert!(
+                n.is_multiple_of(2),
+                "avoided point {p} is not a half-wave multiple"
+            );
+        }
+        // Edge padding: the first high-Z point just beyond the window (4x ~40 m) is
+        // included so a candidate near 35 m gets an honest clearance.
+        assert!(
+            avoid.iter().any(|p| (p - 4.0 * q).abs() < 1e-6),
+            "the first high-Z point beyond the window edge should be included"
+        );
     }
 
     /// The resonance-point base must still carry the *physical* conductor-diameter

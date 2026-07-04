@@ -537,6 +537,9 @@ pub struct ResonantPoint {
     pub length_m: f64,
     pub band_name: String,
     pub harmonic: u32,
+    /// Whether this resonance is a low-Z (easy match) or high-Z (hard to match)
+    /// point. The non-resonant optimizer avoids only the high-Z points.
+    pub impedance_class: crate::calculations::ImpedanceClass,
 }
 
 #[derive(Debug, Clone)]
@@ -2034,6 +2037,7 @@ pub fn resonant_points_in_window(results: &AppResults) -> Vec<ResonantPoint> {
                 length_m,
                 band_name: calc.band_name.clone(),
                 harmonic,
+                impedance_class: crate::calculations::ImpedanceClass::from_harmonic(harmonic),
             });
         }
     }
@@ -2063,24 +2067,27 @@ pub fn resonant_points_view(results: &AppResults) -> ResonantPointsView {
 
     let point_lines = points
         .into_iter()
-        .map(|point| match results.config.units {
-            UnitSystem::Metric => format!(
-                "  - {}: {}x quarter-wave = {:.2} m",
-                point.band_name, point.harmonic, point.length_m
-            ),
-            UnitSystem::Imperial => format!(
-                "  - {}: {}x quarter-wave = {:.2} ft",
-                point.band_name,
-                point.harmonic,
-                point.length_m / FEET_TO_METERS
-            ),
-            UnitSystem::Both => format!(
-                "  - {}: {}x quarter-wave = {:.2} m ({:.2} ft)",
-                point.band_name,
-                point.harmonic,
-                point.length_m,
-                point.length_m / FEET_TO_METERS
-            ),
+        .map(|point| {
+            let z = point.impedance_class.as_label();
+            match results.config.units {
+                UnitSystem::Metric => format!(
+                    "  - {}: {}x quarter-wave = {:.2} m [{z}]",
+                    point.band_name, point.harmonic, point.length_m
+                ),
+                UnitSystem::Imperial => format!(
+                    "  - {}: {}x quarter-wave = {:.2} ft [{z}]",
+                    point.band_name,
+                    point.harmonic,
+                    point.length_m / FEET_TO_METERS
+                ),
+                UnitSystem::Both => format!(
+                    "  - {}: {}x quarter-wave = {:.2} m ({:.2} ft) [{z}]",
+                    point.band_name,
+                    point.harmonic,
+                    point.length_m,
+                    point.length_m / FEET_TO_METERS
+                ),
+            }
         })
         .collect();
 
@@ -2465,6 +2472,13 @@ pub fn resonant_points_display_lines(results: &AppResults) -> Vec<String> {
         lines.push(view.empty_message.to_string());
     } else {
         lines.extend(view.point_lines);
+        lines.push(
+            "  [low-Z]  = odd quarter-wave, current-fed (~35-50 ohm, easy to match)".to_string(),
+        );
+        lines.push(
+            "  [high-Z] = half-wave multiple, voltage-fed (high ohm); non-resonant mode avoids these"
+                .to_string(),
+        );
     }
 
     lines
@@ -3954,6 +3968,42 @@ mod tests {
         assert!(points
             .windows(2)
             .all(|pair| pair[0].length_m <= pair[1].length_m));
+
+        // Each point is classified by harmonic parity: odd -> low-Z, even -> high-Z.
+        for p in &points {
+            let expected = if p.harmonic.is_multiple_of(2) {
+                crate::calculations::ImpedanceClass::High
+            } else {
+                crate::calculations::ImpedanceClass::Low
+            };
+            assert_eq!(p.impedance_class, expected);
+        }
+    }
+
+    #[test]
+    fn resonant_points_display_lines_tag_impedance_class_and_legend() {
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            band_indices: vec![3, 5], // 40m, 20m -> both low-Z and high-Z points in window
+            ..AppConfig::default()
+        };
+        let results = run_calculation(config);
+        let lines = resonant_points_display_lines(&results);
+        let blob = lines.join("\n");
+
+        assert!(
+            blob.contains("[low-Z]"),
+            "expected a low-Z tagged point:\n{blob}"
+        );
+        assert!(
+            blob.contains("[high-Z]"),
+            "expected a high-Z tagged point:\n{blob}"
+        );
+        // Legend present and explains the non-resonant avoidance policy.
+        assert!(
+            blob.contains("non-resonant mode avoids these"),
+            "expected the impedance-class legend:\n{blob}"
+        );
     }
 
     #[test]
