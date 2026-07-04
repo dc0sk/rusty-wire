@@ -2022,27 +2022,19 @@ pub fn resonant_points_in_window(results: &AppResults) -> Vec<ResonantPoint> {
     let mut points = Vec::new();
 
     for calc in &results.calculations {
-        // Uncorrected quarter-wave: the resonant points shown are transformer-
-        // independent and match the non-resonant/compromise optimizers' point sets.
-        let quarter_wave_m = calc.quarter_wave_m;
-        if quarter_wave_m <= 0.0 {
-            continue;
-        }
-
-        let mut harmonic = 1_u32;
-        loop {
-            let resonant_len_m = quarter_wave_m * f64::from(harmonic);
-            if resonant_len_m > max_m + 1e-9 {
-                break;
-            }
-            if resonant_len_m >= min_m - 1e-9 {
-                points.push(ResonantPoint {
-                    length_m: resonant_len_m,
-                    band_name: calc.band_name.clone(),
-                    harmonic,
-                });
-            }
-            harmonic += 1;
+        // Shared physical (conductor-corrected, transformer-independent) resonance
+        // points, identical to the non-resonant/compromise optimizers' base set.
+        for (harmonic, length_m) in crate::calculations::band_resonant_points_m(
+            calc.resonant_quarter_wave_m,
+            min_m,
+            max_m,
+            crate::calculations::IN_WINDOW_PAD_M,
+        ) {
+            points.push(ResonantPoint {
+                length_m,
+                band_name: calc.band_name.clone(),
+                harmonic,
+            });
         }
     }
 

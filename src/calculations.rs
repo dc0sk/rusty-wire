@@ -127,6 +127,13 @@ pub struct WireCalculation {
     pub full_wave_m: f64,
     pub quarter_wave_m: f64,
 
+    /// Physical resonant quarter-wave: `quarter_wave_m` with the conductor-diameter
+    /// correction applied but NOT the transformer-length heuristic. This is the
+    /// canonical, feed-independent base for every resonance-point calculation
+    /// (non-resonant avoid-set, resonant compromise, OCFD clearance, and the
+    /// displayed/exported resonant-points list) so they can never disagree.
+    pub resonant_quarter_wave_m: f64,
+
     // Dipole lengths (in feet)
     pub half_wave_ft: f64,
     pub full_wave_ft: f64,
@@ -343,6 +350,12 @@ pub fn calculate_for_band_with_environment(
     let full_wave_ft = full_wave_m * METERS_TO_FEET;
     let quarter_wave_ft = quarter_wave_m * METERS_TO_FEET;
 
+    // Physical resonant quarter-wave: conductor-diameter correction (real geometry
+    // effect) but NOT the transformer-length heuristic (a feed choice). Canonical
+    // base for all resonance-point calculations.
+    let resonant_quarter_wave_m =
+        quarter_wave_m * conductor_diameter_correction_factor(conductor_diameter_mm);
+
     // NEC-calibrated feedpoint resistance: use corpus reference data instead of the
     // classic textbook 73 Ω free-space value. Height and ground affect the radiation
     // resistance through image-method coupling; the NEC values are validated against
@@ -431,6 +444,7 @@ pub fn calculate_for_band_with_environment(
         half_wave_m,
         full_wave_m,
         quarter_wave_m,
+        resonant_quarter_wave_m,
         half_wave_ft,
         full_wave_ft,
         quarter_wave_ft,
@@ -755,6 +769,45 @@ pub fn calculate_non_resonant_window_optima(
         .collect()
 }
 
+/// Window padding (m) used when the non-resonant optimizer builds its avoid-set,
+/// so a candidate near a window edge still "sees" a resonance just outside the
+/// window and its clearance stays honest. The display/export/compromise callers
+/// use a ~0 pad because they only list/target in-window resonances.
+const NON_RESONANT_EDGE_PAD_M: f64 = 1.0;
+pub(crate) const IN_WINDOW_PAD_M: f64 = 1e-9;
+
+/// A band's resonant wire lengths (quarter-wave harmonics `n·λ/4`) that fall in
+/// `[min_len_m - pad_m, max_len_m + pad_m]`, keyed by harmonic number.
+///
+/// Uses the physical resonant quarter-wave (`resonant_quarter_wave_m`): conductor-
+/// diameter corrected but transformer-independent. Every consumer — the
+/// non-resonant avoid-set, the resonant-compromise optimizer, the on-screen
+/// resonant-points list and the exports — goes through this single function so the
+/// resonance geometry can never drift between them.
+pub(crate) fn band_resonant_points_m(
+    resonant_quarter_wave_m: f64,
+    min_len_m: f64,
+    max_len_m: f64,
+    pad_m: f64,
+) -> Vec<(u32, f64)> {
+    let mut points = Vec::new();
+    if resonant_quarter_wave_m <= 0.0 || max_len_m < min_len_m {
+        return points;
+    }
+    let mut harmonic = 1_u32;
+    loop {
+        let len_m = resonant_quarter_wave_m * f64::from(harmonic);
+        if len_m > max_len_m + pad_m {
+            break;
+        }
+        if len_m >= min_len_m - pad_m {
+            points.push((harmonic, len_m));
+        }
+        harmonic += 1;
+    }
+    points
+}
+
 fn build_non_resonant_resonance_points(
     calculations: &[WireCalculation],
     min_len_m: f64,
@@ -762,23 +815,13 @@ fn build_non_resonant_resonance_points(
 ) -> Vec<f64> {
     let mut resonance_points_m = Vec::new();
     for c in calculations {
-        // Resonance is a property of the wire geometry, not the feed: use the
-        // uncorrected quarter-wave so the avoid-set is transformer-independent and
-        // matches the resonant-points shown in the display/export and targeted by
-        // the compromise optimizer. (The transformer-length heuristic is a
-        // build-length nudge, not physics.)
-        let quarter_wave_m = c.quarter_wave_m;
-
-        let mut harmonic = 1_u32;
-        loop {
-            let resonant_len_m = quarter_wave_m * f64::from(harmonic);
-            if resonant_len_m > max_len_m + 1.0 {
-                break;
-            }
-            if resonant_len_m >= min_len_m - 1.0 {
-                resonance_points_m.push(resonant_len_m);
-            }
-            harmonic += 1;
+        for (_, len_m) in band_resonant_points_m(
+            c.resonant_quarter_wave_m,
+            min_len_m,
+            max_len_m,
+            NON_RESONANT_EDGE_PAD_M,
+        ) {
+            resonance_points_m.push(len_m);
         }
     }
     resonance_points_m
@@ -827,25 +870,18 @@ pub fn calculate_resonant_compromises(
 
     let mut band_points: Vec<Vec<f64>> = Vec::new();
     for calc in calculations {
-        // Uncorrected quarter-wave: resonance points are transformer-independent
-        // and match those shown by resonant_points_in_window in the same view.
-        let quarter_wave_m = calc.quarter_wave_m;
-        if quarter_wave_m <= 0.0 {
-            continue;
-        }
-
-        let mut points = Vec::new();
-        let mut harmonic = 1_u32;
-        loop {
-            let resonant_len_m = quarter_wave_m * f64::from(harmonic);
-            if resonant_len_m > max_len_m + 1e-9 {
-                break;
-            }
-            if resonant_len_m >= min_len_m - 1e-9 {
-                points.push(resonant_len_m);
-            }
-            harmonic += 1;
-        }
+        // Same physical (conductor-corrected, transformer-independent) resonance
+        // points the on-screen list shows, so the compromise recommendations
+        // always coincide with the displayed resonant points.
+        let points: Vec<f64> = band_resonant_points_m(
+            calc.resonant_quarter_wave_m,
+            min_len_m,
+            max_len_m,
+            IN_WINDOW_PAD_M,
+        )
+        .into_iter()
+        .map(|(_, len_m)| len_m)
+        .collect();
 
         if !points.is_empty() {
             band_points.push(points);
@@ -955,9 +991,9 @@ pub fn optimize_ocfd_split_for_length(
 
         let mut worst_leg_clearance_pct = f64::INFINITY;
         for calc in calculations {
-            // Uncorrected quarter-wave: OCFD leg resonance clearance is a physical
-            // property, independent of the feed transformer ratio.
-            let quarter_wave = calc.quarter_wave_m;
+            // Physical resonant quarter-wave (conductor-corrected, feed-independent):
+            // OCFD leg resonance clearance is a property of the wire, not the feed.
+            let quarter_wave = calc.resonant_quarter_wave_m;
             if quarter_wave <= 0.0 {
                 continue;
             }
@@ -1606,6 +1642,54 @@ mod tests {
         let s1 = optimize_ocfd_split_for_length(&c_1to1, 20.0).map(|r| r.short_ratio);
         let s2 = optimize_ocfd_split_for_length(&c_1to49, 20.0).map(|r| r.short_ratio);
         assert_eq!(s1, s2, "OCFD split depends on transformer ratio");
+    }
+
+    /// The resonance-point base must still carry the *physical* conductor-diameter
+    /// correction (only the transformer heuristic is dropped): a thick conductor
+    /// resonates shorter, so its resonant quarter-wave and the resonance points fed
+    /// to the optimizers must move accordingly. Guards against the fix accidentally
+    /// using the fully-raw quarter-wave.
+    #[test]
+    fn resonant_points_keep_conductor_diameter_correction() {
+        let band = band_at("40m", 7.1);
+        let thin = calculate_for_band_with_environment(
+            &band,
+            1.0,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+            1.0,
+        );
+        let thick = calculate_for_band_with_environment(
+            &band,
+            1.0,
+            TransformerRatio::R1To1,
+            10.0,
+            GroundClass::Average,
+            4.0,
+        );
+
+        // Thicker conductor -> shorter physical resonant quarter-wave...
+        assert!(
+            thick.resonant_quarter_wave_m < thin.resonant_quarter_wave_m,
+            "conductor-diameter correction lost from the resonant quarter-wave"
+        );
+        // ...and it is NOT the raw quarter-wave (which ignores diameter).
+        assert!(
+            (thin.resonant_quarter_wave_m - thin.quarter_wave_m).abs() > 1e-9,
+            "resonant quarter-wave should include the conductor-diameter correction"
+        );
+
+        // The shared helper propagates that shortening into the resonance points.
+        let config = NonResonantSearchConfig {
+            min_len_m: 8.0,
+            max_len_m: 35.0,
+            step_m: 0.5,
+            preferred_center_m: 21.5,
+        };
+        let pts_thin = calculate_resonant_compromises(std::slice::from_ref(&thin), config);
+        let pts_thick = calculate_resonant_compromises(std::slice::from_ref(&thick), config);
+        assert!(!pts_thin.is_empty() && !pts_thick.is_empty());
     }
 
     // --- GroundClass ---

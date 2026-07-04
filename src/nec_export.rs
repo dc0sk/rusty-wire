@@ -158,6 +158,7 @@ mod tests {
             half_wave_m: half_wave,
             full_wave_m: half_wave * 2.0,
             quarter_wave_m: half_wave / 2.0,
+            resonant_quarter_wave_m: half_wave / 2.0,
             half_wave_ft: half_wave * 3.28084,
             full_wave_ft: half_wave * 2.0 * 3.28084,
             quarter_wave_ft: half_wave / 2.0 * 3.28084,

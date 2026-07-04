@@ -1950,27 +1950,17 @@ fn collect_band_resonant_points_m(
     wire_min_m: f64,
     wire_max_m: f64,
 ) -> Vec<(u32, f64)> {
-    let mut points = Vec::new();
-    // Uncorrected quarter-wave: exported resonant points are transformer-
-    // independent and match the optimizers and the on-screen resonant-points list.
-    let quarter_wave_m = calc.quarter_wave_m;
-    if quarter_wave_m <= 0.0 || wire_max_m <= wire_min_m {
-        return points;
+    if wire_max_m <= wire_min_m {
+        return Vec::new();
     }
-
-    let mut harmonic = 1_u32;
-    loop {
-        let resonant_len_m = quarter_wave_m * f64::from(harmonic);
-        if resonant_len_m > wire_max_m + 1e-9 {
-            break;
-        }
-        if resonant_len_m >= wire_min_m - 1e-9 {
-            points.push((harmonic, resonant_len_m));
-        }
-        harmonic += 1;
-    }
-
-    points
+    // Shared physical (conductor-corrected, transformer-independent) resonance
+    // points — identical to the optimizers and the on-screen resonant-points list.
+    crate::calculations::band_resonant_points_m(
+        calc.resonant_quarter_wave_m,
+        wire_min_m,
+        wire_max_m,
+        crate::calculations::IN_WINDOW_PAD_M,
+    )
 }
 
 fn format_band_resonant_points(

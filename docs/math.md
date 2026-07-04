@@ -143,16 +143,21 @@ This is a practical approximation, not a substitute for NEC-based segment/curren
 
 ## 5) Non-Resonant Wire Optimization
 
-For each selected band, Rusty Wire generates resonance points from the
-**uncorrected** quarter-wave harmonics (i.e. $71.32/f \cdot VF$, *without* the
-transformer-length heuristic of §4). Resonance is a property of the wire
-geometry, not the feed, so the same point set drives the non-resonant optimizer,
-the resonant-compromise optimizer (§6), the OCFD split optimizer (§7), and the
-resonant-points shown on screen and in exports — they always agree, and none of
-them shift when the transformer ratio changes.
+For each selected band, Rusty Wire generates resonance points from the **physical
+resonant quarter-wave** $L_{1/4}^{\ast} = \tfrac{71.32}{f}\,VF\cdot F_d(d)$ — the
+quarter-wave with the conductor-diameter correction $F_d(d)$ of §9, but *without*
+the transformer-length heuristic of §4. Resonance is a property of the wire
+geometry (length, conductor diameter), not the feed, so a single shared helper
+produces this point set for the non-resonant optimizer, the resonant-compromise
+optimizer (§6), the OCFD split optimizer (§7), and the resonant-points shown on
+screen and in exports. None of them shift when the transformer ratio changes, and
+they use the identical harmonic positions. (The non-resonant optimizer
+additionally considers resonances within 1 m *outside* the search window so a
+candidate near an edge still gets an honest clearance; the display, export and
+compromise optimizer list only strictly in-window resonances.)
 
 $$
-R = \{h\,L_{1/4,i}\mid i\in\text{bands},\ h\in\mathbb{N}\}
+R = \{h\,L_{1/4,i}^{\ast}\mid i\in\text{bands},\ h\in\mathbb{N}\}
 $$
 
 The optimizer avoids **all** quarter-wave harmonics (the wire's resonant lengths
@@ -179,9 +184,10 @@ $$
 
 ## 6) Resonant Compromise Optimization
 
-For each band $i$, define resonant-point set $P_i$ (the uncorrected,
-transformer-independent quarter-wave harmonics of §5) in the active window.
-Per-band nearest distance at candidate $\ell$:
+For each band $i$, define resonant-point set $P_i$ (the physical resonant
+quarter-wave harmonics $h\,L_{1/4,i}^{\ast}$ of §5 — conductor-corrected and
+transformer-independent) in the active window. Per-band nearest distance at
+candidate $\ell$:
 
 $$
 D_i(\ell) = \min_{p\in P_i}|\ell-p|
