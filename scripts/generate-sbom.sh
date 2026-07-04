@@ -9,10 +9,22 @@ fi
 format="${1:-spdx}"
 out_file="${2:-}"
 
+# Pin the cargo-sbom version so the committed SBOM is reproducible. Different
+# cargo-sbom releases enumerate different per-target dependency sets, which would
+# otherwise make the SBOM churn between contributors' machines.
+PINNED_SBOM_VERSION="0.10.0"
+
 if ! cargo --list | grep -q '^    sbom'; then
   echo "error: cargo-sbom is not installed." >&2
-  echo "install it with: cargo install cargo-sbom" >&2
+  echo "install the pinned version with: cargo install cargo-sbom --version $PINNED_SBOM_VERSION --locked" >&2
   exit 1
+fi
+
+installed_sbom_version="$(cargo sbom --version 2>/dev/null | awk 'NR==1{print $NF}')"
+if [[ -n "$installed_sbom_version" && "$installed_sbom_version" != "$PINNED_SBOM_VERSION" ]]; then
+  echo "warning: cargo-sbom $installed_sbom_version differs from the pinned $PINNED_SBOM_VERSION;" >&2
+  echo "         the generated SBOM may differ from the committed one. To match, run:" >&2
+  echo "         cargo install cargo-sbom --version $PINNED_SBOM_VERSION --locked" >&2
 fi
 
 case "$format" in
