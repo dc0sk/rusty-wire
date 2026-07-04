@@ -1373,15 +1373,15 @@ pub fn non_resonant_recommendation_view(results: &AppResults) -> NonResonantReco
 
     let recommended_line = rec.map(|r| match units {
         UnitSystem::Metric => format!(
-            "  {:.2} m, resonance clearance: {:.2}%",
+            "  {:.2} m, high-Z clearance: {:.2}%",
             r.length_m, r.min_resonance_clearance_pct
         ),
         UnitSystem::Imperial => format!(
-            "  {:.2} ft, resonance clearance: {:.2}%",
+            "  {:.2} ft, high-Z clearance: {:.2}%",
             r.length_ft, r.min_resonance_clearance_pct
         ),
         UnitSystem::Both => format!(
-            "  {:.2} m ({:.2} ft), resonance clearance: {:.2}%",
+            "  {:.2} m ({:.2} ft), high-Z clearance: {:.2}%",
             r.length_m, r.length_ft, r.min_resonance_clearance_pct
         ),
     });
@@ -1503,6 +1503,10 @@ pub fn non_resonant_recommendation_display_lines(results: &AppResults) -> Vec<St
     };
 
     let mut lines = vec![view.heading.to_string(), view.window_line, rec_line];
+    lines.push("  (high-Z clearance = distance to the nearest hard-to-match half-wave".to_string());
+    lines.push(
+        "   resonance; low-Z current-fed resonances are easy to match and allowed)".to_string(),
+    );
 
     if let Some(heading) = view.equal_optima_heading {
         lines.push(heading.to_string());

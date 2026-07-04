@@ -774,14 +774,6 @@ pub fn calculate_non_resonant_window_optima(
 /// half-wave per band instead — see `build_non_resonant_resonance_points`.)
 pub(crate) const IN_WINDOW_PAD_M: f64 = 1e-9;
 
-/// A band's resonant wire lengths (quarter-wave harmonics `n·λ/4`) that fall in
-/// `[min_len_m - pad_m, max_len_m + pad_m]`, keyed by harmonic number.
-///
-/// Uses the physical resonant quarter-wave (`resonant_quarter_wave_m`): conductor-
-/// diameter corrected but transformer-independent. Every consumer — the
-/// non-resonant avoid-set, the resonant-compromise optimizer, the on-screen
-/// resonant-points list and the exports — goes through this single function so the
-/// resonance geometry can never drift between them.
 /// Impedance class of a resonance point, from the quarter-wave harmonic number.
 ///
 /// A wire is resonant (X ≈ 0) at every quarter-wave multiple. The feedpoint sees
@@ -818,6 +810,14 @@ impl ImpedanceClass {
     }
 }
 
+/// A band's resonant wire lengths (quarter-wave harmonics `n·λ/4`) that fall in
+/// `[min_len_m - pad_m, max_len_m + pad_m]`, keyed by harmonic number.
+///
+/// Uses the physical resonant quarter-wave (`resonant_quarter_wave_m`): conductor-
+/// diameter corrected but transformer-independent. Every consumer — the
+/// non-resonant avoid-set, the resonant-compromise optimizer, the on-screen
+/// resonant-points list and the exports — goes through this single function so the
+/// resonance geometry can never drift between them.
 pub(crate) fn band_resonant_points_m(
     resonant_quarter_wave_m: f64,
     min_len_m: f64,

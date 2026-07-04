@@ -151,10 +151,9 @@ geometry (length, conductor diameter), not the feed, so a single shared helper
 produces this point set for the non-resonant optimizer, the resonant-compromise
 optimizer (§6), the OCFD split optimizer (§7), and the resonant-points shown on
 screen and in exports. None of them shift when the transformer ratio changes, and
-they use the identical harmonic positions. (The non-resonant optimizer
-additionally considers resonances within 1 m *outside* the search window so a
-candidate near an edge still gets an honest clearance; the display, export and
-compromise optimizer list only strictly in-window resonances.)
+they use the identical harmonic positions. (The display, export and compromise
+optimizer list only strictly in-window resonances; the non-resonant optimizer
+pads its avoid-set outward — see below — so near-edge clearance stays honest.)
 
 Each harmonic $h$ has an **impedance class** set by its parity, because the feed
 sees a current maximum at odd multiples and a voltage maximum at even ones:
