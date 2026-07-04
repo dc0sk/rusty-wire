@@ -7,10 +7,19 @@ cd "$repo_root"
 cargo fmt --check
 cargo check
 cargo test
-./scripts/generate-sbom.sh spdx
 
+# SBOM freshness is advisory, not a hard gate: the SBOM is not checked in CI or
+# at release time, and `cargo sbom` output varies between tool versions (e.g. the
+# set of per-target dependencies it enumerates), so a byte-exact diff would fail
+# spuriously for anyone whose cargo-sbom differs from whoever last committed it.
+# Warn (and restore the working tree) instead of blocking the push.
+./scripts/generate-sbom.sh spdx
 if ! git diff --quiet -- sbom/rusty-wire.spdx.json; then
-  echo "error: sbom/rusty-wire.spdx.json was updated. Commit the refreshed SPDX SBOM before pushing." >&2
-  git --no-pager diff -- sbom/rusty-wire.spdx.json >&2 || true
-  exit 1
+  echo "warning: the regenerated SPDX SBOM differs from the committed one." >&2
+  echo "         If this reflects a real dependency change (Cargo.lock), run" >&2
+  echo "         'make sbom' with the pinned cargo-sbom version and commit the" >&2
+  echo "         refreshed sbom/ files. If it is only a cargo-sbom version" >&2
+  echo "         difference, no action is needed. (Not blocking the push.)" >&2
+  # Don't leave the developer's tree dirty with the regenerated file.
+  git checkout -- sbom/rusty-wire.spdx.json 2>/dev/null || true
 fi
