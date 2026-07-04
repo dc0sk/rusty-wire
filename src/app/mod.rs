@@ -2022,7 +2022,9 @@ pub fn resonant_points_in_window(results: &AppResults) -> Vec<ResonantPoint> {
     let mut points = Vec::new();
 
     for calc in &results.calculations {
-        let quarter_wave_m = calc.corrected_quarter_wave_m;
+        // Uncorrected quarter-wave: the resonant points shown are transformer-
+        // independent and match the non-resonant/compromise optimizers' point sets.
+        let quarter_wave_m = calc.quarter_wave_m;
         if quarter_wave_m <= 0.0 {
             continue;
         }

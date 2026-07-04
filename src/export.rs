@@ -1951,7 +1951,9 @@ fn collect_band_resonant_points_m(
     wire_max_m: f64,
 ) -> Vec<(u32, f64)> {
     let mut points = Vec::new();
-    let quarter_wave_m = calc.corrected_quarter_wave_m;
+    // Uncorrected quarter-wave: exported resonant points are transformer-
+    // independent and match the optimizers and the on-screen resonant-points list.
+    let quarter_wave_m = calc.quarter_wave_m;
     if quarter_wave_m <= 0.0 || wire_max_m <= wire_min_m {
         return points;
     }

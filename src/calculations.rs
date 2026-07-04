@@ -762,9 +762,12 @@ fn build_non_resonant_resonance_points(
 ) -> Vec<f64> {
     let mut resonance_points_m = Vec::new();
     for c in calculations {
-        // Use transformer-corrected quarter-wave as the base resonance point so
-        // optimum common wire length reflects the selected Unun/Balun ratio.
-        let quarter_wave_m = c.corrected_quarter_wave_m;
+        // Resonance is a property of the wire geometry, not the feed: use the
+        // uncorrected quarter-wave so the avoid-set is transformer-independent and
+        // matches the resonant-points shown in the display/export and targeted by
+        // the compromise optimizer. (The transformer-length heuristic is a
+        // build-length nudge, not physics.)
+        let quarter_wave_m = c.quarter_wave_m;
 
         let mut harmonic = 1_u32;
         loop {
@@ -824,7 +827,9 @@ pub fn calculate_resonant_compromises(
 
     let mut band_points: Vec<Vec<f64>> = Vec::new();
     for calc in calculations {
-        let quarter_wave_m = calc.corrected_quarter_wave_m;
+        // Uncorrected quarter-wave: resonance points are transformer-independent
+        // and match those shown by resonant_points_in_window in the same view.
+        let quarter_wave_m = calc.quarter_wave_m;
         if quarter_wave_m <= 0.0 {
             continue;
         }
@@ -950,7 +955,9 @@ pub fn optimize_ocfd_split_for_length(
 
         let mut worst_leg_clearance_pct = f64::INFINITY;
         for calc in calculations {
-            let quarter_wave = calc.corrected_quarter_wave_m;
+            // Uncorrected quarter-wave: OCFD leg resonance clearance is a physical
+            // property, independent of the feed transformer ratio.
+            let quarter_wave = calc.quarter_wave_m;
             if quarter_wave <= 0.0 {
                 continue;
             }
@@ -1538,6 +1545,67 @@ mod tests {
             assert!(comp.length_m <= config.max_len_m);
             assert!(comp.worst_band_distance_m >= 0.0);
         }
+    }
+
+    /// Regression guard for the resonance-point unification: every optimizer that
+    /// works from resonance points (non-resonant, resonant-compromise, OCFD split)
+    /// must produce identical results regardless of the transformer ratio, because
+    /// resonance is a property of the wire geometry, not the feed. Before the fix
+    /// these used the transformer-corrected quarter-wave and drifted per ratio.
+    #[test]
+    fn resonance_point_optimizers_are_transformer_independent() {
+        let bands = [band_at("40m", 7.1), band_at("20m", 14.175)];
+        let config = NonResonantSearchConfig {
+            min_len_m: 8.0,
+            max_len_m: 35.0,
+            step_m: 0.5,
+            preferred_center_m: 21.5,
+        };
+        let build = |ratio| {
+            bands
+                .iter()
+                .map(|b| {
+                    calculate_for_band_with_velocity(b, 1.0, ratio, 10.0, GroundClass::Average)
+                })
+                .collect::<Vec<_>>()
+        };
+        let c_1to1 = build(TransformerRatio::R1To1);
+        let c_1to49 = build(TransformerRatio::R1To49);
+
+        // Sanity: the transformer DID change the corrected build lengths, so this
+        // is a meaningful comparison (not two identical inputs).
+        assert!(
+            (c_1to1[0].corrected_quarter_wave_m - c_1to49[0].corrected_quarter_wave_m).abs() > 1e-6,
+            "transformer ratio should change the corrected build length"
+        );
+
+        let nr1 = calculate_non_resonant_optima(&c_1to1, 1.0, config);
+        let nr2 = calculate_non_resonant_optima(&c_1to49, 1.0, config);
+        assert_eq!(nr1.len(), nr2.len());
+        for (a, b) in nr1.iter().zip(nr2.iter()) {
+            assert!(
+                (a.length_m - b.length_m).abs() < 1e-9,
+                "non-resonant length depends on transformer: {} vs {}",
+                a.length_m,
+                b.length_m
+            );
+        }
+
+        let cp1 = calculate_resonant_compromises(&c_1to1, config);
+        let cp2 = calculate_resonant_compromises(&c_1to49, config);
+        assert_eq!(cp1.len(), cp2.len());
+        for (a, b) in cp1.iter().zip(cp2.iter()) {
+            assert!(
+                (a.length_m - b.length_m).abs() < 1e-9,
+                "compromise length depends on transformer: {} vs {}",
+                a.length_m,
+                b.length_m
+            );
+        }
+
+        let s1 = optimize_ocfd_split_for_length(&c_1to1, 20.0).map(|r| r.short_ratio);
+        let s2 = optimize_ocfd_split_for_length(&c_1to49, 20.0).map(|r| r.short_ratio);
+        assert_eq!(s1, s2, "OCFD split depends on transformer ratio");
     }
 
     // --- GroundClass ---

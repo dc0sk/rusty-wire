@@ -143,11 +143,21 @@ This is a practical approximation, not a substitute for NEC-based segment/curren
 
 ## 5) Non-Resonant Wire Optimization
 
-For each selected band, Rusty Wire generates resonance points from corrected quarter-wave harmonics:
+For each selected band, Rusty Wire generates resonance points from the
+**uncorrected** quarter-wave harmonics (i.e. $71.32/f \cdot VF$, *without* the
+transformer-length heuristic of §4). Resonance is a property of the wire
+geometry, not the feed, so the same point set drives the non-resonant optimizer,
+the resonant-compromise optimizer (§6), the OCFD split optimizer (§7), and the
+resonant-points shown on screen and in exports — they always agree, and none of
+them shift when the transformer ratio changes.
 
 $$
 R = \{h\,L_{1/4,i}\mid i\in\text{bands},\ h\in\mathbb{N}\}
 $$
+
+The optimizer avoids **all** quarter-wave harmonics (the wire's resonant lengths
+on each band), keeping the chosen length in the moderate-reactance region between
+resonances where a tuner has the easiest match.
 
 For candidate wire length $\ell$ in the configured search window:
 
@@ -169,7 +179,9 @@ $$
 
 ## 6) Resonant Compromise Optimization
 
-For each band $i$, define resonant-point set $P_i$ in the active window. Per-band nearest distance at candidate $\ell$:
+For each band $i$, define resonant-point set $P_i$ (the uncorrected,
+transformer-independent quarter-wave harmonics of §5) in the active window.
+Per-band nearest distance at candidate $\ell$:
 
 $$
 D_i(\ell) = \min_{p\in P_i}|\ell-p|
