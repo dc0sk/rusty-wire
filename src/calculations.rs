@@ -1787,6 +1787,137 @@ mod tests {
         assert!(!pts_thin.is_empty() && !pts_thick.is_empty());
     }
 
+    // ── Invariant / property sweeps ───────────────────────────────────────────
+
+    /// Resonant lengths must decrease strictly as frequency rises (L ∝ 1/f).
+    #[test]
+    fn invariant_resonant_length_strictly_decreases_with_frequency() {
+        let freqs = [1.8, 3.65, 5.35, 7.1, 10.1, 14.175, 18.1, 21.2, 24.9, 28.5];
+        let mut prev_half = f64::INFINITY;
+        let mut prev_quarter = f64::INFINITY;
+        for f in freqs {
+            let band = band_at("sweep", f);
+            let c = calculate_for_band_with_velocity(
+                &band,
+                1.0,
+                TransformerRatio::R1To1,
+                10.0,
+                GroundClass::Average,
+            );
+            assert!(
+                c.half_wave_m < prev_half,
+                "half-wave not strictly decreasing at {f} MHz"
+            );
+            assert!(
+                c.quarter_wave_m < prev_quarter,
+                "quarter-wave not strictly decreasing at {f} MHz"
+            );
+            assert!(c.resonant_quarter_wave_m > 0.0);
+            prev_half = c.half_wave_m;
+            prev_quarter = c.quarter_wave_m;
+        }
+    }
+
+    /// An OCFD split must partition the whole wire (ratios/legs sum) and stay
+    /// inside the searched short-leg band [0.20, 0.45] (long leg [0.55, 0.80]).
+    #[test]
+    fn invariant_ocfd_split_partitions_and_stays_in_bounds() {
+        let bands = [
+            band_at("40m", 7.1),
+            band_at("20m", 14.175),
+            band_at("10m", 28.5),
+        ];
+        let calcs: Vec<_> = bands
+            .iter()
+            .map(|b| {
+                calculate_for_band_with_velocity(
+                    b,
+                    1.0,
+                    TransformerRatio::R1To1,
+                    10.0,
+                    GroundClass::Average,
+                )
+            })
+            .collect();
+        for total in [12.0, 18.0, 20.1, 27.0, 40.2] {
+            let rec = optimize_ocfd_split_for_length(&calcs, total).expect("a split should exist");
+            assert!(
+                (rec.short_ratio + rec.long_ratio - 1.0).abs() < 1e-9,
+                "ratios do not sum to 1 at total {total}"
+            );
+            assert!(
+                (0.20..=0.45).contains(&rec.short_ratio),
+                "short ratio {} out of searched range",
+                rec.short_ratio
+            );
+            assert!(
+                (0.55..=0.80).contains(&rec.long_ratio),
+                "long ratio {} out of searched range",
+                rec.long_ratio
+            );
+            assert!(
+                (rec.short_leg_m + rec.long_leg_m - total).abs() < 1e-9,
+                "legs do not sum to the total wire at {total}"
+            );
+            assert!(rec.short_leg_m <= rec.long_leg_m + 1e-9);
+        }
+    }
+
+    /// Every non-resonant window optimum must be a local maximum of resonance
+    /// clearance: its distance to the nearest avoid-point is ≥ that of its
+    /// step-neighbours. This is the defining property of the optimizer's output.
+    #[test]
+    fn invariant_non_resonant_optima_are_local_clearance_maxima() {
+        let bands = [band_at("40m", 7.1), band_at("20m", 14.175)];
+        let calcs: Vec<_> = bands
+            .iter()
+            .map(|b| {
+                calculate_for_band_with_velocity(
+                    b,
+                    1.0,
+                    TransformerRatio::R1To1,
+                    10.0,
+                    GroundClass::Average,
+                )
+            })
+            .collect();
+        let config = NonResonantSearchConfig {
+            min_len_m: 8.0,
+            max_len_m: 35.0,
+            step_m: 0.1,
+            preferred_center_m: 21.5,
+        };
+        let points =
+            build_non_resonant_resonance_points(&calcs, config.min_len_m, config.max_len_m);
+        let nearest = |len: f64| {
+            points
+                .iter()
+                .map(|r| (len - r).abs())
+                .fold(f64::INFINITY, f64::min)
+        };
+
+        let optima = calculate_non_resonant_window_optima(&calcs, 1.0, config);
+        assert!(!optima.is_empty());
+        for o in &optima {
+            let here = nearest(o.length_m);
+            let step = config.step_m;
+            if o.length_m - step >= config.min_len_m - 1e-9 {
+                assert!(
+                    here + 1e-9 >= nearest(o.length_m - step),
+                    "optimum {} is not a local max on the left",
+                    o.length_m
+                );
+            }
+            if o.length_m + step <= config.max_len_m + 1e-9 {
+                assert!(
+                    here + 1e-9 >= nearest(o.length_m + step),
+                    "optimum {} is not a local max on the right",
+                    o.length_m
+                );
+            }
+        }
+    }
+
     // --- GroundClass ---
 
     #[test]
