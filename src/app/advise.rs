@@ -143,15 +143,23 @@ pub struct AdviseView {
 }
 
 pub fn optimize_transformer_candidates(config: &AppConfig) -> TransformerOptimizerView {
+    let baseline = build_optimizer_calculations(config, TransformerRatio::R1To1);
+    let baseline_avg_half_wave = mean_half_wave_m(&baseline);
+
+    // Representative frequency for the height-in-λ feedpoint-R model: the mean of
+    // the selected bands' centres (falls back to the 7.1 MHz calibration if empty).
+    let repr_freq_mhz = if baseline.is_empty() {
+        7.1
+    } else {
+        baseline.iter().map(|c| c.frequency_mhz).sum::<f64>() / baseline.len() as f64
+    };
     let source_impedance = super::assumed_feedpoint_impedance_ohm(
         config.mode,
         config.antenna_model,
         config.antenna_height_m,
+        repr_freq_mhz,
         config.ground_class,
     );
-
-    let baseline = build_optimizer_calculations(config, TransformerRatio::R1To1);
-    let baseline_avg_half_wave = mean_half_wave_m(&baseline);
 
     let mut candidates: Vec<TransformerOptimizerCandidate> = TRANSFORMER_OPTIMIZER_CANDIDATES
         .iter()
