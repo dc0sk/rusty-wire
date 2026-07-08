@@ -1283,6 +1283,9 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
     if let Some(ref mw) = mismatch {
         warning_lines.push(mw.message());
     }
+    if let Some(cw) = compromise_unreachable_bands_warning(results) {
+        warning_lines.push(cw);
+    }
     ResultsDisplayDocument {
         overview_heading: overview.heading,
         overview_header_lines: overview.header_lines,
@@ -1294,6 +1297,48 @@ pub fn results_display_document(results: &AppResults) -> ResultsDisplayDocument 
         skipped_band_details: skipped,
         transformer_mismatch_warning: mismatch,
     }
+}
+
+/// Bands whose resonances all fall outside the search window, so the resonant-
+/// compromise optimizer silently excludes them from its objective. Empty in any
+/// non-resonant mode. Pure function.
+pub fn compromise_unreachable_bands(results: &AppResults) -> Vec<String> {
+    if results.config.mode != CalcMode::Resonant {
+        return Vec::new();
+    }
+    let min_m = results.config.wire_min_m;
+    let max_m = results.config.wire_max_m;
+    results
+        .calculations
+        .iter()
+        .filter(|c| {
+            crate::calculations::band_resonant_points_m(
+                c.resonant_quarter_wave_m,
+                min_m,
+                max_m,
+                crate::calculations::IN_WINDOW_PAD_M,
+            )
+            .is_empty()
+        })
+        .map(|c| c.band_name.clone())
+        .collect()
+}
+
+/// One-line warning naming the bands the compromise recommendation ignores
+/// because they have no resonance in the search window, or `None` if all
+/// selected bands are reachable.
+pub fn compromise_unreachable_bands_warning(results: &AppResults) -> Option<String> {
+    let bands = compromise_unreachable_bands(results);
+    if bands.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "Compromise ignores {} — no resonance in the {:.0}-{:.0} m search window; widen the window to include {}.",
+        bands.join(", "),
+        results.config.wire_min_m,
+        results.config.wire_max_m,
+        if bands.len() == 1 { "it" } else { "them" },
+    ))
 }
 
 /// Return per-band skip details for all bands excluded from this run.
@@ -3737,6 +3782,44 @@ mod tests {
     }
 
     #[test]
+    fn compromise_warns_about_bands_with_no_in_window_resonance() {
+        // 160m (index 0): resonant quarter-wave ~37.5 m, outside the default
+        // 8-35 m window; 40m (index 3) is reachable.
+        let config = AppConfig {
+            mode: CalcMode::Resonant,
+            band_indices: vec![1, 4],
+            ..AppConfig::default()
+        };
+        let results = run_calculation(config);
+
+        let unreachable = compromise_unreachable_bands(&results);
+        assert!(
+            unreachable.iter().any(|b| b.contains("160")),
+            "160m should be flagged as unreachable, got {unreachable:?}"
+        );
+        let warn = compromise_unreachable_bands_warning(&results).expect("a warning is expected");
+        assert!(warn.contains("Compromise ignores"));
+        assert!(results_display_document(&results)
+            .warning_lines
+            .iter()
+            .any(|l| l.contains("Compromise ignores")));
+
+        // Default selection (all bands resonate in-window) → no such warning.
+        let ok = run_calculation(AppConfig::default());
+        assert!(compromise_unreachable_bands_warning(&ok).is_none());
+
+        // Non-resonant mode never emits it.
+        let nr = run_calculation(AppConfig {
+            mode: CalcMode::NonResonant,
+            band_indices: vec![1, 4],
+            wire_min_m: 8.0,
+            wire_max_m: 35.0,
+            ..AppConfig::default()
+        });
+        assert!(compromise_unreachable_bands(&nr).is_empty());
+    }
+
+    #[test]
     fn results_display_document_includes_skipped_band_warning_lines() {
         let mut results = run_calculation(AppConfig::default());
         results.skipped_band_indices = vec![0, 99];
@@ -4148,8 +4231,10 @@ mod tests {
     #[test]
     fn results_display_document_skipped_band_details_populated_when_bands_skipped() {
         let mut config = AppConfig::default();
-        // Band index 999 does not exist in any region — will be skipped
-        config.band_indices = vec![1, 999];
+        // idx 4 = 40m (resonates in the default window); index 999 does not exist
+        // in any region and is skipped. 40m avoids the compromise unreachable-band
+        // warning so this test isolates the skipped-band warning.
+        config.band_indices = vec![4, 999];
         let results = run_calculation(config);
         let doc = results_display_document(&results);
 
