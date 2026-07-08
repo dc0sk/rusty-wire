@@ -100,7 +100,8 @@ Work needed before or alongside the TUI. Items are roughly in dependency order.
 
 Depends on TUI being stable and `AppState`/`AppAction` being settled.
 
-- GUI front-end using `iced`, built on the same app-layer API as the TUI
+- ✅ **First-pass `iced` GUI** — standalone `gui/` crate (`cd gui && cargo run --release`), built on the shared app-layer API via the public `prelude`. Antenna/mode/ground/height pickers + velocity-factor slider, live recalculation, and the same `results_display_document` the CLI/TUI render. Kept as a **separate crate with its own Cargo.lock** (the "separate crates" packaging option) so iced's heavy dependency tree stays out of the main package's lockfile, `cargo audit`, and CI.
+- GUI front-end using `iced`, built on the same app-layer API as the TUI (next: charts for resonant points / non-resonant optima, config comparison, export; see `docs/backlog.md`)
 - Packaging decision: single binary with multiple entry paths, or separate crates
 - See `docs/backlog.md` for GUI-specific enhancement ideas
 

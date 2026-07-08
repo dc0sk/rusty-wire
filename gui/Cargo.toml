@@ -1,0 +1,22 @@
+# Standalone GUI crate for Rusty Wire.
+#
+# Kept OUTSIDE the main package (its own `[workspace]` and Cargo.lock) so iced's
+# heavy graphics dependency tree — which carries unmaintained crates and its own
+# advisories — never enters the main crate's lockfile, `cargo audit`, or CI. The
+# GUI depends on rusty-wire as a path dependency and uses only its public API.
+#
+# Build/run:  cd gui && cargo run --release
+[package]
+name = "rusty-wire-gui"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-2.0-or-later"
+description = "Desktop GUI (iced) for Rusty Wire, built on the rusty-wire app-layer API."
+publish = false
+
+[dependencies]
+rusty-wire = { path = ".." }
+iced = "0.13"
+
+# Own workspace root: isolates this crate's Cargo.lock from the main package.
+[workspace]
