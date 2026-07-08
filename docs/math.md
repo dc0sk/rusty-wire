@@ -257,7 +257,7 @@ Higher score ranks earlier.
 
 Current models are intentionally lightweight and fast:
 - Partial mitigation implemented: standardized antenna-height presets (7 m, 10 m, 12 m) now apply a first-order skip-distance scaling model.
-- No explicit R/X feedpoint sweep vs height/ground/conductor diameter.
+- Feedpoint **resistance** is estimated frequency-aware from NEC corpus anchors interpolated on height-in-wavelengths (`nec_calibrated_dipole_r`, §4); the **reactance** ($X$) is not modelled and there is no full R/X sweep vs conductor diameter.
 - No common-mode choke model or ferrite core loss/thermal derating.
 - No full current-distribution solver in the optimization loop.
 
@@ -306,7 +306,35 @@ The $450/f$ rule is a rule-of-thumb starting point, **not** a cut length. A real
 trap dipole's element lengths depend on the trap inductance/capacitance and the
 specific band pair, which this lightweight model does not solve. Treat the output
 as an initial wire estimate and finalise element lengths against the trap
-manufacturer's data or a NEC model.
+manufacturer's data or a NEC model. The **band-pair guidance** of §11 is the more
+useful design output.
+
+## 11) Trap Dipole Guidance (Per Band Pair)
+
+When two or more bands are selected, Rusty Wire emits a per-band-pair guidance
+section (upper band $f_u$, lower band $f_l$, $f_u > f_l$). For each adjacent pair:
+
+- **Inner leg** (per side) — the upper-band element inboard of the trap, cut to a
+  quarter-wave for $f_u$:
+$$
+L_{\mathrm{inner}} = \frac{71.58}{f_u}\,VF \quad(\approx 234.85/f_u\ \mathrm{ft})
+$$
+- **Total leg** (per side) — resonant on the lower band. It is ~4 % shorter than a
+  plain quarter-wave because the trap's inductance electrically lengthens the
+  outer section, so less physical wire reaches $f_l$ resonance:
+$$
+L_{\mathrm{leg}} = \frac{68.58}{f_l}\,VF \quad(\approx 225/f_l\ \mathrm{ft}),\qquad
+L_{\mathrm{outer}} = \max(L_{\mathrm{leg}} - L_{\mathrm{inner}},\,0)
+$$
+- **Trap** — parallel-resonant at $f_u$, isolating the outer section on the upper
+  band. From $f = 1/(2\pi\sqrt{LC})$ the required $L\text{–}C$ product is
+$$
+L[\mu\mathrm{H}]\cdot C[\mathrm{pF}] = \frac{10^6}{4\pi^2\,f_u^2} = \frac{25{,}330}{f_u^2}
+$$
+  and Rusty Wire lists a few practical $(C, L)$ component pairs satisfying it.
+
+This is a first-order single-trap-per-side model; multi-trap and mutual-coupling
+effects are not solved.
 
 ## References
 

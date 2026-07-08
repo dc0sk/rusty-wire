@@ -1160,10 +1160,21 @@ pub fn results_overview_view(results: &AppResults) -> ResultsOverviewView {
     ];
 
     if results.config.antenna_model == Some(AntennaModel::EndFedHalfWave) {
+        let repr_freq_mhz = if results.calculations.is_empty() {
+            7.1
+        } else {
+            results
+                .calculations
+                .iter()
+                .map(|c| c.frequency_mhz)
+                .sum::<f64>()
+                / results.calculations.len() as f64
+        };
         let feedpoint_r = assumed_feedpoint_impedance_ohm(
             results.config.mode,
             results.config.antenna_model,
             results.config.antenna_height_m,
+            repr_freq_mhz,
             results.config.ground_class,
         );
         let cmp = compare_efhw_transformers(feedpoint_r);
@@ -1712,16 +1723,22 @@ pub fn trap_dipole_guidance_view(results: &AppResults) -> Option<TrapDipoleGuida
         let f_upper = upper.freq_center_mhz;
         let f_lower = lower.freq_center_mhz;
 
-        // Quarter-wave inner leg (upper-band driven element per side).
+        // Inner leg: the upper-band element inboard of the trap. Cut to a
+        // (bare-wire) quarter-wave for the upper band — 71.58/f m ≈ 234.85/f ft,
+        // the standard quarter-wave design length. See docs/math.md §11.
         let inner_leg_m = (71.58 / f_upper) * vf;
-        // Trap-dipole total leg per side for the lower band (uses TRAP_DIPOLE_COEFF_M/2).
+        // Total leg (per side) resonant on the lower band: 68.58/f m ≈ 225/f ft.
+        // This is ~4% shorter than a plain quarter-wave (71.32/f) because the
+        // trap's inductance electrically lengthens the outer section, so less
+        // physical wire is needed to reach lower-band resonance.
         let total_leg_m = (68.58 / f_lower) * vf;
         let outer_section_m = (total_leg_m - inner_leg_m).max(0.0);
         let full_span_m = total_leg_m * 2.0;
 
-        // Trap resonant frequency = upper-band centre.
+        // The trap is parallel-resonant at the upper band, isolating the outer
+        // section there so the inner leg acts as a stand-alone upper-band dipole.
         let trap_freq_mhz = f_upper;
-        // L·C product in μH·pF:  L[μH] × C[pF] = 25 330 / f[MHz]²
+        // Resonance f = 1/(2π√(LC)) ⇒ L[μH]·C[pF] = 1e6/(4π²·f[MHz]²) = 25 330/f².
         let lc_product = 25_330.0 / (trap_freq_mhz * trap_freq_mhz);
         let cap_values = select_trap_cap_examples(lc_product);
         let component_examples: Vec<TrapDipoleComponentExample> = cap_values
@@ -3149,6 +3166,7 @@ fn assumed_feedpoint_impedance_ohm(
     mode: CalcMode,
     antenna_model: Option<AntennaModel>,
     antenna_height_m: f64,
+    freq_mhz: f64,
     ground_class: GroundClass,
 ) -> f64 {
     match antenna_model {
@@ -3156,16 +3174,18 @@ fn assumed_feedpoint_impedance_ohm(
         Some(AntennaModel::Dipole)
         | Some(AntennaModel::InvertedVDipole)
         | Some(AntennaModel::HybridMultiSection) => {
-            crate::calculations::nec_calibrated_dipole_r(antenna_height_m, ground_class)
+            crate::calculations::nec_calibrated_dipole_r(antenna_height_m, freq_mhz, ground_class)
         }
         Some(AntennaModel::TrapDipole) => 65.0,
         Some(AntennaModel::FullWaveLoop) => 100.0,
         Some(AntennaModel::EndFedHalfWave) => 2800.0,
         Some(AntennaModel::OffCenterFedDipole) => 200.0,
         None => match mode {
-            CalcMode::Resonant => {
-                crate::calculations::nec_calibrated_dipole_r(antenna_height_m, ground_class)
-            }
+            CalcMode::Resonant => crate::calculations::nec_calibrated_dipole_r(
+                antenna_height_m,
+                freq_mhz,
+                ground_class,
+            ),
             CalcMode::NonResonant => 450.0,
         },
     }
