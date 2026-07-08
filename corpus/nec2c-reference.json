@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "reference_engine": "nec2c (NEC-2, double precision C translation)",
+  "regenerate_with": "scripts/nec-reference.sh",
+  "notes": [
+    "Second reference solver alongside fnec-rust (reference-results.json). Unlike",
+    "the fnec Hallen solver, nec2c handles finite ground and multi-wire",
+    "non-collinear geometry, so it can validate the inverted-V and ground cases.",
+    "CI does NOT run nec2c; tests compare rusty-wire against these committed values.",
+    "",
+    "FINDING (empirical rule vs NEC free space): a bare thin wire resonates ~2%",
+    "LONGER in NEC free space than the classic 468/f handbook rule rusty-wire uses.",
+    "At 7.1 MHz / 1 mm radius / 51 segments, nec2c resonance (X=0) is 20.54 m while",
+    "468/f gives 20.09 m (2.2% short). The 468/f rule is the accepted PRACTICAL",
+    "length for real installations (ground proximity and end effects shorten a real",
+    "antenna relative to idealised NEC free space), so this offset is expected. NEC",
+    "length gates therefore use a realistic +-3% tolerance, not the idealised +-1%."
+  ],
+  "cases": {
+    "dipole-40m-freesp": {
+      "deck_file": "nec2c-dipole-40m-freesp.nec",
+      "description": "Half-wave dipole, 40m, free space, 1 mm radius, 51 segments",
+      "frequency_mhz": 7.1,
+      "resonant_length_m": 20.541,
+      "at_rusty_wire_length_m": 20.09,
+      "feedpoint_at_rusty_wire_length": { "real_ohm": 67.418, "imag_ohm": -35.180 },
+      "length_tolerance_pct": 3.0
+    },
+    "invertedv-40m-freesp": {
+      "deck_file": "nec2c-invertedv-40m-freesp.nec",
+      "description": "Inverted-V, 40m, 90-deg apex at 12 m, free space, at rusty-wire's leg length (9.74 m)",
+      "frequency_mhz": 7.1,
+      "apex_deg": 90,
+      "apex_height_m": 12.0,
+      "feedpoint": { "real_ohm": 33.345, "imag_ohm": -113.000 },
+      "feedpoint_real_range_ohm": [25.0, 50.0]
+    }
+  }
+}

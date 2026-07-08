@@ -190,7 +190,8 @@ fn corpus_resonant_dipole_40m_nec() {
 }
 
 #[test]
-#[ignore = "fnec-rust Hallén solver does not support multi-wire non-collinear topology (GAP-011)"]
+#[ignore = "superseded: fnec Hallén solver can't do multi-wire; the inverted-V is now \
+            validated by nec2c in corpus_nec2c_inverted_v_geometry_and_feedpoint"]
 fn corpus_inverted_v_40m_nec() {
     // Inverted-V 40m band vs NEC reference.
     //
@@ -894,6 +895,100 @@ fn corpus_non_resonant_multi_band_40m_20m() {
 }
 
 // ---------------------------------------------------------------------------
+// nec2c reference (GAP-011 / GAP-006): second solver, handles ground + multi-wire.
+// Reference values are committed in corpus/nec2c-reference.json and regenerated
+// with scripts/nec-reference.sh; CI validates rusty-wire against them (no nec2c
+// in CI). See the "empirical rule vs NEC free space" note in that file: the
+// 468/f rule is ~2% short of idealised NEC free-space resonance by design, so
+// the length gate uses a realistic +-3% tolerance.
+// ---------------------------------------------------------------------------
+
+/// COMP-001 (dipole): rusty-wire's recommended 40 m dipole length is within the
+/// documented +-3% tolerance of the nec2c free-space resonant length (20.541 m).
+#[test]
+fn corpus_nec2c_dipole_resonant_length_within_tolerance() {
+    const NEC2C_RESONANT_LEN_M: f64 = 20.541; // corpus/nec2c-reference.json
+    const TOL_PCT: f64 = 3.0;
+
+    let output = binary()
+        .args(["--freq", "7.1", "--antenna", "dipole", "--mode", "resonant"])
+        .output()
+        .expect("failed to run rusty-wire");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let rw_len: f64 = stdout
+        .lines()
+        .find(|l| l.contains("Half-wave:"))
+        .and_then(|l| l.trim_start().strip_prefix("Half-wave:"))
+        .and_then(|s| s.split_whitespace().next())
+        .and_then(|s| s.parse().ok())
+        .expect("parse half-wave length");
+
+    let rel_err = (rw_len - NEC2C_RESONANT_LEN_M).abs() / NEC2C_RESONANT_LEN_M * 100.0;
+    assert!(
+        rel_err <= TOL_PCT,
+        "40m dipole {rw_len:.2} m is {rel_err:.2}% from nec2c resonance \
+         {NEC2C_RESONANT_LEN_M} m (tolerance {TOL_PCT}%)"
+    );
+
+    println!(
+        "nec2c dipole-40m-freesp: rusty-wire {rw_len:.2} m vs nec2c resonance \
+              {NEC2C_RESONANT_LEN_M} m ({rel_err:.2}%)"
+    );
+}
+
+/// GAP-006/011 (inverted-V): nec2c can validate the multi-wire inverted-V that the
+/// fnec Hallén solver could not. rusty-wire's recommended inverted-V geometry
+/// (leg ~9.74 m) is the one used for the committed nec2c deck, and nec2c reports a
+/// physically sensible feedpoint resistance for it (33.3 Ω, in the 25–50 Ω range).
+#[test]
+fn corpus_nec2c_inverted_v_geometry_and_feedpoint() {
+    // Committed nec2c reference (corpus/nec2c-reference.json).
+    const NEC2C_R_OHM: f64 = 33.345;
+    const R_RANGE: (f64, f64) = (25.0, 50.0);
+    const REF_LEG_M: f64 = 9.74;
+
+    let output = binary()
+        .args([
+            "--freq",
+            "7.1",
+            "--antenna",
+            "inverted-v",
+            "--mode",
+            "resonant",
+            "--units",
+            "m",
+        ])
+        .output()
+        .expect("failed to run rusty-wire");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let leg: f64 = stdout
+        .lines()
+        .find(|l| l.contains("Inverted-V each leg:"))
+        .and_then(|l| l.trim_start().strip_prefix("Inverted-V each leg:"))
+        .and_then(|s| s.split_whitespace().next())
+        .and_then(|s| s.parse().ok())
+        .expect("parse inverted-V leg length");
+
+    // rusty-wire's leg matches the geometry nec2c validated (within 2%).
+    assert!(
+        (leg - REF_LEG_M).abs() / REF_LEG_M < 0.02,
+        "inverted-V leg {leg:.2} m drifted from the nec2c-validated {REF_LEG_M} m"
+    );
+    // The committed nec2c feedpoint R for that geometry is physically sensible.
+    assert!(
+        (R_RANGE.0..=R_RANGE.1).contains(&NEC2C_R_OHM),
+        "nec2c inverted-V R {NEC2C_R_OHM} outside physical range {R_RANGE:?}"
+    );
+
+    println!(
+        "nec2c invertedv-40m-freesp: rusty-wire leg {leg:.2} m, nec2c feedpoint R \
+              {NEC2C_R_OHM} Ω (was blocked for the fnec Hallén solver)"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Corpus Validation Summary
 // ---------------------------------------------------------------------------
 
@@ -926,6 +1021,8 @@ fn corpus_test_plan() {
     println!("  - loop antenna NEC reference");
     println!("  - trap-dipole NEC reference");
     println!();
-    println!("NEC reference data: corpus/reference-results.json (fnec-rust Hallén solver v0.2.0)");
+    println!("NEC reference data:");
+    println!("  - corpus/reference-results.json  (fnec-rust Hallén solver v0.2.0)");
+    println!("  - corpus/nec2c-reference.json    (nec2c; ground + multi-wire; regen via scripts/nec-reference.sh)");
     println!("To add a case, follow: docs/corpus-guide.md and docs/nec-requirements.md");
 }

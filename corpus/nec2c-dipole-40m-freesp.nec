@@ -1,0 +1,9 @@
+CM Half-wave dipole, 40m (7.1 MHz), free space
+CM rusty-wire recommended length 20.09 m (468/f), radius 0.001 m, 51 segments
+CE
+GW 1 51 0 0 -10.045 0 0 10.045 0.001
+GE 0
+FR 0 1 0 0 7.1 0
+EX 0 1 26 0 1.0 0.0
+RP 0 1 1 1000 0 0 0 0
+EN

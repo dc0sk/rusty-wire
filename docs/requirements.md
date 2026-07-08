@@ -2,7 +2,7 @@
 project: rusty-wire
 doc: docs/requirements.md
 status: living
-last_updated: 2026-04-30
+last_updated: 2026-07-08
 ---
 
 # Requirements Engineering
@@ -251,11 +251,11 @@ Resolution: Full keyboard navigation implemented in `src/tui/mod.rs::handle_key`
 Notes: Affects NFR-006. Resolved.
 
 **GAP-006**: NEC-based validation corpus for loop and trap-dipole models.
-Status: deferred
+Status: deferred (unblocked)
 Target phase: 3
 Owner: unassigned
-Resolution: —
-Notes: Affects COMP-001. Requires reference sweeps from EZNEC/NEC-4. Deferred pending adoption of these models in production use.
+Resolution: The nec2c pipeline added under GAP-011 (`scripts/nec-reference.sh`) removes the tooling blocker — nec2c solves multi-wire loop/trap geometry that the fnec Hallén solver could not. Loop and trap-dipole reference decks + committed values remain to be added.
+Notes: Affects COMP-001. No longer blocked on solver availability; remaining work is deck generation for the loop and trap models.
 
 **GAP-007**: ITU-R P.368 tolerance verification incomplete.
 Status: **resolved** (2026-04-30)
@@ -289,8 +289,8 @@ Notes: NEC seed cases (`resonant_dipole_40m_nec`, `inverted_v_40m_nec`) remain i
 Status: **partial** (2026-04-30)
 Target phase: 2 (minimal), 3 (complete)
 Owner: unassigned
-Resolution: Minimal baseline established. 40m free-space resonant dipole (7.1 MHz) NEC deck created (`corpus/dipole-40m-freesp.nec`), fnec reference obtained (Z = 62.94 - j69.28 Ω), and corpus test `corpus_resonant_dipole_40m_nec` enabled (active, CI-gated baseline validation). Remaining work: 14+ NEC decks for ground variants, height-aware cases, inverted-V, EFHW, and conductor correction. See [docs/nec-requirements.md](nec-requirements.md) for full Phase 2/3 plan. Estimated completion: ~6.5 hours of NEC deck generation and testing.
-Notes: COMP-001 resonant tolerance matrix rows remain partially deferred (dipole free-space now CI-gated; ground/height/other-antennas remain Phase 3). Affects full closure of COMP-001. Decision recorded: 2026-04-30.
+Resolution: Baseline extended with a second reference solver, **nec2c** (NEC-2, double precision), which unlike the fnec Hallén solver supports finite ground and multi-wire geometry. `scripts/nec-reference.sh` regenerates the reference values, committed in `corpus/nec2c-reference.json` (CI validates against the committed data; nec2c is not required in CI). Two nec2c-backed CI-gated tests are now active: `corpus_nec2c_dipole_resonant_length_within_tolerance` (dipole length vs nec2c free-space resonance) and `corpus_nec2c_inverted_v_geometry_and_feedpoint` (the multi-wire inverted-V that fnec could not solve). Remaining work: ground/height-aware decks, EFHW, and loop/trap (GAP-006) — the pipeline is now in place to add them.
+Notes: A physical finding was recorded — a bare thin wire resonates ~2% **longer** in idealised NEC free space than the practical 468/f rule rusty-wire uses (nec2c: 20.54 m vs 20.09 m at 7.1 MHz). The 468/f rule is the accepted length for real installations, so COMP-001 NEC length gates use a realistic ±3% tolerance rather than ±1%. Decision recorded: 2026-07-08.
 
 ---
 
