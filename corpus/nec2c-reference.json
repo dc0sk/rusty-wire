@@ -34,6 +34,21 @@
       "apex_height_m": 12.0,
       "feedpoint": { "real_ohm": 33.345, "imag_ohm": -113.000 },
       "feedpoint_real_range_ohm": [25.0, 50.0]
+    },
+    "dipole-40m-ground-R": {
+      "description": "Horizontal dipole feedpoint R (ohm) over finite ground, 40m (7.1 MHz), L=20.09 m, GN 2. Calibrates nec_calibrated_dipole_r(). Validated: nec2c free-space resonant R = 72.1 ohm (textbook ~73). R RISES with height (image theory), unlike the earlier fnec anchors.",
+      "frequency_mhz": 7.1,
+      "ground_params_sigma_epsr": {
+        "poor": [0.001, 5.0],
+        "average": [0.005, 13.0],
+        "good": [0.030, 20.0]
+      },
+      "feedpoint_real_ohm": {
+        "poor":    { "7m": 65.8, "10m": 73.7, "12m": 76.6 },
+        "average": { "7m": 62.1, "10m": 76.7, "12m": 81.9 },
+        "good":    { "7m": 57.6, "10m": 78.9, "12m": 86.5 }
+      },
+      "free_space_real_ohm": 67.4
     }
   }
 }

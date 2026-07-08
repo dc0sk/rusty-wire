@@ -292,6 +292,8 @@ Owner: unassigned
 Resolution: Baseline extended with a second reference solver, **nec2c** (NEC-2, double precision), which unlike the fnec Hallén solver supports finite ground and multi-wire geometry. `scripts/nec-reference.sh` regenerates the reference values, committed in `corpus/nec2c-reference.json` (CI validates against the committed data; nec2c is not required in CI). Two nec2c-backed CI-gated tests are now active: `corpus_nec2c_dipole_resonant_length_within_tolerance` (dipole length vs nec2c free-space resonance) and `corpus_nec2c_inverted_v_geometry_and_feedpoint` (the multi-wire inverted-V that fnec could not solve). Remaining work: ground/height-aware decks, EFHW, and loop/trap (GAP-006) — the pipeline is now in place to add them.
 Notes: A physical finding was recorded — a bare thin wire resonates ~2% **longer** in idealised NEC free space than the practical 468/f rule rusty-wire uses (nec2c: 20.54 m vs 20.09 m at 7.1 MHz). The 468/f rule is the accepted length for real installations, so COMP-001 NEC length gates use a realistic ±3% tolerance rather than ±1%. Decision recorded: 2026-07-08.
 
+Follow-up (2026-07-08): the dipole **feedpoint-R model** (`nec_calibrated_dipole_r`, GAP item 3c) was re-calibrated against nec2c after nec2c reproduced the textbook free-space half-wave R (72.1 Ω) while the earlier fnec-rust anchors were physically implausible (R *falling* with height and ~−95 Ω reactance for a resonant dipole). The model now interpolates a full nec2c ground matrix (poor/average/good × 7/10/12 m; R correctly *rises* with height toward the ~0.3 λ peak). CI-gated by `corpus_nec2c_dipole_ground_feedpoint_r_matrix`. Reactance is still not modelled.
+
 ---
 
 ## Traceability Matrix

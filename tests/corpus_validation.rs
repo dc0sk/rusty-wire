@@ -988,6 +988,40 @@ fn corpus_nec2c_inverted_v_geometry_and_feedpoint() {
     );
 }
 
+/// COMP-001 (dipole feedpoint R over ground): `nec_calibrated_dipole_r` reproduces
+/// the nec2c finite-ground matrix (corpus/nec2c-reference.json) at 7/10/12 m over
+/// each ground class at 7.1 MHz. Guards the nec2c re-calibration (R rises with
+/// height) against regression back to the old fnec anchors.
+#[test]
+fn corpus_nec2c_dipole_ground_feedpoint_r_matrix() {
+    use rusty_wire::calculations::{nec_calibrated_dipole_r, GroundClass};
+    // (ground, height_m, nec2c reference R in ohms)
+    let matrix = [
+        (GroundClass::Poor, 7.0, 65.8),
+        (GroundClass::Poor, 10.0, 73.7),
+        (GroundClass::Poor, 12.0, 76.6),
+        (GroundClass::Average, 7.0, 62.1),
+        (GroundClass::Average, 10.0, 76.7),
+        (GroundClass::Average, 12.0, 81.9),
+        (GroundClass::Good, 7.0, 57.6),
+        (GroundClass::Good, 10.0, 78.9),
+        (GroundClass::Good, 12.0, 86.5),
+    ];
+    for (ground, height, r_ref) in matrix {
+        let r = nec_calibrated_dipole_r(height, 7.1, ground);
+        assert!(
+            (r - r_ref).abs() < 0.2,
+            "{ground:?} {height} m: model {r:.1} Ω vs nec2c {r_ref} Ω"
+        );
+    }
+    // The physical trend the fnec anchors got wrong: R rises with height.
+    assert!(
+        nec_calibrated_dipole_r(7.0, 7.1, GroundClass::Good)
+            < nec_calibrated_dipole_r(12.0, 7.1, GroundClass::Good)
+    );
+    println!("nec2c dipole-40m-ground-R matrix: nec_calibrated_dipole_r matches all 9 cells");
+}
+
 // ---------------------------------------------------------------------------
 // Corpus Validation Summary
 // ---------------------------------------------------------------------------

@@ -488,51 +488,54 @@ pub fn calculate_for_band_with_environment(
 }
 
 /// Return the NEC-calibrated radiation resistance (real part of feedpoint impedance)
-/// for a half-wave dipole at the given height and ground, derived from fnec-rust
-/// Hallén solver corpus sweeps (corpus/reference-results.json, v2.9.0).
+/// for a horizontal half-wave dipole at the given height, frequency and ground,
+/// derived from **nec2c** (NEC-2) solves (corpus/nec2c-reference.json).
 ///
-/// The interpolation is on height-in-**wavelengths** (`h/λ = height·f/c`), so the
-/// estimate is frequency-aware and reproduces the 40 m calibration exactly. The
-/// underlying anchor magnitudes are still measured only at 7.1 MHz, and only R is
-/// modelled (corpus reactance is not applied), so values away from 40 m remain a
-/// coarse first-order estimate until a full multi-frequency NEC sweep is
-/// committed (GAP-011).
+/// A horizontal dipole's radiation resistance rises with height in wavelengths
+/// toward a peak near ~0.3 λ, then relaxes back toward the free-space value. The
+/// anchors are nec2c solves at 7/10/12 m AGL over poor/average/good ground at
+/// 7.1 MHz (h/λ = 0.166/0.237/0.284) plus the free-space value at 0.5 λ, so the
+/// estimate is frequency-aware (interpolated on `h/λ = height·f/c`). nec2c is
+/// validated against the textbook free-space half-wave R (~72 Ω).
 ///
-/// Reference data (7.1 MHz, 2 mm wire, 51 segments, bare-wire ~0.95 end-effect cut):
-///   free space:          R ≈  62.94 Ω
-///   7 m AGL, good:       R ≈  73.03 Ω
-///   10 m AGL, poor:      R ≈  56.38 Ω
-///   10 m AGL, average:   R ≈  54.35 Ω
-///   10 m AGL, good:      R ≈  52.84 Ω
-///   12 m AGL, good:      R ≈  45.56 Ω
+/// This supersedes earlier fnec-rust anchors (a *falling* R-vs-height trend with
+/// ~−95 Ω reactance for a resonant dipole — physically implausible). Only R is
+/// modelled; reactance is not.
 ///
-/// For heights other than 7/10/12 m the value is linearly interpolated.
-/// Ground-class offset at 10 m is applied as a calibrated delta.
+/// nec2c reference R (7.1 MHz, 20.09 m, 1 mm radius, 51 segments):
+///                  7 m      10 m     12 m
+///   poor          65.8     73.7     76.6
+///   average       62.1     76.7     81.9
+///   good          57.6     78.9     86.5     (free space ≈ 67.4)
 pub fn nec_calibrated_dipole_r(
     antenna_height_m: f64,
     freq_mhz: f64,
     ground_class: GroundClass,
 ) -> f64 {
-    // A horizontal dipole's radiation resistance tracks its height in WAVELENGTHS
-    // (image-method ground coupling), not raw metres. Re-express the NEC corpus
-    // anchors — measured at 7.1 MHz, 7/10/12 m AGL, "good" ground — as height-in-λ,
-    // then interpolate on the actual band's h/λ. This reproduces the 40 m
-    // calibration exactly (10 m @ 7.1 MHz → 0.237 λ → 52.84 Ω) while making the
-    // estimate frequency-aware: at 20 m a 10 m mast is ~0.47 λ, not ~0.24 λ, and
-    // gets a correspondingly higher R. A free-space anchor at 0.5 λ lets high
-    // antennas / high bands relax toward the measured free-space value instead of
-    // clamping to the 12 m figure. Still a coarse first-order model until a full
-    // multi-frequency NEC sweep is committed (GAP-011).
     const LAMBDA_CAL_M: f64 = 299.792_458 / 7.1; // wavelength at the calibration freq
-    const FREE_SPACE_R: f64 = 62.94; // NEC corpus free-space R (high-antenna asymptote)
+    const FREE_SPACE_R: f64 = 67.4; // nec2c free-space R (high-antenna asymptote)
 
-    // (height-in-λ, R at "good" ground), ascending in h/λ.
-    let anchors: [(f64, f64); 4] = [
-        (7.0 / LAMBDA_CAL_M, 73.03),  // 0.166 λ  (7 m @ 7.1 MHz)
-        (10.0 / LAMBDA_CAL_M, 52.84), // 0.237 λ  (10 m @ 7.1 MHz)
-        (12.0 / LAMBDA_CAL_M, 45.56), // 0.284 λ  (12 m @ 7.1 MHz)
-        (0.5, FREE_SPACE_R),          // half-wave height: ground coupling weakens
-    ];
+    // (height-in-λ, R) anchors for this ground class, ascending in h/λ.
+    let anchors: [(f64, f64); 4] = match ground_class {
+        GroundClass::Poor => [
+            (7.0 / LAMBDA_CAL_M, 65.8),
+            (10.0 / LAMBDA_CAL_M, 73.7),
+            (12.0 / LAMBDA_CAL_M, 76.6),
+            (0.5, FREE_SPACE_R),
+        ],
+        GroundClass::Average => [
+            (7.0 / LAMBDA_CAL_M, 62.1),
+            (10.0 / LAMBDA_CAL_M, 76.7),
+            (12.0 / LAMBDA_CAL_M, 81.9),
+            (0.5, FREE_SPACE_R),
+        ],
+        GroundClass::Good => [
+            (7.0 / LAMBDA_CAL_M, 57.6),
+            (10.0 / LAMBDA_CAL_M, 78.9),
+            (12.0 / LAMBDA_CAL_M, 86.5),
+            (0.5, FREE_SPACE_R),
+        ],
+    };
 
     let h_over_lambda = if freq_mhz > 0.0 {
         antenna_height_m * freq_mhz / 299.792_458
@@ -541,7 +544,7 @@ pub fn nec_calibrated_dipole_r(
     };
 
     // Piecewise-linear interpolation on h/λ; hold the end anchors beyond the range.
-    let h_good = if h_over_lambda <= anchors[0].0 {
+    let r = if h_over_lambda <= anchors[0].0 {
         anchors[0].1
     } else if h_over_lambda >= anchors[anchors.len() - 1].0 {
         anchors[anchors.len() - 1].1
@@ -556,15 +559,7 @@ pub fn nec_calibrated_dipole_r(
             .unwrap_or(FREE_SPACE_R)
     };
 
-    // Ground-class deltas (NEC corpus, at 10 m / 7.1 MHz; small, applied across bands):
-    //   average - good ≈ +1.51 Ω;  poor - good ≈ +3.54 Ω
-    let ground_delta: f64 = match ground_class {
-        GroundClass::Good => 0.0,
-        GroundClass::Average => 1.51,
-        GroundClass::Poor => 3.54,
-    };
-
-    (h_good + ground_delta).clamp(30.0, 90.0)
+    r.clamp(30.0, 95.0)
 }
 
 fn height_skip_factor(antenna_height_m: f64) -> f64 {
@@ -1816,33 +1811,48 @@ mod tests {
     }
 
     #[test]
-    fn nec_calibrated_r_is_frequency_aware_and_preserves_40m_calibration() {
-        // 40 m calibration reproduced exactly (h/λ hits the measured anchors).
-        assert!((nec_calibrated_dipole_r(7.0, 7.1, GroundClass::Good) - 73.03).abs() < 0.05);
-        assert!((nec_calibrated_dipole_r(10.0, 7.1, GroundClass::Good) - 52.84).abs() < 0.05);
-        assert!((nec_calibrated_dipole_r(12.0, 7.1, GroundClass::Good) - 45.56).abs() < 0.05);
+    fn nec_calibrated_r_matches_nec2c_anchors_and_is_frequency_aware() {
+        // nec2c good-ground anchors at 7.1 MHz (corpus/nec2c-reference.json).
+        assert!((nec_calibrated_dipole_r(7.0, 7.1, GroundClass::Good) - 57.6).abs() < 0.1);
+        assert!((nec_calibrated_dipole_r(10.0, 7.1, GroundClass::Good) - 78.9).abs() < 0.1);
+        assert!((nec_calibrated_dipole_r(12.0, 7.1, GroundClass::Good) - 86.5).abs() < 0.1);
 
-        // The same 10 m mast is a larger fraction of a wavelength on 20 m, so R
-        // rises toward free space relative to the 40 m case.
+        // R rises with height over 0.166→0.284 λ (physical horizontal-dipole trend).
+        assert!(
+            nec_calibrated_dipole_r(7.0, 7.1, GroundClass::Good)
+                < nec_calibrated_dipole_r(12.0, 7.1, GroundClass::Good),
+            "R should rise with height toward the ~0.3 λ peak"
+        );
+
+        // Frequency-aware: the same 10 m mast on 20 m is ~0.47 λ (past the peak),
+        // so R falls back toward free space relative to the 40 m (0.24 λ) case.
         let r_40 = nec_calibrated_dipole_r(10.0, 7.1, GroundClass::Good);
         let r_20 = nec_calibrated_dipole_r(10.0, 14.175, GroundClass::Good);
-        assert!(r_20 > r_40, "R should rise on 20 m ({r_20} vs {r_40})");
+        assert!(
+            r_20 < r_40,
+            "past the peak R should fall ({r_20} vs {r_40})"
+        );
 
-        // High band / high antenna relaxes to the free-space asymptote (~62.94 Ω).
+        // High band / high antenna relaxes to the free-space asymptote (~67.4 Ω).
         let r_10m_band = nec_calibrated_dipole_r(10.0, 28.5, GroundClass::Good);
         assert!(
-            (r_10m_band - 62.94).abs() < 0.5,
+            (r_10m_band - 67.4).abs() < 0.5,
             "R should approach free space ({r_10m_band})"
         );
 
-        // Ground-class ordering preserved at a fixed height/frequency.
+        // Ground-class effect is height-dependent (nec2c): poor < good at 10 m but
+        // poor > good at 7 m.
         assert!(
             nec_calibrated_dipole_r(10.0, 7.1, GroundClass::Poor)
-                > nec_calibrated_dipole_r(10.0, 7.1, GroundClass::Good)
+                < nec_calibrated_dipole_r(10.0, 7.1, GroundClass::Good)
+        );
+        assert!(
+            nec_calibrated_dipole_r(7.0, 7.1, GroundClass::Poor)
+                > nec_calibrated_dipole_r(7.0, 7.1, GroundClass::Good)
         );
 
-        // Degenerate frequency falls back to the calibration point.
-        assert!((nec_calibrated_dipole_r(10.0, 0.0, GroundClass::Good) - 52.84).abs() < 0.05);
+        // Degenerate frequency falls back to the 10 m calibration point.
+        assert!((nec_calibrated_dipole_r(10.0, 0.0, GroundClass::Good) - 78.9).abs() < 0.1);
     }
 
     // ── Invariant / property sweeps ───────────────────────────────────────────
