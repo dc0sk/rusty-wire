@@ -127,7 +127,8 @@ r = \max\left(0.01,\frac{Z_t}{Z_{\mathrm{ref}}}\right)
 $$
 
 where $Z_{\mathrm{ref}}$ is the **NEC-calibrated** nominal feedpoint resistance for
-the current height/ground (`nec_calibrated_dipole_r`, ~45–77 Ω), *not* a fixed
+the current height/ground/frequency (`nec_calibrated_dipole_r`, ~58–87 Ω over
+ground, interpolated on height-in-wavelengths from nec2c solves), *not* a fixed
 73 Ω. At the default 1:1 ratio this correction is a no-op, so it does not affect
 default resonant lengths.
 
